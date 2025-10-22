@@ -15,5 +15,14 @@
   // allow any user inside the container to reach the host's docker socket.
   // this is needed so the docker-cli in the container can reach the host's docker daemon.
   // this is safe for local development.
-  "postStartCommand": "sudo chmod 666 /var/run/docker.sock"
+  "postStartCommand": "sudo chmod 666 /var/run/docker.sock",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anysphere.cpptools",           // C/C++ IntelliSense
+        "esbenp.prettier-vscode",       // Code formatting
+        "openai.chatgpt"                // OpenAI's codex
+      ]
+    }
+  }
 }
