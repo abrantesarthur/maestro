@@ -1,0 +1,19 @@
+{
+  "name": "Dalhe Backend",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  // Mount the project into /workspace.
+  "workspaceFolder": "/workspace",
+  // Mirror the host folder into /workspace with a bind mount for live editing.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  // Allow Docker CLI inside the container to talk to the host daemon for building images.
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  // allow any user inside the container to reach the host's docker socket.
+  // this is needed so the docker-cli in the container can reach the host's docker daemon.
+  // this is safe for local development.
+  "postStartCommand": "sudo chmod 666 /var/run/docker.sock"
+}
