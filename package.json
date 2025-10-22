@@ -1,0 +1,11 @@
+{
+  "name": "Dalhe Backend Server",
+  "version": "1.0.0",
+  "description": "Dalhe's backend implementing an LLM agent.",
+  "scripts": {
+    "start": "bun run server.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0"
+  }
+}
