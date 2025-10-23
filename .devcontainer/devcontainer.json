@@ -10,13 +10,8 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "mounts": [
     // Allow Docker CLI inside the container to talk to the host's docker daemon.
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
-  "containerEnv": {
-    // set the path where the devcontainer's SSH agent listens for authentication requests.
-    "SSH_AUTH_SOCK": "/ssh-agent"
-  },
   "runArgs": [
     // Share the host’s network namespace, meaning devcontainer's localhost = host's localhost
      "--network=host"
