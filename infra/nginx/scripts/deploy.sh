@@ -8,8 +8,6 @@
 ####        /etc/tmp and /etc/nginx.
 ####  TODO: link private keys to users. This way, a user is only able to log in as
 ####        root if it also has root's private key!
-####  TODO: do a writeup about this deployment in Notion
-####  TODO: populate the infra/nginx/README.md file with information about the folder, its configs, and scripts
 ####  
 ####  Required env vars
 ####    - REMOTE_HOST: The remote server's IP address (e.g., REMOTE_HOST=203.0.11.10)
