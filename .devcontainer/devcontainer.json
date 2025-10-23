@@ -8,12 +8,19 @@
   "workspaceFolder": "/workspace",
   // Mirror the host folder into /workspace with a bind mount for live editing.
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  // Allow Docker CLI inside the container to talk to the host daemon for building images.
   "mounts": [
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    // Allow Docker CLI inside the container to talk to the host's docker daemon.
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
   ],
-  // Share the host’s network namespace, meaning devcontainer's localhost = host's localhost
-  "runArgs": ["--network=host"],
+  "containerEnv": {
+    // set the path where the devcontainer's SSH agent listens for authentication requests.
+    "SSH_AUTH_SOCK": "/ssh-agent"
+  },
+  "runArgs": [
+    // Share the host’s network namespace, meaning devcontainer's localhost = host's localhost
+     "--network=host"
+  ],
   // allow any user inside the container to reach the host's docker socket.
   // this is needed so the docker-cli in the container can reach the host's docker daemon.
   // this is safe for local development.
