@@ -25,7 +25,9 @@
       "extensions": [
         "anysphere.cpptools",           // C/C++ IntelliSense
         "esbenp.prettier-vscode",       // Code formatting
-        "openai.chatgpt"                // OpenAI's codex
+        "openai.chatgpt",               // OpenAI's codex
+        "dbaeumer.vscode-eslint",       // Microsoft's ESLint
+        "esbenp.prettier-vscode"        // Prettier
       ]
     }
   }

@@ -1,0 +1,19 @@
+{
+    "window.commandCenter": true,
+    "editor.fontSize": 16,
+    "terminal.integrated.fontSize": 14,
+    "workbench.activityBar.orientation": "vertical",
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "eslint.run": "onSave",
+    "eslint.options": {
+        "overrideConfigFile": "eslint.config.mjs"
+    },
+    "eslint.useFlatConfig": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+}

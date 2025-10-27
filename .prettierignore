@@ -1,0 +1,27 @@
+# Dependencies and build outputs
+node_modules
+bun.lockb
+dist
+build
+.cache
+.tmp
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
+
+# Coverage and testing
+coverage
+.vitest
+.nyc_output
+
+# Environment and configuration
+.env
+.env.*
+!.env.example
+
+# IDE / editor artifacts
+.vscode
+.idea
+*.swp
