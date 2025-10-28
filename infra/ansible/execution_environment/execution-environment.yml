@@ -1,0 +1,39 @@
+version: 3
+
+images:
+  base_image:
+    name: registry.fedoraproject.org/fedora:42
+
+dependencies:
+  python_interpreter: # which python runtime to install
+    package_system: python3 # install python3, required for Ansible to run, from a system package manager (e.g., dnf, apt)
+  ansible_core: # how to install Ansible itself
+    package_pip: ansible-core # install ansible core via pip to provide the Ansible engine and built-in modules
+  ansible_runner:
+    package_pip: ansible-runner # used by automation tools like ansible-navigator. Not needed if we're not using ansible-navigator.
+  system: # linux system packages to install
+    - openssh-clients # required for SSH connections to remote hosts.
+
+additional_build_files:
+  # copy ssh configuration into the execution enviornment's context/_build folder
+  - src: files/ssh_config
+    dest: files
+  - src: files/ssh_known_hosts
+    dest: files
+
+additional_build_steps:
+  # install cloudflared
+  prepend_final:
+    - RUN dnf config-manager addrepo --from-repofile https://pkg.cloudflare.com/cloudflared-ascii.repo
+    - RUN dnf install -y cloudflared
+
+  append_final:
+    # bake the ssh configuration into the image
+    - COPY _build/files/ssh_config /tmp/ssh_config
+    - RUN cat /tmp/ssh_config >> /etc/ssh/ssh_config
+    - RUN rm /tmp/ssh_config
+    # set the ssh trusted remote hosts
+    - COPY _build/files/ssh_known_hosts /tmp/ssh_known_hosts
+    - RUN mkdir -p /root/.ssh
+    - RUN cat /tmp/ssh_known_hosts >> /root/.ssh/known_hosts
+    - RUN rm /tmp/ssh_known_hosts
