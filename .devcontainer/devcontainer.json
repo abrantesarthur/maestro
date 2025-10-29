@@ -14,7 +14,7 @@
   ],
   "runArgs": [
     // Share the host’s network namespace, meaning devcontainer's localhost = host's localhost
-     "--network=host"
+    "--network=host"
   ],
   // allow any user inside the container to reach the host's docker socket.
   // this is needed so the docker-cli in the container can reach the host's docker daemon.
@@ -23,11 +23,11 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "anysphere.cpptools",           // C/C++ IntelliSense
-        "esbenp.prettier-vscode",       // Code formatting
-        "openai.chatgpt",               // OpenAI's codex
-        "dbaeumer.vscode-eslint",       // Microsoft's ESLint
-        "esbenp.prettier-vscode"        // Prettier
+        "anysphere.cpptools", // C/C++ IntelliSense
+        "esbenp.prettier-vscode", // Code formatting
+        "openai.chatgpt", // OpenAI's codex
+        "dbaeumer.vscode-eslint", // Microsoft's ESLint
+        "esbenp.prettier-vscode" // Prettier
       ]
     }
   }
