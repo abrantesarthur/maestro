@@ -23,13 +23,13 @@ DROPLET_NAME=<the droplet name>
 
 ## Build & Run via run.sh
 
-`run.sh` validates that each variable is present before launching Docker.
+`run.sh` requires the DigitalOcean API token to be passed explicitly—the script never reads it from `config.env`. Generate a token with access to list SSH keys and create droplets in the DigitalOcean control panel, then run:
 
 ```bash
-./run.sh
+./run.sh --api-key "<digital_ocean_api_key>"
 ```
 
-The script builds `IMAGE_NAME` from `image/` and executes the container, passing the values from `config.env` as flags to `entrypoint.sh`.
+All remaining settings come from `config.env`. The script builds `IMAGE_NAME` from `image/` and forwards those values into the container. Set `INTERACTIVE=true` in `config.env` to skip flag validation and answer prompts inside the container instead.
 
 ## Manual Workflow
 

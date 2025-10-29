@@ -10,6 +10,27 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
   exit 1
 fi
 
+# Parse mandatory API key argument
+API_KEY=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --api-key)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      API_KEY="$2"
+      shift 2
+      ;;
+    *)
+      printf 'Unknown option: %s\n' "$1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "${API_KEY}" ]]; then
+  printf 'Error: --api-key <digital_ocean_api_key> is required.\n' >&2
+  exit 1
+fi
+
 # shellcheck disable=SC1090
 source "${CONFIG_FILE}"
 
@@ -28,7 +49,6 @@ if [[ "${interactive_mode}" == "false" ]]; then
   : "${DROPLET_OS_IMAGE:?DROPLET_OS_IMAGE must be set in config.env}"
   : "${DROPLET_SSH_KEY:?DROPLET_SSH_KEY must be set in config.env}"
   : "${DROPLET_SIZE:?DROPLET_SIZE must be set in config.env}"
-  : "${DIGITAL_OCEAN_API_KEY:?DIGITAL_OCEAN_API_KEY must be set in config.env}"
   : "${DROPLET_NAME:?DROPLET_NAME must be set in config.env}"
 fi
 
@@ -37,13 +57,14 @@ docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}"
 
 echo "Running dalhe bootstrap container..."
 if [[ "${interactive_mode}" == "true" ]]; then
-  docker run -it "${IMAGE_NAME}"
+  docker run -it "${IMAGE_NAME}" \
+    --api-key "${API_KEY}"
 else
   docker run -it "${IMAGE_NAME}" \
     --region "${DROPLET_REGION}" \
     --image "${DROPLET_OS_IMAGE}" \
     --ssh-key "${DROPLET_SSH_KEY}" \
     --size "${DROPLET_SIZE}" \
-    --api-key "${DIGITAL_OCEAN_API_KEY}" \
+    --api-key "${API_KEY}" \
     --name "${DROPLET_NAME}"
 fi

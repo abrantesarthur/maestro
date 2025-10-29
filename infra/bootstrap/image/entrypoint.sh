@@ -175,6 +175,14 @@ while [[ -z "$NAME" ]]; do
 done
 
 printf "\n📦 Creating droplet...\n"
-# doctl compute droplet create "$NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-key "$SSH_KEY" --wait --enable-monitoring
+if ! create_output=$(doctl compute droplet create "$NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring 2>&1); then
+  error_lines=$(printf '%s\n' "$create_output" | grep -i '^error:')
+  if [[ -z "$error_lines" ]]; then
+    error_lines="$create_output"
+  fi
+  printf '\n❌ Failed to create droplet "%s". DigitalOcean responded with:\n%s\n' "$NAME" "$error_lines" >&2
+  exit 1
+fi
 
+printf '%s\n' "$create_output"
 printf "\n✅ Droplet created successfully.\n"
