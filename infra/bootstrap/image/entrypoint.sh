@@ -128,7 +128,7 @@ fi
 
 # Choose the public ssh key to bake into the droplet for allowing safe ssh connections
 if [[ -n "$CLI_SSH_KEY" ]]; then
-  printf '\n🔐 Validating the ssh-key '%s'..."\n' "$CLI_SSH_KEY"
+  printf '\n🔐 Validating the ssh-key "%s"...\n' "$CLI_SSH_KEY"
 else
   echo "🔐 Available ssh-keys:"
 fi
@@ -146,7 +146,7 @@ REGION=$(select_doctl_resource "$REGION_DATA" "Choose a region for the droplet:"
 
 # Choose the droplet's OS image
 if [[ -n "$CLI_IMAGE" ]]; then
-  printf '\n🖼️  Validating the droplet OS image '%s'..."\n' "$CLI_IMAGE"
+  printf '\n🖼️  Validating the droplet OS image "%s"...\n' "$CLI_IMAGE"
 else
   echo "🖼️  Available droplet OS images:"
 fi
@@ -156,7 +156,7 @@ IMAGE=$(select_doctl_resource "$IMAGE_DATA" "Choose a OS image slug (e.g., ubunt
 
 # Choose the droplet's size
 if [[ -n "$CLI_IMAGE" ]]; then
-  printf '\n⚙️  Validating the droplet size '%s'..."\n' "$CLI_IMAGE"
+  printf '\n⚙️  Validating the droplet size "%s"...\n' "$CLI_IMAGE"
 else
   echo "⚙️ Available droplet sizes:"
 fi
@@ -175,7 +175,7 @@ while [[ -z "$NAME" ]]; do
 done
 
 printf "\n📦 Creating droplet...\n"
-if ! create_output=$(doctl compute droplet create "$NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring 2>&1); then
+if ! create_output=$(doctl compute droplet create "$NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring --format PublicIPv4 2>&1); then
   error_lines=$(printf '%s\n' "$create_output" | grep -i '^error:')
   if [[ -z "$error_lines" ]]; then
     error_lines="$create_output"
@@ -184,5 +184,4 @@ if ! create_output=$(doctl compute droplet create "$NAME" --region "$REGION" --i
   exit 1
 fi
 
-printf '%s\n' "$create_output"
-printf "\n✅ Droplet created successfully.\n"
+printf "\n✅ Droplet created successfully at:\n%s\n" "$create_output"
