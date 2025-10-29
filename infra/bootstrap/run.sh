@@ -53,7 +53,10 @@ if [[ "${interactive_mode}" == "false" ]]; then
 fi
 
 echo "Building Docker image ${IMAGE_NAME}..."
-docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}"
+if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); then
+  printf 'Failed to build Docker image "%s". Docker responded with:\n%s\n' "${IMAGE_NAME}" "${build_output}" >&2
+  exit 1
+fi
 
 echo "Running dalhe bootstrap container..."
 if [[ "${interactive_mode}" == "true" ]]; then
