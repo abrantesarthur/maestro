@@ -16,7 +16,6 @@ DROPLET_REGION=<the geographical region to create the droplet>
 DROPLET_OS_IMAGE=<the droplet OS image>
 DROPLET_SSH_KEY=<the publich ssh key id. It must already exist within Digital Ocean>
 DROPLET_SIZE=<the droplet size>
-DIGITAL_OCEAN_API_KEY=<the token used to connect to DigitalOcean>
 DROPLET_NAME=<the droplet name>
 
 ```
