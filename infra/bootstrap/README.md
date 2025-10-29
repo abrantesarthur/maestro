@@ -26,11 +26,10 @@ DROPLET_NAME=<the droplet name>
 ## Build & Run via run.sh
 
 ```bash
-cd infra/bootstrap
 ./run.sh
 ```
 
-The script builds `IMAGE_NAME` from `image/` and executes the container, passing the values from `config.env` as flags to `entrypoint.sh`.
+The script builds `DALHE_BOOTSTRAP_IMAGE_NAME` from `image/` and executes the container, passing the values from `config.env` as flags to `entrypoint.sh`.
 
 ## Manual Workflow
 
@@ -47,4 +46,4 @@ docker run -it "${IMAGE_NAME}" \
   --name "${NAME}"
 ```
 
-Any flag you omit triggers interactive prompts inside the container. Keep your API key confidential—avoid committing real tokens.
+Any flag you omit triggers interactive prompts inside the container. Keep the API key confidential and avoid committing real tokens.
