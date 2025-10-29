@@ -11,7 +11,7 @@ This directory packages everything needed to provision a DigitalOcean droplet th
 Edit `config.env` to set the droplet parameters and credentials:
 
 ```env
-DALHE_BOOTSTRAP_IMAGE_NAME=<name of the bootstrapping docker image>
+IMAGE_NAME=<name of the bootstrapping docker image>
 DROPLET_REGION=<the geographical region to create the droplet>
 DROPLET_OS_IMAGE=<the droplet OS image>
 DROPLET_SSH_KEY=<the publich ssh key id. It must already exist within Digital Ocean>
@@ -21,15 +21,15 @@ DROPLET_NAME=<the droplet name>
 
 ```
 
-`run.sh` validates that each variable is present before launching Docker.
-
 ## Build & Run via run.sh
+
+`run.sh` validates that each variable is present before launching Docker.
 
 ```bash
 ./run.sh
 ```
 
-The script builds `DALHE_BOOTSTRAP_IMAGE_NAME` from `image/` and executes the container, passing the values from `config.env` as flags to `entrypoint.sh`.
+The script builds `IMAGE_NAME` from `image/` and executes the container, passing the values from `config.env` as flags to `entrypoint.sh`.
 
 ## Manual Workflow
 
