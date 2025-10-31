@@ -4,6 +4,7 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 
 ## Components
 - `nginx/` — shared nginx configuration plus automation to push updates to production. Consult `infra/nginx/README.md` before modifying or deploying.
+- `pulumi/` — Pulumi programs for provisioning Cloudflare DNS and related cloud resources.
 
 ## Working In This Folder
 - Make changes inside the relevant component directory and keep cross-cutting scripts co-located with the service they operate.
