@@ -47,7 +47,7 @@ esac
 if [[ "${interactive_mode}" == "false" ]]; then
   : "${DROPLET_REGION:?DROPLET_REGION must be set in config.env}"
   : "${DROPLET_OS_IMAGE:?DROPLET_OS_IMAGE must be set in config.env}"
-  : "${DROPLET_SSH_KEY:?DROPLET_SSH_KEY must be set in config.env}"
+  : "${DROPLET_SSH_KEY_ID:?DROPLET_SSH_KEY_ID must be set in config.env}"
   : "${DROPLET_SIZE:?DROPLET_SIZE must be set in config.env}"
   : "${DROPLET_NAME:?DROPLET_NAME must be set in config.env}"
 fi
@@ -63,10 +63,10 @@ if [[ "${interactive_mode}" == "true" ]]; then
   docker run -it "${IMAGE_NAME}" \
     --api-key "${API_KEY}"
 else
-  docker run -it "${IMAGE_NAME}" \
+  docker run -it --rm "${IMAGE_NAME}" \
     --region "${DROPLET_REGION}" \
     --image "${DROPLET_OS_IMAGE}" \
-    --ssh-key "${DROPLET_SSH_KEY}" \
+    --ssh-key-id "${DROPLET_SSH_KEY_ID}" \
     --size "${DROPLET_SIZE}" \
     --api-key "${API_KEY}" \
     --name "${DROPLET_NAME}"

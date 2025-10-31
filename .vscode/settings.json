@@ -1,7 +1,7 @@
 {
     "window.commandCenter": true,
     "editor.fontSize": 16,
-    "terminal.integrated.fontSize": 14,
+    "terminal.integrated.fontSize": 16,
     "workbench.activityBar.orientation": "vertical",
     "[typescript]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode"

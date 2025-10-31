@@ -1,0 +1,10 @@
+name: cloudflare
+description: A minimal Cloudflare Typescript Pulumi program
+runtime:
+  name: nodejs
+  options:
+    packagemanager: bun # TODO: replace by node
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: typescript

@@ -1,0 +1,14 @@
+{
+  "name": "@dalhe/cloudflare",
+  "description": "Dalhe's Cloudflare Pulumi provisioning module.",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^22.10.1"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.205.0",
+    "@pulumi/cloudflare": "^6.10.1"
+  }
+}

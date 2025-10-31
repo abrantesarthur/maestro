@@ -46,6 +46,14 @@ export default defineConfig([
             "TSInterfaceDeclaration",
             "TSTypeAliasDeclaration",
             "FunctionDeclaration",
+            {
+              context:
+                "VariableDeclaration[kind='const'] > VariableDeclarator > ArrowFunctionExpression",
+            },
+            {
+              context:
+                "VariableDeclaration[kind='const'] > VariableDeclarator > FunctionExpression",
+            },
             // ensure every property in RemoteRunnerConfig carries JSDoc, inline style
             {
               context: "TSInterfaceDeclaration > TSInterfaceBody > TSPropertySignature",
@@ -75,5 +83,30 @@ export default defineConfig([
   },
   // merges in TypeScript-specific parsing and rule recommendations from
   ...tseslint.configs.recommended,
+  // require typed function arguments and return values
+  {
+    files: ["**/*.ts"],
+    rules: {
+      "@typescript-eslint/explicit-function-return-type": [
+        "error",
+        {
+          allowExpressions: false,
+          allowTypedFunctionExpressions: true,
+          allowHigherOrderFunctions: false,
+          allowIIFEs: false,
+        },
+      ],
+      // Require type definitions for variables, parameters, properties, etc.
+      "@typescript-eslint/typedef": [
+        "warn",
+        {
+          // All function parameters must have explicit type annotations.
+          parameter: true,
+          // Arrow function parameters don’t need explicit types (use inference).
+          arrowParameter: false,
+        },
+      ],
+    },
+  },
   prettier,
 ]);

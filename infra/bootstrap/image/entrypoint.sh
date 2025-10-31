@@ -59,16 +59,16 @@ select_doctl_resource() {
 
 ## try to read the arguments from the command-line
 CLI_DOCTL_API_KEY=""
-CLI_SSH_KEY=""
+CLI_SSH_KEY_ID=""
 CLI_REGION=""
 CLI_IMAGE=""
 CLI_SIZE=""
 CLI_NAME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --ssh-key)
+    --ssh-key-id)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      CLI_SSH_KEY="$2"
+      CLI_SSH_KEY_ID="$2"
       shift 2
       ;;
     --region)
@@ -81,7 +81,7 @@ while [[ $# -gt 0 ]]; do
       CLI_IMAGE="$2"
       shift 2
       ;;
-    --size|---size)
+    --size)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       CLI_SIZE="$2"
       shift 2
@@ -127,13 +127,14 @@ if ! doctl auth list 2>/dev/null | grep -q valid; then
 fi
 
 # Choose the public ssh key to bake into the droplet for allowing safe ssh connections
-if [[ -n "$CLI_SSH_KEY" ]]; then
-  printf '\n🔐 Validating the ssh-key "%s"...\n' "$CLI_SSH_KEY"
+# This key must have been previously added to DigitalOcean.
+if [[ -n "$CLI_SSH_KEY_ID" ]]; then
+  printf '\n🔐 Validating the ssh-key ID "%s"...\n' "$CLI_SSH_KEY_ID"
 else
   echo "🔐 Available ssh-keys:"
 fi
 SSH_KEYS=$(doctl_compute ssh-key list --format ID,Name "SSH keys")
-SSH_KEY=$(select_doctl_resource "$SSH_KEYS" "Enter the public ssh-key ID to connect to the droplet later:" "ssh-key ID" "$CLI_SSH_KEY")
+SSH_KEY=$(select_doctl_resource "$SSH_KEYS" "Enter the public ssh-key ID to connect to the droplet later:" "ssh-key ID" "$CLI_SSH_KEY_ID")
 
 # Choose the geographic region to create the droplet in
 if [[ -n "$CLI_REGION" ]]; then

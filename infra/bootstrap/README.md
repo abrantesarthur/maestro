@@ -14,7 +14,7 @@ Edit `config.env` to set the droplet parameters and credentials:
 IMAGE_NAME=<name of the bootstrapping docker image>
 DROPLET_REGION=<the geographical region to create the droplet>
 DROPLET_OS_IMAGE=<the droplet OS image>
-DROPLET_SSH_KEY=<the publich ssh key id. It must already exist within Digital Ocean>
+DROPLET_SSH_KEY_ID=<the publich ssh key id. It must already exist within Digital Ocean>
 DROPLET_SIZE=<the droplet size>
 DROPLET_NAME=<the droplet name>
 
@@ -38,7 +38,7 @@ If you prefer manual control:
 docker build -t "${IMAGE_NAME}" infra/bootstrap/image
 docker run -it "${IMAGE_NAME}" \
   --api-key "${API_KEY}" \
-  --ssh-key "${SSH_KEY}" \
+  --ssh-key-id "${SSH_KEY}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --size "${SIZE}" \
@@ -46,3 +46,8 @@ docker run -it "${IMAGE_NAME}" \
 ```
 
 Any flag you omit triggers interactive prompts inside the container. Keep the API key confidential and avoid committing real tokens.
+
+## Future Improvements
+
+1. Support tagging servers with the environment (dev or prod)
+2. Support destroying existing servers as well. This will be useful if we ever want to fully migrate to a new server later (we'll want to destroy the old infra after the migration is successful)
