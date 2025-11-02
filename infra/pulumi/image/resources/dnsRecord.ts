@@ -41,7 +41,7 @@ export class DnsRecord extends pulumi.ComponentResource {
       zoneId: this.getZoneId(),
       content: ipv4,
       proxied,
-    });
+    }, {parent: this});
 
     this.registerOutputs({
       recordId: this.record.id,

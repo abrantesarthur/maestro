@@ -68,3 +68,6 @@ When you run the script it:
   configuration changes.
 - We only support a single DigitalOcean droplet. The first droplet returned by
   `doctl` is treated as authoritative, even if multiple servers exist.
+
+## TODO
+1. Ensure that no sensitive information is logged when `pulumi up` is called. If so, consider creating a `Pulumi.<stack-name>.yaml` with `secretsProvider` for encripting sensitive information. See (documentation)[https://www.pulumi.com/docs/iac/concepts/projects/stack-settings-file/].

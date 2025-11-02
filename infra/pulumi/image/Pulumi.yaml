@@ -3,7 +3,7 @@ description: A minimal Cloudflare Typescript Pulumi program
 runtime:
   name: nodejs
   options:
-    packagemanager: bun # TODO: replace by node
+    packagemanager: npm
 config:
   pulumi:tags:
     value:
