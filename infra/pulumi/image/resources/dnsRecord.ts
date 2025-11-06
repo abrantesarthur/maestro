@@ -11,51 +11,70 @@ export interface DnsRecordArgs {
   ttl?: pulumi.Input<number>;
   /** The DNS record type. Defaults to 'A' */
   type: pulumi.Input<"A" | "CNAME">;
-  /** The DNS record's IPv4 address, its content. */
-  ipv4: pulumi.Input<string>;
+  /** The DNS record's content (e.g., an IPv4 address). */
+  content: pulumi.Input<string>;
   /** Whether Cloudflare should proxy the record. Defaults to true. */
   proxied?: pulumi.Input<boolean>;
 }
 
-export class DnsRecord extends pulumi.ComponentResource {
-  readonly record: cloudflare.DnsRecord;
-  readonly domain: pulumi.Input<string>;
+/** A bag of options that control this resource's behavior. */
+export interface DnsRecordOptions {
+  /** An optional parent resource to which this resource belongs. */
+  parent?: pulumi.Resource;
+}
 
-  constructor(args: DnsRecordArgs) {
-    super("dalhe:cloudflare:DnsRecord", DnsRecord.buildResourceName(args), {});
+export class DnsRecord extends pulumi.ComponentResource {
+  readonly id: pulumi.Output<string>;
+
+  constructor(args: DnsRecordArgs, opts?: DnsRecordOptions) {
+    super("dalhe:cloudflare:DnsRecord", DnsRecord.buildResourceName(args), {
+      ...(opts?.parent ? { parent: opts.parent } : {}),
+    });
     const name = DnsRecord.buildResourceName(args);
 
-    const defaults: Required<Pick<DnsRecordArgs, "subdomain" | "ttl" | "proxied">> = {
+    const defaults: Required<
+      Pick<DnsRecordArgs, "subdomain" | "ttl" | "proxied">
+    > = {
       subdomain: "@",
       ttl: 1,
       proxied: true,
     };
-    const { domain, subdomain, ttl, type, ipv4, proxied } = { ...defaults, ...args };
+    const { domain, subdomain, ttl, type, content, proxied } = {
+      ...defaults,
+      ...args,
+    };
 
-    this.domain = domain;
+    const record = new cloudflare.DnsRecord(
+      name,
+      {
+        name: subdomain,
+        ttl,
+        type,
+        zoneId: this.getZoneId(domain),
+        content,
+        proxied,
+      },
+      { parent: this },
+    );
 
-    this.record = new cloudflare.DnsRecord(name, {
-      name: subdomain,
-      ttl,
-      type,
-      zoneId: this.getZoneId(),
-      content: ipv4,
-      proxied,
-    }, {parent: this});
-
+    this.id = record.id;
     this.registerOutputs({
-      recordId: this.record.id,
+      id: this.id,
     });
   }
 
   /**
    * Resolve a the Cloudflare zone identifier from its domain name.
    *
+   * @param domain
    * @returns the Cloudflare zone ID as a Pulumi Output
    */
-  getZoneId = (): pulumi.Output<string> =>
-    pulumi.output(this.domain).apply(async (dnsName) => {
-      const { results } = await cloudflare.getZones({ name: dnsName, match: "all" });
+  private getZoneId = (domain: pulumi.Input<string>): pulumi.Output<string> =>
+    pulumi.output(domain).apply(async (dnsName) => {
+      const { results } = await cloudflare.getZones({
+        name: dnsName,
+        match: "all",
+      });
       const zone = results.find((zone) => zone.name === dnsName);
       if (!zone) {
         throw new Error(`Cloudflare zone for ${dnsName} not found.`);
@@ -71,6 +90,6 @@ export class DnsRecord extends pulumi.ComponentResource {
    * @param a - the arguments for building a DnsRecord
    * @returns the name of the DNS record within Pulumi
    */
-  static buildResourceName = (a: DnsRecordArgs): string =>
-    `${a.subdomain ? `${a.subdomain}.` : ""}${a.domain}_${a.type}_${a.ipv4}`;
+  private static buildResourceName = (a: DnsRecordArgs): string =>
+    `dns-${a.subdomain ? a.subdomain : a.domain}-${a.type}`;
 }

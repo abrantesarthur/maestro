@@ -17,8 +17,7 @@ This directory contains a Dockerised Pulumi program that provisions the cloudfla
 1. Docker installed locally (the script builds and runs a container).
 2. Pulumi access token from https://app.pulumi.com/user/settings/tokens with
    permissions to operate on the `prod` stack.
-3. Cloudflare API token with at least `Zone.Zone` → `Edit` permission for the
-   dalhe.ai zone (Manage Account → Account API Tokens).
+3. Cloudflare API token with at least `Zone` → `DNS` → `Edit` and `Account` → `Cloudflare Tunnel` → `Edit` permissions for the dalhe.ai zone (Manage Account → Account API Tokens).
 4. DigitalOcean API key that can list droplets (`doctl` uses it to enumerate
    servers).
 
@@ -60,7 +59,14 @@ When you run the script it:
 
 1. `entrypoint.sh` validates all required environment variables.
 2. Pulumi logs in to the managed service using the supplied access token.
-3. The TypeScript program provisions cloudflare resorucs, such as DNS records.
+3. The TypeScript program provisions Cloudflare resources, including DNS records and an SSH tunnel into `ssh.dalhe.ai`.
+4. To connect through the tunnel from your machine, install `cloudflared` locally and add the following to your `~/.ssh/config`:
+
+   ```
+   Host ssh.dalhe.ai
+     ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
+     IdentityFile <path to the ssh private key>
+   ```
 
 ## Current Limitations
 
@@ -68,6 +74,3 @@ When you run the script it:
   configuration changes.
 - We only support a single DigitalOcean droplet. The first droplet returned by
   `doctl` is treated as authoritative, even if multiple servers exist.
-
-## TODO
-1. Ensure that no sensitive information is logged when `pulumi up` is called. If so, consider creating a `Pulumi.<stack-name>.yaml` with `secretsProvider` for encripting sensitive information. See (documentation)[https://www.pulumi.com/docs/iac/concepts/projects/stack-settings-file/].
