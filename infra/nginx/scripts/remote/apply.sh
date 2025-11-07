@@ -26,6 +26,12 @@ rollback() {
 }
 
 # Copy the configuration files from the stagign to target directory and create the required symlinks.
+echo "[REMOTE SERVER] - ensuring ${remote_target_dir} exists..."
+mkdir -p \
+  "${remote_target_dir}" \
+  "${remote_target_dir}/sites-available" \
+  "${remote_target_dir}/sites-enabled"
+  
 echo "[REMOTE SERVER] - copying ${nginx_config} from ${remote_staging_dir} to ${remote_target_dir}..."
 install -b -S "${backup_suffix}" -m 0644 "${remote_staging_dir}/${nginx_config}" "${remote_target_dir}/${nginx_config}"
 for site_conf in "${nginx_sites_conf[@]}"; do
