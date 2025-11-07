@@ -153,11 +153,11 @@ ansible-builder build \
   --tag "${EE_IMAGE_TAG}" \
   -f "${EE_DEFINITION_FILE}" 
 
-# provision cloudflared
-echo "Provisioning cloudflared..."
-export PROD_SERVER_IP
-export CLOUDFLARE_TUNNEL_TOKEN
-ansible-navigator run playbooks/cloudflared.yml
+# # provision cloudflared
+# echo "Provisioning cloudflared..."
+# export PROD_SERVER_IP
+# export CLOUDFLARE_TUNNEL_TOKEN
+# ansible-navigator run playbooks/cloudflared.yml
 
 # provision groups
 echo "Provisioning groups..."

@@ -48,3 +48,6 @@ All playbooks are idempotent by design. They rely on Ansible modules that declar
 The execution environment's SSH behavior is controlled by `execution_environment/files/ssh_config`. That file declares a `Host ssh.dalhe.ai` stanza with a `cloudflared access ssh` proxy command and the expected identity file path. It is critical that this hostname matches the one Pulumi provisions (`dalhe:tunnelHostname` in `infra/pulumi/image/Pulumi.prod.yaml`, currently `ssh.dalhe.ai`). If you ever change the tunnel hostname in Pulumi, update both the SSH config file and the inventory entry simultaneously to keep Ansible, Cloudflare, and Pulumi aligned.
 
 With these pieces in place, you can rebuild the environment, rerun the playbooks, and safely converge the production server as often as needed.
+
+## Future improvements
+- right now we only support provisioning resources in a single production server. In the future, we should suppport multiple environments.

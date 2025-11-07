@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-
 # Ensure the api keys are set in the environment
 if [[ -z "${PULUMI_ACCESS_TOKEN:-}" ]]; then
     echo "PULUMI_ACCESS_TOKEN must be set for Pulumi authentication" >&2

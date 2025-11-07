@@ -22,6 +22,7 @@ New infrastructure pieces should follow the same structure: top-level directory,
     2. run pulumi
     3. run ansible
 - update ansible to provision nginx
+- update ansible to provision ufw policies
 - Update this README to explain the step by step for provisioning a server from zero.
 - rename infra/bootstrap
 - update infra/bootstrap to support specifying how many droplets to create and whether to fully replace the existing ones.
