@@ -18,6 +18,10 @@ New infrastructure pieces should follow the same structure: top-level directory,
 ## TODOs
 
 - wire up the whole provisioning workflow in a single run.sh file that consumes sensitive api-keys from the environment and pipes variables from one workflow to the next
+    1. run bootstrap
+    2. run pulumi
+    3. run ansible
+- update ansible to provision nginx
 - Update this README to explain the step by step for provisioning a server from zero.
 - rename infra/bootstrap
 - update infra/bootstrap to support specifying how many droplets to create and whether to fully replace the existing ones.
