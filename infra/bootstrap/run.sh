@@ -59,6 +59,7 @@ if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); th
 fi
 
 echo "Running dalhe bootstrap container..."
+echo "DROPLET_SSH_KEY_ID ${DROPLET_SSH_KEY_ID}"
 if [[ "${interactive_mode}" == "true" ]]; then
   docker run -it "${IMAGE_NAME}" \
     --api-key "${API_KEY}"

@@ -1,0 +1,49 @@
+- name: Ensure cloudflared keyring directory exists
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755" # Sets permissions to rwxr-xr-x
+
+- name: Download Cloudflare GPG key
+  ansible.builtin.get_url:
+    url: https://pkg.cloudflare.com/cloudflare-public-v2.gpg
+    dest: /usr/share/keyrings/cloudflare-public-v2.gpg
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Configure cloudflared apt repository
+  ansible.builtin.apt_repository: # automates creation of a .list file under /etc/apt/sources.list.d/
+    repo: "deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main" # what to write in the file
+    filename: cloudflared # the file will be /etc/apt/sources.list.d/cloudflared.list.
+    state: present # ensures file exists (and updates it if needed).
+
+- name: Install cloudflared
+  ansible.builtin.apt:
+    name: cloudflared
+    state: present
+    update_cache: true # Run apt-get update before installing, so APT knows about the new configured cloudflared apt repository.
+
+- name: Check if cloudflared systemd service already exists
+  ansible.builtin.stat:
+    path: /etc/systemd/system/cloudflared.service
+  register: cloudflared_service_unit
+
+- name: Load cloudflared tunnel token from environment
+  ansible.builtin.set_fact:
+    cloudflared_tunnel_token: "{{ lookup('env', 'CLOUDFLARE_TUNNEL_TOKEN') }}"
+  when: not cloudflared_service_unit.stat.exists
+  no_log: true
+
+- name: Install cloudflared systemd service with retrieved token
+  ansible.builtin.command:
+    cmd: "cloudflared service install {{ cloudflared_tunnel_token }}"
+  when: not cloudflared_service_unit.stat.exists
+  no_log: true
+
+- name: Ensure cloudflared service is enabled and running
+  ansible.builtin.systemd:
+    name: cloudflared
+    enabled: true
+    state: started
+    daemon_reload: true

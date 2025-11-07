@@ -9,6 +9,7 @@ This directory contains a Dockerised Pulumi program that provisions the cloudfla
 - `image/` holds the Pulumi project.
 - `image/entrypoint.sh` runs inside the container. It validates the environment
   variables and executes pulumi.
+- `image/Pulumi.<stack>.yaml` specifies stack-specific configuration values, such as the domain and cloudflare accountId.
 - `image/providers/` hosts the services that discovers our infrastructure, such as the server IPv4.
 - `image/resources/` defines the record components at our disposal for provisioning resources.
 

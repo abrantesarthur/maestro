@@ -1,0 +1,6 @@
+---
+- name: Provision groups
+  hosts: prod_server
+  become: true
+  roles:
+    - groups

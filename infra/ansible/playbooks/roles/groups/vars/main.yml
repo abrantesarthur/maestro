@@ -1,0 +1,5 @@
+managed_groups:
+  - devops
+managed_group_gid_min: 1000
+managed_group_exclusions:
+  - nogroup

@@ -4,12 +4,13 @@ import { SshTunnel, DnsRecord, DnsRecordArgs } from "./resources";
 
 const stackConfig = new pulumi.Config("dalhe");
 const domain = stackConfig.require("domain");
+const tunnelHostname = stackConfig.require("tunnelHostname");
 new SshTunnel({
   name: "ssh",
   configuration: {
     ingresses: [
       {
-        hostname: `ssh.${domain}`,
+        hostname: tunnelHostname,
         service: "ssh://localhost:22",
       },
       {

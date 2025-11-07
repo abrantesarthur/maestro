@@ -1,0 +1,6 @@
+---
+- name: Install and configure cloudflared in the server
+  hosts: prod_server_direct # ssh via IP, not hostname, as the tunnel that enables the hostname is being configured in this step!
+  become: true
+  roles:
+    - cloudflared

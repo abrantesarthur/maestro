@@ -1,0 +1,26 @@
+- name: Ensure each required group is present
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ managed_groups }}"
+
+- name: Gather group database
+  ansible.builtin.getent:
+    database: group
+
+- name: Build list of unmanaged custom groups
+  ansible.builtin.set_fact:
+    removable_groups: "{{ (removable_groups | default([])) + [item.key] }}"
+  loop: "{{ ansible_facts.getent_group | dict2items }}"
+  when:
+    - item.value | length > 1
+    - (item.value[1] | int) > managed_group_gid_min
+    - item.key not in managed_groups
+    - item.key not in managed_group_exclusions
+
+- name: Remove unmanaged custom groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ removable_groups | default([]) }}"
+  when: (removable_groups | default([])) | length > 0

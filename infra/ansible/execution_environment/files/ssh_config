@@ -1,0 +1,3 @@
+Host ssh.dalhe.ai
+  ProxyCommand /usr/local/bin/cloudflared access ssh --hostname %h
+  IdentityFile /root/.ssh/ssh_dalhe_ai

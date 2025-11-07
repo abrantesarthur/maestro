@@ -51,3 +51,9 @@ Any flag you omit triggers interactive prompts inside the container. Keep the AP
 
 1. Support tagging servers with the environment (dev or prod)
 2. Support destroying existing servers as well. This will be useful if we ever want to fully migrate to a new server later (we'll want to destroy the old infra after the migration is successful)
+
+## TODO
+
+1. Explain better the relevance of the DROPLET_SSH_KEY_ID. Mention that it must be manually inserted into DigitalOcean and its private counterpart must be stored in the client machine sshing into the server.
+2. Explore ways to automate the pushing of this public key to the droplet the first time we create a server.
+3. Explore ways to programmatially update the --ssh-key-id of a server.
