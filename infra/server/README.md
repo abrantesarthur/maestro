@@ -17,8 +17,11 @@ DROPLET_OS_IMAGE=<the droplet OS image>
 DROPLET_SSH_KEY_ID=<the publich ssh key id. It must already exist within Digital Ocean>
 DROPLET_SIZE=<the droplet size>
 DROPLET_NAME=<the droplet name>
+DROPLET_COUNT=<how many droplets to create>
 
 ```
+
+When `DROPLET_COUNT` is greater than `1`, the bootstrapper will append a numeric suffix (`-1`, `-2`, …) to the requested `DROPLET_NAME` to keep each droplet unique.
 
 ## Build & Run via run.sh
 
@@ -35,14 +38,15 @@ All remaining settings come from `config.env`. The script builds `IMAGE_NAME` fr
 If you prefer manual control:
 
 ```bash
-docker build -t "${IMAGE_NAME}" infra/bootstrap/image
+docker build -t "${IMAGE_NAME}" infra/server/image
 docker run -it "${IMAGE_NAME}" \
   --api-key "${API_KEY}" \
   --ssh-key-id "${SSH_KEY}" \
   --region "${REGION}" \
   --image "${IMAGE}" \
   --size "${SIZE}" \
-  --name "${NAME}"
+  --name "${NAME}" \
+  --count 1
 ```
 
 Any flag you omit triggers interactive prompts inside the container. Keep the API key confidential and avoid committing real tokens.
@@ -54,6 +58,6 @@ Any flag you omit triggers interactive prompts inside the container. Keep the AP
 
 ## TODO
 
-1. Explain better the relevance of the DROPLET_SSH_KEY_ID. Mention that it must be manually inserted into DigitalOcean and its private counterpart must be stored in the client machine sshing into the server.
-2. Explore ways to automate the pushing of this public key to the droplet the first time we create a server.
-3. Explore ways to programmatially update the --ssh-key-id of a server.
+- automate the pushing of the ssh key to the droplet the first time we create the server.
+- automate adding new ssh key to the droplet. Perhaps better done via ansible. See https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/to-existing-droplet/.
+- Explain better the relevance of the DROPLET_SSH_KEY_ID. Mention that it must be manually inserted into DigitalOcean and its private counterpart must be stored in the client machine sshing into the server.

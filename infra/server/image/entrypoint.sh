@@ -64,6 +64,7 @@ CLI_REGION=""
 CLI_IMAGE=""
 CLI_SIZE=""
 CLI_NAME=""
+CLI_COUNT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ssh-key-id)
@@ -89,6 +90,11 @@ while [[ $# -gt 0 ]]; do
     --name)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       CLI_NAME="$2"
+      shift 2
+      ;;
+    --count)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      CLI_COUNT="$2"
       shift 2
       ;;
     --api-key)
@@ -175,14 +181,40 @@ while [[ -z "$NAME" ]]; do
   fi
 done
 
-printf "\n📦 Creating droplet...\n"
-if ! create_output=$(doctl compute droplet create "$NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring --format PublicIPv4 2>&1); then
-  error_lines=$(printf '%s\n' "$create_output" | grep -i '^error:')
-  if [[ -z "$error_lines" ]]; then
-    error_lines="$create_output"
+COUNT="$CLI_COUNT"
+if [[ -n "$COUNT" ]]; then
+  if ! [[ "$COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    printf '❌ Droplet count must be a positive integer (got "%s").\n' "$COUNT" >&2
+    exit 1
   fi
-  printf '\n❌ Failed to create droplet "%s". DigitalOcean responded with:\n%s\n' "$NAME" "$error_lines" >&2
-  exit 1
+else
+  while true; do
+    read -p "How many droplet instances would you like to create? [1]: " COUNT
+    COUNT="${COUNT:-1}"
+    if [[ "$COUNT" =~ ^[1-9][0-9]*$ ]]; then
+      break
+    fi
+    printf '❌ Droplet count must be a positive integer.\n' >&2
+  done
 fi
 
-printf "\n✅ Droplet created successfully at:\n%s\n" "$create_output"
+printf "\n📦 Creating %s droplet(s)...\n" "$COUNT"
+for ((instance_index = 1; instance_index <= COUNT; instance_index++)); do
+  if (( COUNT == 1 )); then
+    CURRENT_NAME="$NAME"
+  else
+    CURRENT_NAME="${NAME}-${instance_index}"
+  fi
+
+  printf '\n📦 Creating droplet (%d/%d): %s...\n' "$instance_index" "$COUNT" "$CURRENT_NAME"
+  if ! create_output=$(doctl compute droplet create "$CURRENT_NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring --format PublicIPv4 2>&1); then
+    error_lines=$(printf '%s\n' "$create_output" | grep -i '^error:')
+    if [[ -z "$error_lines" ]]; then
+      error_lines="$create_output"
+    fi
+    printf '\n❌ Failed to create droplet "%s". DigitalOcean responded with:\n%s\n' "$CURRENT_NAME" "$error_lines" >&2
+    exit 1
+  fi
+
+  printf "\n✅ Droplet \"%s\" created successfully at:\n%s\n" "$CURRENT_NAME" "$create_output"
+done

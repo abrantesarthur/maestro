@@ -35,6 +35,12 @@ fi
 source "${CONFIG_FILE}"
 
 : "${IMAGE_NAME:?IMAGE_NAME must be set in config.env}"
+DROPLET_COUNT="${DROPLET_COUNT:-1}"
+if ! [[ "${DROPLET_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'DROPLET_COUNT must be a positive integer (got "%s").\n' "${DROPLET_COUNT}" >&2
+  exit 1
+fi
+
 interactive_mode="${INTERACTIVE:-false}"
 case "${interactive_mode}" in
   true|false) ;;
@@ -70,5 +76,6 @@ else
     --ssh-key-id "${DROPLET_SSH_KEY_ID}" \
     --size "${DROPLET_SIZE}" \
     --api-key "${API_KEY}" \
-    --name "${DROPLET_NAME}"
+    --name "${DROPLET_NAME}" \
+    --count "${DROPLET_COUNT}"
 fi
