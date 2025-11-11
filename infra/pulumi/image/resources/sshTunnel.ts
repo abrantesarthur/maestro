@@ -27,7 +27,6 @@ export class SshTunnel extends pulumi.ComponentResource {
     const domain = stackConfig.require("domain");
     const configSrc = "cloudflare";
 
-    // ensure the configuration has valid ingresses property
     const { configuration } = args;
     this.validateConfiguration(configuration, domain);
 

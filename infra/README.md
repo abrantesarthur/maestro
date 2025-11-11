@@ -37,9 +37,10 @@ New infrastructure pieces should follow the same structure: top-level directory,
 
 Come up with a plan, ask for feedback, then proceed once I approve.
 
-Help me populate infra/run.sh to fully provision a brand-new server with cloudflare set up and ansible playbooks. Here is how I would do it (feel free to base your solution on mine or come up with your own where you see shortfalls)
+Help me populate infra/run.sh to provision a brand-new server end-to-end with cloudflare set up and ansible playbooks. Here is how I would do it (feel free to base your solution on mine or come up with your own where you see shortfalls)
 - Within infra/run.sh, ensure the flags --digital-ocean-api-key, --pulumi-access-token and --cloudflare-api-token are provided.
-- authenticate against digitalocean with doctl auth init -t <--digital-ocean-api-key>
+- authenticate against digitalocean with doctl auth init -t <--digital-ocean-api-key> using node's spawnSync.
 - list the existing droplet IDs and save those for later. We will fully remove them once the whole provisioning flow is finished.
-- execute infra/server/run.sh to create new servers. List all existing servers IDs again and calculate the IDs of the brand-new servers. These 
+- execute infra/server/run.sh to create new servers. List all existing servers IDs again and filter only the IDs of the brand-new servers.
+- Use these brand-new IDs to provision pulumi.
 - Update infra/README.md to include a section explainin how the run.sh works and what are its pre-requisites (e.g., flags). It should also specify which permisisons each api key must have. For instance, according to the infra/server/README.md the --digital-ocean-api-key must have access to "list SSH keys and create droplets". Base yourself on the instructions at infra/pulumi, and infra/ansible readmes to assess the requirements for the other tokens / api keys as well.

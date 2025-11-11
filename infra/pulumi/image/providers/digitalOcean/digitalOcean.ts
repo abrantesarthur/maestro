@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import type { DropletField } from "./types";
+import { DropletField } from "./types";
 
 export class DigitalOcean {
   private static instance: DigitalOcean | null = null;
@@ -47,7 +47,32 @@ export class DigitalOcean {
     return result.stdout ?? "";
   }
 
-  getDroplets(headers: DropletField[] = ["Tags"]): Record<DropletField, string>[] {
+  /**
+   * Fetches droplets using doctl and returns the requested fields keyed by header.
+   * @param options - the options
+   * @param options.headers - Droplet fields to fetch from DigitalOcean.
+   * @param options.filter - Key/value pairs that every droplet must satisfy.
+   * @returns List of droplets keyed by the requested headers.
+   */
+  getDroplets({
+    headers = [DropletField.Tags, DropletField.VPCUUID],
+    filter,
+  }: {
+    headers?: DropletField[];
+    filter?: Partial<Record<DropletField, string[]>>;
+  } = {}): Record<DropletField, string>[] {
+    // FIXME: test
+    // in order to filter a droplet by some field, this field must have been fetched!
+    if (filter) {
+      const keys = Object.keys(filter) as DropletField[];
+      const diff = keys.filter((k) => !headers.includes(k));
+      if (diff.length > 0) {
+        throw new Error(
+          `Invalid 'filter' argument: all fields must be included in the 'headers' argument. Missing: ${diff.join(", ")}.`,
+        );
+      }
+    }
+
     let dropletOutput: string;
     try {
       dropletOutput = this.run([
@@ -59,10 +84,15 @@ export class DigitalOcean {
         "--no-header",
       ]);
     } catch (error) {
-      throw new Error(`Failed to list droplet IPs: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to list droplet IPs: ${(error as Error).message}`,
+      );
     }
 
-    const droplets: Record<string, string>[] = [];
+    const droplets: Record<DropletField, string>[] = [];
+    const filterEntries = filter
+      ? (Object.entries(filter) as [DropletField, string[]][])
+      : null;
 
     dropletOutput
       .split("\n")
@@ -75,6 +105,15 @@ export class DigitalOcean {
         headers.forEach((header, index) => {
           droplet[header] = values[index] ?? "";
         });
+        // exlude from result the droplets that disrespect some filter
+        if (
+          filterEntries &&
+          filterEntries.some(([field, expected]) =>
+            expected.every((e) => droplet[field] !== e),
+          )
+        ) {
+          return;
+        }
         droplets.push(droplet);
       });
 
