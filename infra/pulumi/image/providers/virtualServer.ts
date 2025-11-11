@@ -1,12 +1,16 @@
 import { DigitalOcean } from "./digitalOcean";
 import { DropletField } from "./digitalOcean/types";
+import { VirtualServer, VirtualServerFilter } from "./types";
 
 /**
- * Get the upstream server's Public IPv4 address
+ * Get a list of upstream virtual servers.
  *
- * @returns the IPv4 address
+ * @param filter
+ * @returns the server
  */
-export const getIPv4 = (): string => {
+export const getVirtualServers = (
+  filter?: VirtualServerFilter,
+): VirtualServer[] => {
   const provider = "digital_ocean";
 
   /**
@@ -18,13 +22,16 @@ export const getIPv4 = (): string => {
     case "digital_ocean": {
       const digitalOcean = DigitalOcean.getInstance();
       const droplets = digitalOcean.getDroplets({
-        headers: [DropletField.PublicIPv4, DropletField.Tags],
+        headers: [DropletField.PublicIPv4],
+        filter:
+          filter && filter.ipv4
+            ? { [DropletField.PublicIPv4]: filter.ipv4 }
+            : {},
       });
-      const dropletIps = droplets.map((d) => d[DropletField.PublicIPv4]);
-      if (dropletIps.length === 0) {
-        throw new Error("DigitalOcean returned zero server IPs.");
+      if (droplets.length === 0) {
+        throw new Error("DigitalOcean returned zero virtual servers!");
       }
-      return dropletIps[0];
+      return droplets.map((d) => ({ ipv4: d.PublicIPv4 }));
     }
   }
 };

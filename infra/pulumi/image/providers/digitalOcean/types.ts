@@ -16,3 +16,6 @@ export enum DropletField {
   Features = "Features",
   Volumes = "Volumes",
 }
+
+/** The filters for a DigitalOcean droplet */
+export type DropletFilter = Partial<Record<DropletField, string[]>>;

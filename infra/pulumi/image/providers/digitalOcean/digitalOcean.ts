@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { DropletField } from "./types";
+import { DropletField, DropletFilter } from "./types";
 
 export class DigitalOcean {
   private static instance: DigitalOcean | null = null;
@@ -59,7 +59,7 @@ export class DigitalOcean {
     filter,
   }: {
     headers?: DropletField[];
-    filter?: Partial<Record<DropletField, string[]>>;
+    filter?: DropletFilter;
   } = {}): Record<DropletField, string>[] {
     // FIXME: test
     // in order to filter a droplet by some field, this field must have been fetched!
