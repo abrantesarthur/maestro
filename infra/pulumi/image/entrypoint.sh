@@ -22,6 +22,10 @@ fi
 # Use PULUMI_ACCESS_TOKEN to log into Pulumi Cloud at api.pulumi.com without prompting.
 pulumi login 
 
+if [[ -n "${PULUMI_CONFIG_PROD_IPV4S:-}" ]]; then
+  pulumi config set --stack prod "dalhe:prodIpv4s" "${PULUMI_CONFIG_PROD_IPV4S}"
+fi
+
 # Run the requested Pulumi action
 case "$PULUMI_COMMAND" in
   up)

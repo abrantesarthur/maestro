@@ -11,6 +11,7 @@ PULUMI_ACCESS_TOKEN=""
 CLOUDFLARE_API_TOKEN=""
 DIGITAL_OCEAN_API_KEY=""
 PULUMI_COMMAND="up"
+PULUMI_CONFIG_PROD_IPV4S=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pulumi-access-token)
@@ -31,6 +32,11 @@ while [[ $# -gt 0 ]]; do
     --command)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       PULUMI_COMMAND="$2"
+      shift 2
+      ;;
+    --prod-ipv4s)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      PULUMI_CONFIG_PROD_IPV4S="$2"
       shift 2
       ;;
     *)
@@ -65,6 +71,13 @@ if [[ -z "${DIGITAL_OCEAN_API_KEY}" ]]; then
   exit 1
 fi
 
+if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
+  if [[ ! "${PULUMI_CONFIG_PROD_IPV4S}" =~ ^\[.*\]$ ]]; then
+    printf 'Error: --prod-ipv4s must be a JSON array, e.g. '["123.45.678.00","123.45.678.01"]'.\n' >&2
+    exit 1
+  fi
+fi
+
 
 
 echo "Building Docker image ${IMAGE_NAME}..."
@@ -74,9 +87,16 @@ if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); th
 fi
 
 echo "Running the ${IMAGE_NAME} container..."
+docker_env=(
+  -e "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
+  -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
+  -e "DIGITAL_OCEAN_API_KEY=${DIGITAL_OCEAN_API_KEY}"
+  -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
+)
+if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
+  docker_env+=(-e "PULUMI_CONFIG_PROD_IPV4S=${PULUMI_CONFIG_PROD_IPV4S}")
+fi
+
 docker run -it --rm \
-    -e CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN}" \
-    -e PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}" \
-    -e DIGITAL_OCEAN_API_KEY="${DIGITAL_OCEAN_API_KEY}" \
-    -e PULUMI_COMMAND="${PULUMI_COMMAND}" \
-    "${IMAGE_NAME}"
+  "${docker_env[@]}" \
+  "${IMAGE_NAME}"

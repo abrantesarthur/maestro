@@ -1,5 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
-import { server } from "./providers";
+import { getVirtualServers } from "./providers";
 import { SshTunnel, DnsRecord, DnsRecordArgs } from "./resources";
 
 const stackConfig = new pulumi.Config("dalhe");
@@ -20,22 +20,17 @@ new SshTunnel({
   },
 });
 
-const ipv4 = server.getIPv4();
-const DNS_RECORDS: DnsRecordArgs[] = [
-  {
-    content: ipv4,
-    type: "A",
-    domain,
-  },
-  {
-    content: ipv4,
-    type: "A",
-    domain,
-    subdomain: "www",
-  },
-];
-
-// create the DNS records
+// create A DNS records for each production server
+const prodIpv4s = stackConfig.getObject<string[]>("prodIpv4s");
+const virtualServers = getVirtualServers(prodIpv4s ? { ipv4: prodIpv4s } : {});
+const DNS_RECORDS: DnsRecordArgs[] = virtualServers.reduce<DnsRecordArgs[]>(
+  (acc, prev) => [
+    ...acc,
+    { content: prev.ipv4, type: "A", domain },
+    { content: prev.ipv4, type: "A", domain, subdomain: "www" },
+  ],
+  [],
+);
 DNS_RECORDS.forEach((r) => {
   new DnsRecord(r);
 });

@@ -31,7 +31,8 @@ Run the helper script from `infra/pulumi`:
   --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
   --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
   --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
-  [--command up|refresh]
+  [--command up|refresh] \
+  [--prod-ipv4s '["123.45.678.00","123.45.678.01"]']
 ```
 
 When you run the script it:
@@ -50,11 +51,14 @@ When you run the script it:
 - `--digital-ocean-api-key` is exported as `DIGITAL_OCEAN_API_KEY` and used by
   `doctl` to look up droplet details.
 
-### Optional flag:
+### Optional flags:
 
 - `--command` controls the Pulumi action (`up` by default). Supported values are
   `up` to apply infrastructure changes and `refresh` to reconcile the state
   without deploying.
+- `--prod-ipv4s` accepts a JSON array of IPv4 addresses (for example
+  `'["123.45.678.00","123.45.678.01"]'`). If provided, Pulumi
+  creates DNS records only for the supplied servers. Otherwise, it creates records for every server it can find.
 
 ## What the Container Does
 
