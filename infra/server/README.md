@@ -1,39 +1,14 @@
 # Server Bootstrapper
 
-This directory packages everything needed to provision a DigitalOcean droplet through a Dockerized helper script.
+This directory packages everything needed to provision DigitalOcean droplets.
 
-- `image/` – Docker build context containing `Dockerfile` and `entrypoint.sh`.
-- `run.sh` – convenience script that builds the image and runs the container.
-- `config.env` – environment-style configuration consumed by `run.sh`.
+## Workflow
 
-## Configure
-
-Edit `config.env` to set the droplet parameters and credentials:
-
-```env
-IMAGE_NAME=<name of the bootstrapping docker image>
-DROPLET_REGION=<the geographical region to create the droplet>
-DROPLET_OS_IMAGE=<the droplet OS image>
-DROPLET_SSH_KEY_ID=<the publich ssh key id. It must already exist within Digital Ocean>
-DROPLET_SIZE=<the droplet size>
-DROPLET_NAME=<the droplet name>
-DROPLET_COUNT=<how many droplets to create>
-
-```
-
-When `DROPLET_COUNT` is greater than `1`, the bootstrapper will append a numeric suffix (`-1`, `-2`, …) to the requested `DROPLET_NAME` to keep each droplet unique.
-
-## Build & Run via run.sh
-
-`run.sh` requires the DigitalOcean API token to be passed explicitly—the script never reads it from `config.env`. Generate a token with access to list SSH keys and create droplets in the DigitalOcean control panel, then run:
+Run the `run.sh` script. It validates the provided DigitalOcean API token, builds and run a docker image according to the `image/` context which provisions droplets according to the specified `config.env`. If `INTERACTIVE = true` it reads the other configuration values interactively from the CLI.
 
 ```bash
 ./run.sh --api-key "<digital_ocean_api_key>"
 ```
-
-All remaining settings come from `config.env`. The script builds `IMAGE_NAME` from `image/` and forwards those values into the container. Set `INTERACTIVE=true` in `config.env` to skip flag validation and answer prompts inside the container instead.
-
-## Manual Workflow
 
 If you prefer manual control:
 
@@ -50,6 +25,35 @@ docker run -it "${IMAGE_NAME}" \
 ```
 
 Any flag you omit triggers interactive prompts inside the container. Keep the API key confidential and avoid committing real tokens.
+
+### Required flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--api-key` | The DigitalOcean API token. Create it in the DigitalOcean control panel with permission to list SSH keys and create droplets.   |
+
+### Configuration
+
+Edit `config.env` to set the droplet parameters and credentials:
+
+```env
+IMAGE_NAME=<name of the bootstrapping docker image>
+DROPLET_REGION=<the geographical region to create the droplet>
+DROPLET_OS_IMAGE=<the droplet OS image>
+DROPLET_SSH_KEY_ID=<the publich ssh key id. It must already exist within Digital Ocean>
+DROPLET_SIZE=<the droplet size>
+DROPLET_NAME=<the droplet name>
+DROPLET_COUNT=<how many droplets to create>
+
+```
+
+When `DROPLET_COUNT` is greater than `1`, the bootstrapper will append a numeric suffix (`-1`, `-2`, …) to the requested `DROPLET_NAME` to keep each droplet unique.
+
+## Components
+
+- `image/` – Docker build context containing `Dockerfile` and `entrypoint.sh`.
+- `run.sh` – convenience script that builds the image and runs the container.
+- `config.env` – environment-style configuration consumed by `run.sh`.
 
 ## Future Improvements
 
