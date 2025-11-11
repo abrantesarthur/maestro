@@ -15,15 +15,7 @@ Run `./run.sh` with the required flags. The script validates required inputs and
 | `--cloudflare-account-id` | Used together with the tunnel ID/API key to call the Cloudflare API for a one-time tunnel token. |
 | `--cloudflare-api-key` | Bearer token with permission to read tunnel credentials. |
 
-
-After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then runs:
-
-```bash
-ansible-navigator run playbooks/cloudflared.yml
-ansible-navigator run playbooks/groups.yml
-```
-
-Running `cloudflared` first is intentional: we need the tunnel established before we can rely on the friendly hostname `ssh.dalhe.ai`.
+After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
 
 ## Components
 

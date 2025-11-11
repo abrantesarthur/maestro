@@ -153,7 +153,7 @@ ansible-builder build \
   --tag "${EE_IMAGE_TAG}" \
   -f "${EE_DEFINITION_FILE}" 
 
-# provision cloudflared
+# provision cloudflared first. We need the tunnel established before we can rely on the friendly hostname `ssh.dalhe.ai`.
 echo "Provisioning cloudflared..."
 export PROD_SERVER_IP
 export CLOUDFLARE_TUNNEL_TOKEN
