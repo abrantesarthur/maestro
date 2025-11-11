@@ -29,41 +29,7 @@ export class SshTunnel extends pulumi.ComponentResource {
 
     // ensure the configuration has valid ingresses property
     const { configuration } = args;
-    pulumi.output(configuration).apply((config) => {
-      const ingresses = config.ingresses ?? [];
-      if (ingresses.length === 0) {
-        throw new Error(
-          `SshTunnel expects the "configuration.ingresses" array to be defined and not empty`,
-        );
-      }
-
-      // at least one ingresses entry must have hostname
-      if (ingresses.filter((i) => (i.hostname ?? "").length > 0).length === 0) {
-        throw new Error(
-          `At least one SshTunnel configuration.ingresses.hostname must be defined`,
-        );
-      }
-
-      const domainSuffix = `.${domain}`;
-      ingresses.forEach((ingress, index) => {
-        const hostname = ingress.hostname ?? "";
-        if (hostname.length === 0) {
-          return;
-        }
-        if (!hostname.endsWith(domainSuffix)) {
-          throw new Error(
-            `SshTunnel configuration.ingresses[${index}].hostname must end with "${domainSuffix}"`,
-          );
-        }
-
-        const subdomain = hostname.slice(0, -domainSuffix.length);
-        if (subdomain.length === 0 || subdomain.includes(".")) {
-          throw new Error(
-            `SshTunnel configuration.ingresses[${index}].hostname must be in the form <subdomain>${domainSuffix}`,
-          );
-        }
-      });
-    });
+    this.validateConfiguration(configuration, domain);
 
     // create the tunnel
     const tunnel = new cloudflare.ZeroTrustTunnelCloudflared(
@@ -117,6 +83,47 @@ export class SshTunnel extends pulumi.ComponentResource {
       tunnelId: tunnel.id,
       tunnelConfigId: tunnelConfig.id,
       dnsRecordIds,
+    });
+  }
+
+  private validateConfiguration(
+    configuration: pulumi.Input<SshTunnelConfiguration>,
+    domain: string,
+  ): void {
+    pulumi.output(configuration).apply((config) => {
+      const ingresses = config.ingresses ?? [];
+      if (ingresses.length === 0) {
+        throw new Error(
+          `SshTunnel expects the "configuration.ingresses" array to be defined and not empty`,
+        );
+      }
+
+      // at least one ingresses entry must have hostname
+      if (ingresses.filter((i) => (i.hostname ?? "").length > 0).length === 0) {
+        throw new Error(
+          `At least one SshTunnel configuration.ingresses.hostname must be defined`,
+        );
+      }
+
+      const domainSuffix = `.${domain}`;
+      ingresses.forEach((ingress, index) => {
+        const hostname = ingress.hostname ?? "";
+        if (hostname.length === 0) {
+          return;
+        }
+        if (!hostname.endsWith(domainSuffix)) {
+          throw new Error(
+            `SshTunnel configuration.ingresses[${index}].hostname must end with "${domainSuffix}"`,
+          );
+        }
+
+        const subdomain = hostname.slice(0, -domainSuffix.length);
+        if (subdomain.length === 0 || subdomain.includes(".")) {
+          throw new Error(
+            `SshTunnel configuration.ingresses[${index}].hostname must be in the form <subdomain>${domainSuffix}`,
+          );
+        }
+      });
     });
   }
 
