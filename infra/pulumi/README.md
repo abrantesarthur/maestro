@@ -77,5 +77,3 @@ When you run the script it:
 
 - Only the `prod` stack is wired up; adding more stacks will require code and
   configuration changes.
-- We only support a single DigitalOcean droplet. The first droplet returned by
-  `doctl` is treated as authoritative, even if multiple servers exist.
