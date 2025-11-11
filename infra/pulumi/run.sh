@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
       PULUMI_COMMAND="$2"
       shift 2
       ;;
-    --prod-ipv4s)
+    --prod-server-ips)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       PULUMI_CONFIG_PROD_IPV4S="$2"
       shift 2
@@ -73,7 +73,7 @@ fi
 
 if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
   if [[ ! "${PULUMI_CONFIG_PROD_IPV4S}" =~ ^\[.*\]$ ]]; then
-    printf 'Error: --prod-ipv4s must be a JSON array, e.g. '["123.45.678.00","123.45.678.01"]'.\n' >&2
+    printf 'Error: --prod-server-ips must be a JSON array, e.g. '["123.45.678.00","123.45.678.01"]'.\n' >&2
     exit 1
   fi
 fi
