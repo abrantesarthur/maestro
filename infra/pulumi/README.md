@@ -12,7 +12,7 @@ Run the `run.sh` script. It validates that all required flags are present,  buil
   --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
   --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
   --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
-  --prod-server-ssh-key-path "/path/to/key>" \
+  --ssh-key "/path/to/key>" \
   [--command up|refresh] \
   [--prod-server-ips '["123.45.678.00","123.45.678.01"]']
 ```
@@ -38,7 +38,7 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
    permissions to operate on the `prod` stack. |
 | `--cloudflare-api-token` | authorises changes to the target Cloudflare zone. It must have `Zone` → `DNS` → `Edit` and `Account` → `Cloudflare Tunnel` → `Edit` permissions for the dalhe.ai zone (Manage Account → Account API Tokens). |
 | `--digital-ocean-api-key` | is exported as `DIGITAL_OCEAN_API_KEY` and used by `doctl` to look up droplet details. It must have permission to list droplets.   |
-| `--prod-server-ssh-key-path` | absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
+| `--ssh-key` | absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
 
 ### Optional flags:
 

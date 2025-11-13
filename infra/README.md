@@ -42,6 +42,15 @@ Help me populate infra/run.ts to provision a brand-new server end-to-end with cl
 - infra/run.ts works as a CLI program. Ensure the flags --digital-ocean-api-key, --pulumi-access-token and --cloudflare-api-token are provided.
 - authenticate against DigitalOcean with doctl auth init -t <--digital-ocean-api-key> using bun's spawnSync.
 - list the existing droplet IDs and save those for later. We will fully remove them once the whole provisioning flow is finished.
-- execute infra/server/run.ts to create new servers. List all existing servers IDs and Ipv4s again and filter only the brand-new servers.
-- Use these IPv4s of these brand-new servers to provision pulumi by invoking infra/pulumi/run.sh passing their IPv4s via --prod-server-ips. You can read infra/pulumi/README.md to figure out which other options are required.
+- execute infra/server/run.ts to create new servers.
+- list all existing servers IDs and Ipv4s again. This will return the list of previously existing servers (if any) and new servers. Filter the brand-new servers into a variable.
+- Use the IPs of these brand-new servers to provision pulumi by invoking infra/pulumi/run.sh passing their IPv4s via --prod-server-ips. You can read infra/pulumi/README.md to figure out which other options are required.
+- infra/pulumi/run.sh will output the stack outputs in between **PULUMI_OUTPUTS_BEGIN** and **PULUMI_OUTPUTS_END** sentinels. Extract the block between them to figure out the sshHostnames. The block will look like:
+  **PULUMI_OUTPUTS_BEGIN**
+  Current stack outputs (1):
+  OUTPUT VALUE
+  sshHostnames ["ssh-a.dalhe.ai"]
+  **PULUMI_OUTPUTS_END**
+- use these sshHostnames to invoke infra/ansible/run.sh. It requires other options which you can also figure out from infra/ansible/README.md.
+
 - Update infra/README.md to include a section explainin how the run.ts works and what are its pre-requisites (e.g., flags). It should also specify which permisisons each api key must have. For instance, according to the infra/server/README.md the --digital-ocean-api-key must have access to "list SSH keys and create droplets". Base yourself on the instructions at infra/pulumi, and infra/ansible readmes to assess the requirements for the other tokens / api keys as well.

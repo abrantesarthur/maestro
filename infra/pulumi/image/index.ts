@@ -20,20 +20,10 @@ const SSH_TUNNELS: SshTunnelArgs[] = virtualServers.map((vs) => {
   return {
     name: tunnelName,
     ipv4: vs.ipv4,
-    configuration: {
-      ingresses: [
-        {
-          hostname: `${tunnelName}.${domain}`,
-          service: "ssh://localhost:22",
-        },
-        {
-          service: "http_status:404",
-        },
-      ],
-    },
+    hostname: `${tunnelName}.${domain}`,
   };
 });
-SSH_TUNNELS.forEach((t) => new SshTunnel(t));
+const sshTunnels = SSH_TUNNELS.map((t) => new SshTunnel(t));
 
 // FIXME: support creating DNS records for multiple servers (or for only the webservers)
 // create A DNS records for each production server
@@ -44,3 +34,6 @@ const DNS_RECORDS: DnsRecordArgs[] = [
 DNS_RECORDS.forEach((r) => {
   new DnsRecord(r);
 });
+
+// export the outputs we care about so they can be consumed by the pulumi cli
+export const sshHostnames = sshTunnels.map((t) => t.hostname);

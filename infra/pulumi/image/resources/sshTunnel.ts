@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
-import { DnsRecord, DnsRecordArgs } from "./dnsRecord";
+import { DnsRecord } from "./dnsRecord";
 import { createSetCloudflaredCommand } from "../commands";
 
 /** The SshTunnel configuration options */
@@ -11,17 +11,14 @@ export type SshTunnelConfiguration =
 export interface SshTunnelArgs {
   /** Human-friendly tunnel name shown in Cloudflare Zero Trust */
   name: string;
-  /** Cloudflare tunnel configuration describing ingresses and origin settings */
-  configuration: pulumi.Input<SshTunnelConfiguration>;
+  /** The hostname used to ssh into the tunnel */
+  hostname: pulumi.Input<string>;
   /** The IPv4 address of the server this tunnel refers to */
   ipv4: pulumi.Input<string>;
 }
 
 export class SshTunnel extends pulumi.ComponentResource {
-  readonly tunnelId: pulumi.Output<string>;
-  readonly tunnelConfigId: pulumi.Output<string>;
-  readonly dnsRecordIds: pulumi.Output<string[]>;
-  readonly stopCloudflaredCommandId: pulumi.Output<string>;
+  readonly hostname: pulumi.Output<string>;
 
   constructor(args: SshTunnelArgs, opts?: pulumi.ComponentResourceOptions) {
     super("dalhe:cloudflare:Tunnel", args.name, opts);
@@ -31,7 +28,7 @@ export class SshTunnel extends pulumi.ComponentResource {
     const domain = stackConfig.require("domain");
     const configSrc = "cloudflare";
 
-    const { configuration, ipv4 } = args;
+    const { ipv4 } = args;
 
     const { CLOUDFLARE_API_TOKEN } = process.env;
     if (!CLOUDFLARE_API_TOKEN) {
@@ -40,7 +37,7 @@ export class SshTunnel extends pulumi.ComponentResource {
       );
     }
 
-    this.validateConfiguration(configuration, domain);
+    this.validateHostname(args.hostname, domain);
 
     // create the tunnel
     const tunnel = new cloudflare.ZeroTrustTunnelCloudflared(
@@ -54,41 +51,41 @@ export class SshTunnel extends pulumi.ComponentResource {
     );
 
     // create the tunnel configuration
-    const tunnelConfig = new cloudflare.ZeroTrustTunnelCloudflaredConfig(
+    new cloudflare.ZeroTrustTunnelCloudflaredConfig(
       `${resourceName}-config`,
       {
         accountId,
         tunnelId: tunnel.id,
-        config: configuration,
+        config: {
+          ingresses: [
+            {
+              hostname: args.hostname,
+              service: "ssh://localhost:22",
+            },
+            {
+              service: "http_status:404",
+            },
+          ],
+        },
         source: configSrc,
       },
       { parent: tunnel },
     );
 
     // create the CNAME dns records
-    const dnsRecordIds = pulumi.output(configuration).apply((config) => {
-      const ingresses = config.ingresses ?? [];
-
-      const type = "CNAME";
-      const records: DnsRecordArgs[] = ingresses
-        .filter((i) => (i.hostname ?? "").length > 0)
-        .map((i) => ({
-          content: pulumi.interpolate`${tunnel.id}.cfargotunnel.com`,
-          type,
-          domain,
-          subdomain: i.hostname!.split(".")[0],
-        }));
-
-      const recordIds = records.map((r) => {
-        const createdRecord = new DnsRecord(r, { parent: this });
-        return createdRecord.id;
-      });
-
-      return pulumi.all(recordIds);
-    });
+    this.hostname = pulumi.output(args.hostname);
+    new DnsRecord(
+      {
+        content: pulumi.interpolate`${tunnel.id}.cfargotunnel.com`,
+        type: "CNAME",
+        domain,
+        subdomain: this.hostname.apply((h) => h.split(".")[0]),
+      },
+      { parent: this },
+    );
 
     // create a command to stop cloudflared before we try to destroy a tunnel
-    const stopCloudflaredCommand = createSetCloudflaredCommand({
+    createSetCloudflaredCommand({
       namePrefix: resourceName,
       ipv4,
       accountId,
@@ -96,56 +93,30 @@ export class SshTunnel extends pulumi.ComponentResource {
       cloudflareApiToken: CLOUDFLARE_API_TOKEN,
     });
 
-    this.tunnelId = tunnel.id;
-    this.tunnelConfigId = tunnelConfig.id;
-    this.dnsRecordIds = dnsRecordIds;
-    this.stopCloudflaredCommandId = stopCloudflaredCommand.id;
     this.registerOutputs({
-      tunnelId: tunnel.id,
-      tunnelConfigId: tunnelConfig.id,
-      dnsRecordIds,
-      stopCloudflaredCommandId: this.stopCloudflaredCommandId,
+      hostname: this.hostname,
     });
   }
 
-  private validateConfiguration(
-    configuration: pulumi.Input<SshTunnelConfiguration>,
+  private validateHostname(
+    hostname: pulumi.Input<string>,
     domain: string,
   ): void {
-    pulumi.output(configuration).apply((config) => {
-      const ingresses = config.ingresses ?? [];
-      if (ingresses.length === 0) {
-        throw new Error(
-          `SshTunnel expects the "configuration.ingresses" array to be defined and not empty`,
-        );
-      }
-
-      // at least one ingresses entry must have hostname
-      if (ingresses.filter((i) => (i.hostname ?? "").length > 0).length === 0) {
-        throw new Error(
-          `At least one SshTunnel configuration.ingresses.hostname must be defined`,
-        );
-      }
-
+    pulumi.output(hostname).apply((h) => {
       const domainSuffix = `.${domain}`;
-      ingresses.forEach((ingress, index) => {
-        const hostname = ingress.hostname ?? "";
-        if (hostname.length === 0) {
-          return;
-        }
-        if (!hostname.endsWith(domainSuffix)) {
-          throw new Error(
-            `SshTunnel configuration.ingresses[${index}].hostname must end with "${domainSuffix}"`,
-          );
-        }
+      if (h.length === 0) {
+        return;
+      }
+      if (!h.endsWith(domainSuffix)) {
+        throw new Error(`SshTunnel hostname must end with "${domainSuffix}"`);
+      }
 
-        const subdomain = hostname.slice(0, -domainSuffix.length);
-        if (subdomain.length === 0 || subdomain.includes(".")) {
-          throw new Error(
-            `SshTunnel configuration.ingresses[${index}].hostname must be in the form <subdomain>${domainSuffix}`,
-          );
-        }
-      });
+      const subdomain = h.slice(0, -domainSuffix.length);
+      if (subdomain.length === 0 || subdomain.includes(".")) {
+        throw new Error(
+          `SshTunnel hostname must be in the form <subdomain>${domainSuffix}`,
+        );
+      }
     });
   }
 

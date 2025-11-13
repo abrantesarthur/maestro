@@ -30,6 +30,9 @@ fi
 case "$PULUMI_COMMAND" in
   up)
     pulumi up --yes --stack prod
+    echo "__PULUMI_OUTPUTS_BEGIN__"
+    pulumi stack output --stack prod
+    echo "__PULUMI_OUTPUTS_END__"
     ;;
   refresh)
     pulumi refresh --stack prod
