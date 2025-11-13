@@ -22,7 +22,7 @@ export const getVirtualServers = (
     case "digital_ocean": {
       const digitalOcean = DigitalOcean.getInstance();
       const droplets = digitalOcean.getDroplets({
-        headers: [DropletField.PublicIPv4],
+        headers: [DropletField.PublicIPv4, DropletField.Tags, DropletField.Name],
         filter:
           filter && filter.ipv4
             ? { [DropletField.PublicIPv4]: filter.ipv4 }
@@ -31,7 +31,7 @@ export const getVirtualServers = (
       if (droplets.length === 0) {
         throw new Error("DigitalOcean returned zero virtual servers!");
       }
-      return droplets.map((d) => ({ ipv4: d.PublicIPv4 }));
+      return droplets.map((d) => ({ ipv4: d.PublicIPv4, tags: d.Tags.split(","), name: d.Name }));
     }
   }
 };

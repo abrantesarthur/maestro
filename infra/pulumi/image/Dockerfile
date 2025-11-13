@@ -1,6 +1,6 @@
 FROM ubuntu:25.10
 
-# install curl, unzip, and nodejs
+# install curl, unzip, nodejs, sudo, and ssh client
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -9,6 +9,8 @@ RUN apt-get update \
         nodejs \
         npm \
         wget \
+        sudo \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # install pulumi
@@ -29,6 +31,7 @@ WORKDIR /workspace
 COPY package.json package-lock.json Pulumi.yaml Pulumi.prod.yaml tsconfig.json index.ts ./
 COPY resources ./resources
 COPY providers ./providers
+COPY commands ./commands
 
 # install the Node packages
 RUN npm install

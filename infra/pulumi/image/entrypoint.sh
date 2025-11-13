@@ -29,10 +29,13 @@ fi
 # Run the requested Pulumi action
 case "$PULUMI_COMMAND" in
   up)
-    pulumi up --yes --stack prod "$@"
+    pulumi up --yes --stack prod
     ;;
   refresh)
-    pulumi refresh --stack prod "$@"
+    pulumi refresh --stack prod
+    ;;
+  cancel)
+    pulumi cancel --stack prod
     ;;
   *)
     printf 'Unsupported PULUMI_COMMAND env var: %s (expected "up" or "refresh")\n' "$PULUMI_COMMAND" >&2

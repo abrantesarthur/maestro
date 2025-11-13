@@ -12,6 +12,7 @@ CLOUDFLARE_API_TOKEN=""
 DIGITAL_OCEAN_API_KEY=""
 PULUMI_COMMAND="up"
 PULUMI_CONFIG_PROD_IPV4S=""
+PROD_SERVER_SSH_KEY_PATH=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pulumi-access-token)
@@ -39,6 +40,11 @@ while [[ $# -gt 0 ]]; do
       PULUMI_CONFIG_PROD_IPV4S="$2"
       shift 2
       ;;
+    --prod-server-ssh-key-path)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      PROD_SERVER_SSH_KEY_PATH="$2"
+      shift 2
+      ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
       exit 1
@@ -49,10 +55,10 @@ done
 
 # ensure --command is either up or refresh
 case "$PULUMI_COMMAND" in
-  up|refresh)
+  up|refresh|cancel)
     ;;
   *)
-    printf 'Invalid value for --command: %s. Expected "up" or "refresh".\n' "$PULUMI_COMMAND" >&2
+    printf 'Invalid value for --command: %s. Expected "up", "refresh", or "cancel".\n' "$PULUMI_COMMAND" >&2
     exit 1
     ;;
 esac
@@ -70,6 +76,21 @@ if [[ -z "${DIGITAL_OCEAN_API_KEY}" ]]; then
   printf 'Error: --digital-ocean-api-key <api_key> is required.\n' >&2
   exit 1
 fi
+if [[ -z "${PROD_SERVER_SSH_KEY_PATH}" ]]; then
+  printf 'Error: --prod-server-ssh-key-path </path/to/key> is required.\n' >&2
+  exit 1
+fi
+
+if [[ ! -f "${PROD_SERVER_SSH_KEY_PATH}" ]]; then
+  printf 'Error: %s does not exist or is not a file.\n' "${PROD_SERVER_SSH_KEY_PATH}" >&2
+  exit 1
+fi
+
+# convert SSH key path to absolute for docker volume mounting
+if [[ "${PROD_SERVER_SSH_KEY_PATH}" != /* ]]; then
+  PROD_SERVER_SSH_KEY_PATH="$(cd "$(dirname "${PROD_SERVER_SSH_KEY_PATH}")" && pwd)/$(basename "${PROD_SERVER_SSH_KEY_PATH}")"
+fi
+
 
 if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
   if [[ ! "${PULUMI_CONFIG_PROD_IPV4S}" =~ ^\[.*\]$ ]]; then
@@ -98,5 +119,6 @@ if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
 fi
 
 docker run -it --rm \
+  -v "${PROD_SERVER_SSH_KEY_PATH}:/root/.ssh/ssh_dalhe_ai:ro" \
   "${docker_env[@]}" \
   "${IMAGE_NAME}"

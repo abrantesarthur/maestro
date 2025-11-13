@@ -49,6 +49,8 @@ DROPLET_COUNT=<how many droplets to create>
 
 When `DROPLET_COUNT` is greater than `1`, the bootstrapper will append a numeric suffix (`-1`, `-2`, …) to the requested `DROPLET_NAME` to keep each droplet unique.
 
+Every droplet also gets an automatic SSH tag so you can easily target it with `doctl`. The tag format is `ssh-<letter>`, where the letter reflects the droplet index (`ssh-a` for the first droplet, `ssh-b` for the second, and so on, rolling to `aa`, `ab`, … if you go past 26). No extra configuration is required—just make sure `DROPLET_COUNT` (or `--count`) matches the number of droplets you expect so the ordering stays predictable.
+
 ## Components
 
 - `image/` – Docker build context containing `Dockerfile` and `entrypoint.sh`.

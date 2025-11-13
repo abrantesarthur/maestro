@@ -2,6 +2,10 @@
 export interface VirtualServer {
   /** The server's Public IPv4 address */
   ipv4: string;
+  /** The server's tags */
+  tags: string[];
+  /** The server's name */
+  name: string;
 }
 
 /** Filters for a VirtualServer */

@@ -57,6 +57,23 @@ select_doctl_resource() {
   done
 }
 
+# Derives a ssh-<suffix> tag for each droplet by index.
+build_droplet_ssh_tag() {
+  local index="$1"
+  local suffix=""
+
+  while (( index > 0 )); do
+    local remainder=$(((index - 1) % 26))
+    local char_code=$((97 + remainder))
+    local char
+    printf -v char '%b' "\\$(printf '%03o' "$char_code")"
+    suffix="${char}${suffix}"
+    index=$(((index - 1) / 26))
+  done
+
+  printf 'ssh-%s' "$suffix"
+}
+
 ## try to read the arguments from the command-line
 CLI_DOCTL_API_KEY=""
 CLI_SSH_KEY_ID=""
@@ -198,6 +215,15 @@ else
   done
 fi
 
+# Determine how many droplets already exist to offset SSH tags.
+EXISTING_DROPLET_LIST=$(doctl_compute droplet list --no-header)
+if [[ -z "$EXISTING_DROPLET_LIST" ]]; then
+  EXISTING_DROPLET_COUNT=0
+else
+  EXISTING_DROPLET_COUNT=$(printf '%s' "$EXISTING_DROPLET_LIST" | wc -l | tr -d ' ')
+fi
+printf '\n🔎 Found %s existing droplet(s).\n' "$EXISTING_DROPLET_COUNT"
+
 printf "\n📦 Creating %s droplet(s)...\n" "$COUNT"
 for ((instance_index = 1; instance_index <= COUNT; instance_index++)); do
   if (( COUNT == 1 )); then
@@ -206,8 +232,11 @@ for ((instance_index = 1; instance_index <= COUNT; instance_index++)); do
     CURRENT_NAME="${NAME}-${instance_index}"
   fi
 
+  TAG_INDEX=$((EXISTING_DROPLET_COUNT + instance_index))
+  CURRENT_TAG="$(build_droplet_ssh_tag "$TAG_INDEX")"
+
   printf '\n📦 Creating droplet (%d/%d): %s...\n' "$instance_index" "$COUNT" "$CURRENT_NAME"
-  if ! create_output=$(doctl compute droplet create "$CURRENT_NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --wait --enable-monitoring --format PublicIPv4 2>&1); then
+  if ! create_output=$(doctl compute droplet create "$CURRENT_NAME" --region "$REGION" --image "$IMAGE" --size "$SIZE" --ssh-keys "$SSH_KEY" --tag-name "$CURRENT_TAG" --wait --enable-monitoring --format PublicIPv4 2>&1); then
     error_lines=$(printf '%s\n' "$create_output" | grep -i '^error:')
     if [[ -z "$error_lines" ]]; then
       error_lines="$create_output"

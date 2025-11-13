@@ -16,10 +16,6 @@ ansible-navigator:
       # mount the ssh.dalhe.ai key at the expected path, as specified by the execution-environment/files/ssh_config
       - src: ~/.ssh/digitalocean_id_ed25519
         dest: /root/.ssh/ssh_dalhe_ai
-    environment-variables: # the environment variables to forward to the execution-environment container
-      pass:
-        - PROD_SERVER_IP
-        - CLOUDFLARE_TUNNEL_TOKEN
   ansible:
     inventory:
       help: False # Do not show inventory help output

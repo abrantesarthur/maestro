@@ -12,17 +12,22 @@ Run the `run.sh` script. It validates that all required flags are present,  buil
   --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
   --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
   --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
+  --prod-server-ssh-key-path "/path/to/key>" \
   [--command up|refresh] \
   [--prod-server-ips '["123.45.678.00","123.45.678.01"]']
 ```
 
-The Pulumi program provisions Cloudflare resources, including DNS records and an SSH tunnel into `ssh.dalhe.ai`. To connect through the tunnel from your machine, install `cloudflared` locally and add the following to your `~/.ssh/config`:
+The Pulumi program provisions Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh-a.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh-a`, `ssh-b`, etc).
+
+To connect through the tunnel from your machine, install `cloudflared` locally and add as many of the following entries to your `~/.ssh/config` as there are servers (don't forget to replace `ssh-a` by the appropriate tag):
 
 ```
-Host ssh.dalhe.ai
+Host ssh-a.dalhe.ai
   ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
   IdentityFile <path to the ssh private key>
 ```
+
+In the event that a server is destroyed, pulumi correctly takes down the tunnels that were linked to it.
 
 ### Required flags:
 
@@ -33,6 +38,7 @@ Host ssh.dalhe.ai
    permissions to operate on the `prod` stack. |
 | `--cloudflare-api-token` | authorises changes to the target Cloudflare zone. It must have `Zone` → `DNS` → `Edit` and `Account` → `Cloudflare Tunnel` → `Edit` permissions for the dalhe.ai zone (Manage Account → Account API Tokens). |
 | `--digital-ocean-api-key` | is exported as `DIGITAL_OCEAN_API_KEY` and used by `doctl` to look up droplet details. It must have permission to list droplets.   |
+| `--prod-server-ssh-key-path` | absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
 
 ### Optional flags:
 

@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { DnsRecord, DnsRecordArgs } from "./dnsRecord";
+import { createSetCloudflaredCommand } from "../commands";
 
 /** The SshTunnel configuration options */
 export type SshTunnelConfiguration =
@@ -12,12 +13,15 @@ export interface SshTunnelArgs {
   name: string;
   /** Cloudflare tunnel configuration describing ingresses and origin settings */
   configuration: pulumi.Input<SshTunnelConfiguration>;
+  /** The IPv4 address of the server this tunnel refers to */
+  ipv4: pulumi.Input<string>;
 }
 
 export class SshTunnel extends pulumi.ComponentResource {
   readonly tunnelId: pulumi.Output<string>;
   readonly tunnelConfigId: pulumi.Output<string>;
   readonly dnsRecordIds: pulumi.Output<string[]>;
+  readonly stopCloudflaredCommandId: pulumi.Output<string>;
 
   constructor(args: SshTunnelArgs, opts?: pulumi.ComponentResourceOptions) {
     super("dalhe:cloudflare:Tunnel", args.name, opts);
@@ -27,7 +31,15 @@ export class SshTunnel extends pulumi.ComponentResource {
     const domain = stackConfig.require("domain");
     const configSrc = "cloudflare";
 
-    const { configuration } = args;
+    const { configuration, ipv4 } = args;
+
+    const { CLOUDFLARE_API_TOKEN } = process.env;
+    if (!CLOUDFLARE_API_TOKEN) {
+      throw new Error(
+        "CLOUDFLARE_API_TOKEN environment variable must be set to manage Cloudflare tunnels.",
+      );
+    }
+
     this.validateConfiguration(configuration, domain);
 
     // create the tunnel
@@ -50,7 +62,7 @@ export class SshTunnel extends pulumi.ComponentResource {
         config: configuration,
         source: configSrc,
       },
-      { parent: this },
+      { parent: tunnel },
     );
 
     // create the CNAME dns records
@@ -75,13 +87,24 @@ export class SshTunnel extends pulumi.ComponentResource {
       return pulumi.all(recordIds);
     });
 
+    // create a command to stop cloudflared before we try to destroy a tunnel
+    const stopCloudflaredCommand = createSetCloudflaredCommand({
+      namePrefix: resourceName,
+      ipv4,
+      accountId,
+      tunnel,
+      cloudflareApiToken: CLOUDFLARE_API_TOKEN,
+    });
+
     this.tunnelId = tunnel.id;
     this.tunnelConfigId = tunnelConfig.id;
     this.dnsRecordIds = dnsRecordIds;
+    this.stopCloudflaredCommandId = stopCloudflaredCommand.id;
     this.registerOutputs({
       tunnelId: tunnel.id,
       tunnelConfigId: tunnelConfig.id,
       dnsRecordIds,
+      stopCloudflaredCommandId: this.stopCloudflaredCommandId,
     });
   }
 

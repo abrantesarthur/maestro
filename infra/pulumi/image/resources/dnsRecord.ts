@@ -27,8 +27,8 @@ export class DnsRecord extends pulumi.ComponentResource {
   readonly id: pulumi.Output<string>;
 
   constructor(args: DnsRecordArgs, opts?: DnsRecordOptions) {
-    super("dalhe:cloudflare:DnsRecord", DnsRecord.buildResourceName(args), {
-      ...(opts?.parent ? { parent: opts.parent } : {}),
+    super("dalhe:cloudflare:DnsRecord", DnsRecord.buildResourceName(args), {}, {
+      ...(opts ?? {}),
     });
     const name = DnsRecord.buildResourceName(args);
 
@@ -91,5 +91,5 @@ export class DnsRecord extends pulumi.ComponentResource {
    * @returns the name of the DNS record within Pulumi
    */
   private static buildResourceName = (a: DnsRecordArgs): string =>
-    `dns-${a.subdomain ? a.subdomain : a.domain}-${a.type}`;
+    `dns-${a.type}-${a.subdomain ? `${a.subdomain}.` : ''}${a.domain}`;
 }
