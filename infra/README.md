@@ -2,55 +2,52 @@
 
 Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. Each component stays in its own subdirectory with dedicated documentation and deployment scripts.
 
+## Workflow
+
+`run.sh` is an orchestration script that wires the DigitalOcean server bootstrapper, the Pulumi Cloudflare stack, and the Ansible playbooks into a single command.
+
+```bash
+./run.sh \
+  --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
+  --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
+  --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
+  --ssh-key "$HOME/.ssh/ssh_dalhe_ai"
+```
+
+## Required flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--digital-ocean-api-key` | Token with permission to list SSH keys, create droplets, list droplets, and destroy droplets. |
+| `--pulumi-access-token` | Pulumi Cloud access token that can log into and mutate the `prod` stack. |
+| `--cloudflare-api-token` | Cloudflare token with `Zone → DNS → Edit` and `Account → Cloudflare Tunnel → Edit` permissions for the dalhe.ai account. |
+| `--ssh-key` | Path to the SSH private key that can reach every server. The same key is bind-mounted inside both the Pulumi and Ansible containers. |
+
+## Optional Flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--provision-server` | Create new DigitalOcean droplets before running the Pulumi and Ansible steps. |
+
 ## Components
 
-- `nginx/` — shared nginx configuration plus automation to push updates to production. Consult `infra/nginx/README.md` before modifying or deploying.
+- `server/` — Dockerized bootstrapper (see `server/run.sh` + `config.env`) that creates virtual servers.
 - `pulumi/` — Pulumi programs for provisioning Cloudflare DNS and related cloud resources.
+- `ansible/` — Ansible execution environment, inventories, and playbooks that configures the servers (e.g., nginx, groups, etc).
 
 ## Working In This Folder
 
-- Make changes inside the relevant component directory and keep cross-cutting scripts co-located with the service they operate.
-- Follow the component-specific README to lint, validate, and deploy.
+- Make changes inside the relevant component directory following its README.
 - Keep commits scoped to a single infrastructure component to simplify rollbacks.
 
-New infrastructure pieces should follow the same structure: top-level directory, a README that explains prerequisites, and scripts that can run non-interactively so we can automate them later.
+### Prerequisites
 
-## TODOs
+- The SSH private key passed via `--ssh-key` must already match a public key uploaded to DigitalOcean so both Pulumi (for remote commands) and Ansible can log into the droplets.
 
-- wire up the whole provisioning workflow in a single run.sh file that consumes sensitive api-keys from the environment and pipes variables from one workflow to the next
-  1. run server
-  2. run pulumi
-  3. run ansible
-- update this provisioning flow so that it doesn't cause downtime. For instance, we should only bring down the existing servers once the new servers have been spin up and properly set up.
-- support skipping the server creation and cloudflare set up and only run ansible. This way, we don't have to fully reboot new servers. In this case, for instance, we do not need to retrieve the list of server IDs at the beginning, since we won't be removing them.
-- update ansible to provision nginx (both install nginx and provision its configuration)
-- update ansible to provision ufw policies
-- deploy our actual backend server to the droplet
-- document everything the droplet is provisioning.
-- Update this README to explain the step by step for provisioning a server from zero.
-- rename infra/server
-- update infra/server to support specifying whether to fully replace the existing droplets after new ones are provisioned.
+## Future improvements
+
+- Update this provisioning flow so that it doesn't cause downtime. For instance, we should only bring down the existing servers once the new servers have been spin up and properly set up.
+- update ansible to provision nginx (both install nginx and provision its configuration).
+- update ansible to provision ufw policies.
+- update ansible to deploy our backend server.
 - consider creating my own docker registry to host images
-
-## Codex instructions
-
-Come up with a plan, ask for feedback, then proceed once I approve.
-
-Help me populate infra/run.ts to provision a brand-new server end-to-end with cloudflare set up and ansible playbooks. Here is how I would do it (feel free to base your solution on mine or come up with your own where you see shortfalls)
-
-- infra/run.ts would be a bun program with the minimum amount of dependencies as possible. Prefer using buil-in bun programs. Initialize the package.json, a tsconfig based on the root tsconfig.json and anything else you'd need.
-- infra/run.ts works as a CLI program. Ensure the flags --digital-ocean-api-key, --pulumi-access-token and --cloudflare-api-token are provided.
-- authenticate against DigitalOcean with doctl auth init -t <--digital-ocean-api-key> using bun's spawnSync.
-- list the existing droplet IDs and save those for later. We will fully remove them once the whole provisioning flow is finished.
-- execute infra/server/run.ts to create new servers.
-- list all existing servers IDs and Ipv4s again. This will return the list of previously existing servers (if any) and new servers. Filter the brand-new servers into a variable.
-- Use the IPs of these brand-new servers to provision pulumi by invoking infra/pulumi/run.sh passing their IPv4s via --prod-server-ips. You can read infra/pulumi/README.md to figure out which other options are required.
-- infra/pulumi/run.sh will output the stack outputs in between **PULUMI_OUTPUTS_BEGIN** and **PULUMI_OUTPUTS_END** sentinels. Extract the block between them to figure out the sshHostnames. The block will look like:
-  **PULUMI_OUTPUTS_BEGIN**
-  Current stack outputs (1):
-  OUTPUT VALUE
-  sshHostnames ["ssh-a.dalhe.ai"]
-  **PULUMI_OUTPUTS_END**
-- use these sshHostnames to invoke infra/ansible/run.sh. It requires other options which you can also figure out from infra/ansible/README.md.
-
-- Update infra/README.md to include a section explainin how the run.ts works and what are its pre-requisites (e.g., flags). It should also specify which permisisons each api key must have. For instance, according to the infra/server/README.md the --digital-ocean-api-key must have access to "list SSH keys and create droplets". Base yourself on the instructions at infra/pulumi, and infra/ansible readmes to assess the requirements for the other tokens / api keys as well.

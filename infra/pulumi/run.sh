@@ -80,7 +80,6 @@ if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
   printf 'Error: --ssh-key </path/to/key> is required.\n' >&2
   exit 1
 fi
-
 if [[ ! -f "${HOST_SSH_KEY_PATH}" ]]; then
   printf 'Error: %s does not exist or is not a file.\n' "${HOST_SSH_KEY_PATH}" >&2
   exit 1

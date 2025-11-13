@@ -74,15 +74,17 @@ export class SshTunnel extends pulumi.ComponentResource {
 
     // create the CNAME dns records
     this.hostname = pulumi.output(args.hostname);
-    new DnsRecord(
-      {
-        content: pulumi.interpolate`${tunnel.id}.cfargotunnel.com`,
-        type: "CNAME",
-        domain,
-        subdomain: this.hostname.apply((h) => h.split(".")[0]),
-      },
-      { parent: this },
-    );
+    this.hostname.apply((hostname) => {
+      new DnsRecord(
+        {
+          content: pulumi.interpolate`${tunnel.id}.cfargotunnel.com`,
+          type: "CNAME",
+          domain,
+          subdomain: hostname.split(".")[0],
+        },
+        { parent: this },
+      );
+    });
 
     // create a command to stop cloudflared before we try to destroy a tunnel
     createSetCloudflaredCommand({
