@@ -4,9 +4,16 @@ This directory contains the Ansible automation that provisions resources in a se
 
 ## Workflow
 
-Run `./run.sh` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
+Run `./run.sh --ssh-hostnames <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
 
 After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
+
+## Required Flags
+
+| Flag | Purpose |
+| --- | --- |
+| `--ssh-hostnames` | Comma-separated list of SSH tunnel hostnames to target (e.g., `ssh-a.dalhe.ai,ssh-b.dalhe.ai`). |
+| `--ssh-key` | Absolute path to the host SSH private key that should be mounted into the execution environment to provide access to the remote servers. |
 
 ## Components
 
@@ -26,14 +33,10 @@ After secrets are in place, `run.sh` builds the execution environment image via 
 
 - Docker installed locally (the script builds and runs a container).
 - The `ansible-builder` and `ansible-navigator` programs must be installed.
-- The ansible execution environment's SSH behavior is controlled by `execution_environment/files/ssh_config`. That file declares a `Host ssh.dalhe.ai` stanza with a `cloudflared access ssh` proxy command and the expected identity file path. It is critical that this hostname matches the one Pulumi provisions (`dalhe:tunnelHostname` in `infra/pulumi/image/Pulumi.prod.yaml`, currently `ssh.dalhe.ai`). If you ever change the tunnel hostname in Pulumi, update both the SSH config file and the inventory entry simultaneously to keep Ansible, Cloudflare, and Pulumi aligned.
 
 ## Idempotence
 
 All playbooks are idempotent. Running them repeatedly will either make changes (if drift is detected) or do nothing (if the server already matches the declared state).
 
 ## Future improvements
-- right now we only support provisioning resources in a single production server. In the future, we should suppport multiple environments and servers.
-
-## TODO
-- find a way to update the `execution_environment/files/ssh_config` files so that we have every provisioned server (e.g., ssh-a, ssh-b, etc)
+- right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). We will have to update the hosts.py file to specify different kinds of hosts and update the playbooks accordingly to reference them.

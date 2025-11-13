@@ -61,7 +61,6 @@ export class DigitalOcean {
     headers?: DropletField[];
     filter?: DropletFilter;
   } = {}): Record<DropletField, string>[] {
-    // FIXME: test
     // in order to filter a droplet by some field, this field must have been fetched!
     if (filter) {
       const keys = Object.keys(filter) as DropletField[];

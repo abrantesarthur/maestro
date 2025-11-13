@@ -12,12 +12,12 @@ ansible-navigator:
     image: ansible_ee:latest # Name of the execution environment image to run
     pull:
       policy: missing # Only pull the image if it’s not present locally
-    volume-mounts:
-      # mount the ssh.dalhe.ai key at the expected path, as specified by the execution-environment/files/ssh_config
-      - src: ~/.ssh/digitalocean_id_ed25519
-        dest: /root/.ssh/ssh_dalhe_ai
+    environment-variables:
+      pass:
+        - SSH_HOSTNAMES
+        - SSH_KEY_PATH
   ansible:
     inventory:
       help: False # Do not show inventory help output
       entries:
-        - inventory/hosts.yml # Inventory file to use for playbook runs
+        - inventory/hosts.py # Dynamic inventory populated via SSH_HOSTNAMES

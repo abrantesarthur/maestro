@@ -6,12 +6,17 @@ SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
 EE_IMAGE_TAG="${EE_IMAGE_TAG:-ansible_ee}"
 EE_DEFINITION_FILE="${SCRIPT_DIR}/execution_environment/execution-environment.yml"
+SSH_HOSTNAMES_ARG=""
+CONTAINER_SSH_KEY_PATH="/root/.ssh/dalhe_ai"
+HOST_SSH_KEY_PATH=""
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0")
 Options:
   -h, --help                       Show this message.
+  --ssh-hostnames <list>           Comma-separated hostnames (required).
+  --ssh-key <path>                 Path to the host SSH private key (required).
 EOF
 }
 
@@ -22,12 +27,42 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
+    --ssh-hostnames)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --ssh-hostnames requires an argument." >&2
+        exit 1
+      fi
+      SSH_HOSTNAMES_ARG="$2"
+      shift 2
+      ;;
+    --ssh-key)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --ssh-key requires an argument." >&2
+        exit 1
+      fi
+      HOST_SSH_KEY_PATH="$2"
+      shift 2
+      ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
       exit 1
       ;;
   esac
 done
+
+if [[ -z "${SSH_HOSTNAMES_ARG}" ]]; then
+  echo "Error: --ssh-hostnames must be provided with at least one hostname." >&2
+  exit 1
+fi
+
+if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
+  echo "Error: --ssh-key must be provided and point to the host SSH private key." >&2
+  exit 1
+fi
+
+if [[ "${HOST_SSH_KEY_PATH}" != /* ]]; then
+  HOST_SSH_KEY_PATH="$(cd "$(dirname "${HOST_SSH_KEY_PATH}")" && pwd -P)/$(basename "${HOST_SSH_KEY_PATH}")"
+fi
 
 # ensure ansible-builder and ansible-navigator are installed in the host
 if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigator >/dev/null 2>&1; then
@@ -74,8 +109,11 @@ ansible-builder build \
 
 # provision groups
 echo "Provisioning groups..."
-ansible-navigator run playbooks/groups.yml
-
+SSH_HOSTNAMES="${SSH_HOSTNAMES_ARG}" \
+SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
+  ansible-navigator run \
+  playbooks/groups.yml \
+  "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
 popd >/dev/null
 
 echo "Done."

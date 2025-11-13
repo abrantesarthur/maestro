@@ -14,26 +14,8 @@ dependencies:
   system: # linux system packages to install
     - openssh-clients # required for SSH connections to remote hosts.
 
-additional_build_files:
-  # copy ssh configuration into the execution enviornment's context/_build folder
-  - src: files/ssh_config
-    dest: files
-  # - src: files/ssh_known_hosts
-  #   dest: files
-
 additional_build_steps:
   # install the cloudflared client for sshing into the server via named host (e.g., ssh.dalhe.ai)
   prepend_final:
     - RUN dnf config-manager addrepo --from-repofile https://pkg.cloudflare.com/cloudflared-ascii.repo
     - RUN dnf install -y cloudflared
-
-  append_final:
-    # bake the ssh configuration into the image
-    - COPY _build/files/ssh_config /tmp/ssh_config
-    - RUN cat /tmp/ssh_config >> /etc/ssh/ssh_config
-    - RUN rm /tmp/ssh_config
-    # set the ssh trusted remote hosts
-    # - COPY _build/files/ssh_known_hosts /tmp/ssh_known_hosts
-    # - RUN mkdir -p /root/.ssh
-    # - RUN cat /tmp/ssh_known_hosts >> /root/.ssh/known_hosts
-    # - RUN rm /tmp/ssh_known_hosts
