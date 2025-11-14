@@ -53,40 +53,47 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-# ensure --command is either up or refresh
+# ensure --command is either up, refresh, cancel, or output
 case "$PULUMI_COMMAND" in
-  up|refresh|cancel)
+  up|refresh|cancel|output)
     ;;
   *)
-    printf 'Invalid value for --command: %s. Expected "up", "refresh", or "cancel".\n' "$PULUMI_COMMAND" >&2
+    printf 'Invalid value for --command: %s. Expected "up", "refresh", "cancel", or "output".\n' "$PULUMI_COMMAND" >&2
     exit 1
     ;;
 esac
+
+NEEDS_PROVIDER_CREDS=true
+if [[ "${PULUMI_COMMAND}" == "output" ]]; then
+  NEEDS_PROVIDER_CREDS=false
+fi
 
 # require mandatory api keys
 if [[ -z "${PULUMI_ACCESS_TOKEN}" ]]; then
   printf 'Error: --pulumi-access-token <token> is required.\n' >&2
   exit 1
 fi
-if [[ -z "${CLOUDFLARE_API_TOKEN}" ]]; then
-  printf 'Error: --cloudflare-api-token <token> is required.\n' >&2
-  exit 1
-fi
-if [[ -z "${DIGITAL_OCEAN_API_KEY}" ]]; then
-  printf 'Error: --digital-ocean-api-key <api_key> is required.\n' >&2
-  exit 1
-fi
-if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
-  printf 'Error: --ssh-key </path/to/key> is required.\n' >&2
-  exit 1
-fi
-if [[ ! -f "${HOST_SSH_KEY_PATH}" ]]; then
-  printf 'Error: %s does not exist or is not a file.\n' "${HOST_SSH_KEY_PATH}" >&2
-  exit 1
+if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
+  if [[ -z "${CLOUDFLARE_API_TOKEN}" ]]; then
+    printf 'Error: --cloudflare-api-token <token> is required.\n' >&2
+    exit 1
+  fi
+  if [[ -z "${DIGITAL_OCEAN_API_KEY}" ]]; then
+    printf 'Error: --digital-ocean-api-key <api_key> is required.\n' >&2
+    exit 1
+  fi
+  if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
+    printf 'Error: --ssh-key </path/to/key> is required.\n' >&2
+    exit 1
+  fi
+  if [[ ! -f "${HOST_SSH_KEY_PATH}" ]]; then
+    printf 'Error: %s does not exist or is not a file.\n' "${HOST_SSH_KEY_PATH}" >&2
+    exit 1
+  fi
 fi
 
 # convert SSH key path to absolute for docker volume mounting
-if [[ "${HOST_SSH_KEY_PATH}" != /* ]]; then
+if [[ -n "${HOST_SSH_KEY_PATH}" && "${HOST_SSH_KEY_PATH}" != /* ]]; then
   HOST_SSH_KEY_PATH="$(cd "$(dirname "${HOST_SSH_KEY_PATH}")" && pwd)/$(basename "${HOST_SSH_KEY_PATH}")"
 fi
 
@@ -106,16 +113,24 @@ fi
 
 echo "Running the ${IMAGE_NAME} container..."
 docker_env=(
-  -e "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
-  -e "DIGITAL_OCEAN_API_KEY=${DIGITAL_OCEAN_API_KEY}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
 )
+if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
+  docker_env+=(
+    -e "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
+    -e "DIGITAL_OCEAN_API_KEY=${DIGITAL_OCEAN_API_KEY}"
+  )
+fi
 if [[ -n "${PULUMI_CONFIG_PROD_IPV4S}" ]]; then
   docker_env+=(-e "PULUMI_CONFIG_PROD_IPV4S=${PULUMI_CONFIG_PROD_IPV4S}")
 fi
 
-docker run -it --rm \
-  -v "${HOST_SSH_KEY_PATH}:/root/.ssh/ssh_dalhe_ai:ro" \
-  "${docker_env[@]}" \
-  "${IMAGE_NAME}"
+docker_cmd=(docker run -it --rm)
+if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
+  docker_cmd+=(-v "${HOST_SSH_KEY_PATH}:/root/.ssh/ssh_dalhe_ai:ro")
+fi
+docker_cmd+=("${docker_env[@]}")
+docker_cmd+=("${IMAGE_NAME}")
+
+"${docker_cmd[@]}"

@@ -1,0 +1,40 @@
+---
+- name: Install nginx
+  ansible.builtin.package:
+    name: "{{ nginx_package_name }}"
+    state: present
+
+- name: Ensure nginx directory structure exists
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/nginx
+    - "{{ nginx_sites_available_dir }}"
+    - "{{ nginx_sites_enabled_dir }}"
+
+- name: Deploy nginx.conf
+  ansible.builtin.copy:
+    src: "{{ nginx_conf_src }}"
+    dest: "{{ nginx_conf_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Validate nginx configuration
+
+- name: Enable site configuration
+  ansible.builtin.file:
+    src: "{{ nginx_site_dest }}"
+    dest: "{{ nginx_site_link }}"
+    state: link
+    force: true
+  notify: Validate nginx configuration
+
+- name: Ensure nginx service is enabled and running
+  ansible.builtin.service:
+    name: "{{ nginx_service_name }}"
+    state: started
+    enabled: true

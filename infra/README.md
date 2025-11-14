@@ -27,7 +27,9 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 
 | Flag | Purpose |
 | --- | --- |
-| `--provision-server` | Create new DigitalOcean droplets before running the Pulumi and Ansible steps. |
+| `--skip-server` | Skips provisioning new DigitalOcean droplets. |
+| `--skip-pulumi` | Skips running the Pulumi stack. |
+| `--skip-ansible` | Skips the Ansible provisioning step entirely. |
 
 ## Components
 
@@ -51,3 +53,13 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 - update ansible to provision ufw policies.
 - update ansible to deploy our backend server.
 - consider creating my own docker registry to host images
+
+## TODO
+- create a require_env_var and require_flag function and share it accross scripts.
+require_env_var() {
+  local env_var_name="$1"
+  if [[ -z "${!env_var_name:-}" ]]; then
+    echo "Missing the ${env_var_name} environment variable." >&2
+    exit 1
+  fi
+}

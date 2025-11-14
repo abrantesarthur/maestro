@@ -39,4 +39,4 @@ After secrets are in place, `run.sh` builds the execution environment image via 
 All playbooks are idempotent. Running them repeatedly will either make changes (if drift is detected) or do nothing (if the server already matches the declared state).
 
 ## Future improvements
-- right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). We will have to update the hosts.py file to specify different kinds of hosts and update the playbooks accordingly to reference them.
+- right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). This way, we can provision nginx only on servers with the website.

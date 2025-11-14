@@ -8,14 +8,22 @@ dependencies:
   python_interpreter: # which python runtime to install
     package_system: python3 # install python3, required for Ansible to run, from a system package manager (e.g., dnf, apt)
   ansible_core: # how to install Ansible itself
-    package_pip: ansible-core # install ansible core via pip to provide the Ansible engine and built-in modules
+    package_pip: ansible-core==2.17.1 # pin to the latest Ansible core for cache-race fixes
   ansible_runner:
-    package_pip: ansible-runner # used by automation tools like ansible-navigator. Not needed if we're not using ansible-navigator.
+    package_pip: ansible-runner==2.4.0 # upgraded for the latest executor fixes
   system: # linux system packages to install
     - openssh-clients # required for SSH connections to remote hosts.
 
+additional_build_files:
+  - src: files/nginx/nginx.conf
+    dest: files/nginx/nginx.conf
+  - src: files/nginx/sites-available/dalhe.ai.conf
+    dest: files/nginx/sites-available/dalhe.ai.conf
+    
 additional_build_steps:
   # install the cloudflared client for sshing into the server via named host (e.g., ssh.dalhe.ai)
   prepend_final:
     - RUN dnf config-manager addrepo --from-repofile https://pkg.cloudflare.com/cloudflared-ascii.repo
     - RUN dnf install -y cloudflared
+  append_final:
+    - COPY _build/files/nginx /opt/nginx

@@ -107,13 +107,21 @@ ansible-builder build \
   --tag "${EE_IMAGE_TAG}" \
   -f "${EE_DEFINITION_FILE}" 
 
-# provision groups
+# helper to run ansible playbooks with shared environment
+run_playbook() {
+  local playbook="$1"
+  SSH_HOSTNAMES="${SSH_HOSTNAMES_ARG}" \
+  SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
+    ansible-navigator run \
+    "playbooks/${playbook}" \
+    "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
+}
+
 echo "Provisioning groups..."
-SSH_HOSTNAMES="${SSH_HOSTNAMES_ARG}" \
-SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
-  ansible-navigator run \
-  playbooks/groups.yml \
-  "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
+run_playbook "groups.yml"
+
+echo "Provisioning nginx..."
+run_playbook "nginx.yml"
 popd >/dev/null
 
 echo "Done."

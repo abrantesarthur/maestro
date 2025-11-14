@@ -1,0 +1,12 @@
+---
+- name: Validate nginx configuration
+  ansible.builtin.command: "{{ nginx_validate_command }}"
+  register: nginx_validation
+  changed_when: false
+  failed_when: nginx_validation.rc != 0
+  notify: Reload nginx
+
+- name: Reload nginx
+  ansible.builtin.service:
+    name: "{{ nginx_service_name }}"
+    state: reloaded
