@@ -49,17 +49,10 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 ## Future improvements
 
 - Update this provisioning flow so that it doesn't cause downtime. For instance, we should only bring down the existing servers once the new servers have been spin up and properly set up.
-- update ansible to provision the website
 - update ansible to provision ufw policies.
 - update ansible to deploy our backend server.
 - consider creating my own docker registry to host images
-
-## TODO
-- create a require_env_var and require_flag function and share it accross scripts.
-require_env_var() {
-  local env_var_name="$1"
-  if [[ -z "${!env_var_name:-}" ]]; then
-    echo "Missing the ${env_var_name} environment variable." >&2
-    exit 1
-  fi
-}
+- provision (origin certificates)[https://developers.cloudflare.com/ssl/concepts/#origin-certificate] between cloudflare and servers.
+    - Will likely need to provision vault to store secrets as well.
+    - Will have to update nginx configurations to support tls connections.
+- provision (edge certificates)[https://developers.cloudflare.com/ssl/concepts/#edge-certificate] between clients and cloudlfare
