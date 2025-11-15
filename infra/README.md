@@ -45,14 +45,3 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 ### Prerequisites
 
 - The SSH private key passed via `--ssh-key` must already match a public key uploaded to DigitalOcean so both Pulumi (for remote commands) and Ansible can log into the droplets.
-
-## Future improvements
-
-- Update this provisioning flow so that it doesn't cause downtime. For instance, we should only bring down the existing servers once the new servers have been spin up and properly set up.
-- update ansible to provision ufw policies.
-- update ansible to deploy our backend server.
-- consider creating my own docker registry to host images
-- provision (origin certificates)[https://developers.cloudflare.com/ssl/concepts/#origin-certificate] between cloudflare and servers.
-    - Will likely need to provision vault to store secrets as well.
-    - Will have to update nginx configurations to support tls connections.
-- provision (edge certificates)[https://developers.cloudflare.com/ssl/concepts/#edge-certificate] between clients and cloudlfare
