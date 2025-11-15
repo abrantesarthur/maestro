@@ -15,10 +15,10 @@ dependencies:
     - openssh-clients # required for SSH connections to remote hosts.
 
 additional_build_files:
-  - src: files/nginx/nginx.conf
-    dest: files/nginx/nginx.conf
-  - src: files/nginx/sites-available/dalhe.ai.conf
-    dest: files/nginx/sites-available/dalhe.ai.conf
+  - src: files/nginx/
+    dest: files/nginx/
+  - src: files/website/
+    dest: files/website/
     
 additional_build_steps:
   # install the cloudflared client for sshing into the server via named host (e.g., ssh.dalhe.ai)
@@ -27,3 +27,4 @@ additional_build_steps:
     - RUN dnf install -y cloudflared
   append_final:
     - COPY _build/files/nginx /opt/nginx
+    - COPY _build/files/website /opt/website

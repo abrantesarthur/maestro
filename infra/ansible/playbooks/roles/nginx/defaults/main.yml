@@ -1,11 +1,7 @@
 ---
-nginx_package_name: nginx
 nginx_service_name: nginx
-nginx_conf_src: /opt/nginx
-nginx_conf_dest: /etc/nginx
-nginx_site_src: /opt/nginx/sites-available/dalhe.ai.conf
-nginx_site_dest: /etc/nginx/sites-available/dalhe.ai.conf
-nginx_site_link: /etc/nginx/sites-enabled/dalhe.ai.conf
-nginx_sites_available_dir: /etc/nginx/sites-available
-nginx_sites_enabled_dir: /etc/nginx/sites-enabled
+nginx_conf_src: /opt/nginx/
+nginx_conf_dest: /etc/nginx/
 nginx_validate_command: nginx -t
+website_src_dir: /opt/website
+website_dest_dir: /var/www/dalhe.ai/website

@@ -40,3 +40,8 @@ All playbooks are idempotent. Running them repeatedly will either make changes (
 
 ## Future improvements
 - right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). This way, we can provision nginx only on servers with the website.
+
+
+## TODO
+- update ansible and nginx config to have tls/ssl certificates.-
+- Explicitly set cloudflare provisioning so that ssl/tls is in full(strict) so we forbid http connections between cloudflare and the server.

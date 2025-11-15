@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
 EE_IMAGE_TAG="${EE_IMAGE_TAG:-ansible_ee}"
 EE_DEFINITION_FILE="${SCRIPT_DIR}/execution_environment/execution-environment.yml"
+WEBSITE_BUILD_SCRIPT="${SCRIPT_DIR}/../website/build.sh"
+WEBSITE_ASSETS_DIR="${SCRIPT_DIR}/execution_environment/files/website"
 SSH_HOSTNAMES_ARG=""
 CONTAINER_SSH_KEY_PATH="/root/.ssh/dalhe_ai"
 HOST_SSH_KEY_PATH=""
@@ -99,6 +101,15 @@ if [[ ! -f "${EE_DEFINITION_FILE}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${WEBSITE_BUILD_SCRIPT}" ]]; then
+  echo "Error: website build script not found at ${WEBSITE_BUILD_SCRIPT}." >&2
+  exit 1
+fi
+
+# make sure the website assets baked into the EE are up to date
+echo "Building website assets for Ansible execution environment..."
+"${WEBSITE_BUILD_SCRIPT}" --output-dir "${WEBSITE_ASSETS_DIR}" >/dev/null; 
+
 # build the ansible execution environment image
 echo "Building Ansible execution environment image '${EE_IMAGE_TAG}' using ${CONTAINER_RUNTIME}..."
 pushd "${SCRIPT_DIR}" >/dev/null
@@ -117,8 +128,8 @@ run_playbook() {
     "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
 }
 
-echo "Provisioning groups..."
-run_playbook "groups.yml"
+# echo "Provisioning groups..."
+# run_playbook "groups.yml"
 
 echo "Provisioning nginx..."
 run_playbook "nginx.yml"

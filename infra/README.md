@@ -49,7 +49,7 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 ## Future improvements
 
 - Update this provisioning flow so that it doesn't cause downtime. For instance, we should only bring down the existing servers once the new servers have been spin up and properly set up.
-- update ansible to provision nginx (both install nginx and provision its configuration).
+- update ansible to provision the website
 - update ansible to provision ufw policies.
 - update ansible to deploy our backend server.
 - consider creating my own docker registry to host images

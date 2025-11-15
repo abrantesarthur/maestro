@@ -1,7 +1,7 @@
 ---
 - name: Install nginx
   ansible.builtin.package:
-    name: "{{ nginx_package_name }}"
+    name: "{{ nginx_service_name }}"
     state: present
 
 - name: Ensure nginx directory structure exists
@@ -12,11 +12,43 @@
     group: root
     mode: "0755"
   loop:
-    - /etc/nginx
-    - "{{ nginx_sites_available_dir }}"
-    - "{{ nginx_sites_enabled_dir }}"
+    - "{{ nginx_conf_dest }}"
+    - "{{ nginx_conf_dest }}sites-enabled/"
 
-- name: Deploy nginx.conf
+- name: Ensure website destination exists
+  ansible.builtin.file:
+    path: "{{ website_dest_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check website assets are available in the execution environment
+  ansible.builtin.stat:
+    path: "{{ website_src_dir }}"
+  register: website_assets_dir
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fail if website assets are missing
+  ansible.builtin.fail:
+    msg: "Website assets were not found at {{ website_src_dir }}."
+  when: not website_assets_dir.stat.exists
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Deploy website assets
+  ansible.builtin.copy:
+    src: "{{ website_src_dir }}/"
+    dest: "{{ website_dest_dir }}/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Deploy nginx configuration
   ansible.builtin.copy:
     src: "{{ nginx_conf_src }}"
     dest: "{{ nginx_conf_dest }}"
@@ -25,10 +57,10 @@
     mode: "0644"
   notify: Validate nginx configuration
 
-- name: Enable site configuration
+- name: Enable nginx site configuration
   ansible.builtin.file:
-    src: "{{ nginx_site_dest }}"
-    dest: "{{ nginx_site_link }}"
+    src: "{{ nginx_conf_dest }}sites-available/dalhe.ai.conf"
+    dest: "{{ nginx_conf_dest }}sites-enabled/dalhe.ai.conf"
     state: link
     force: true
   notify: Validate nginx configuration
@@ -38,3 +70,4 @@
     name: "{{ nginx_service_name }}"
     state: started
     enabled: true
+  notify: Reload nginx
