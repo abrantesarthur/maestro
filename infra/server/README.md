@@ -61,7 +61,6 @@ Every droplet also gets an automatic SSH tag so you can easily target it with `d
 
 1. Support tagging servers with the environment (dev or prod)
 2. Support destroying existing servers as well. This will be useful if we ever want to fully migrate to a new server later (we'll want to destroy the old infra after the migration is successful)
-
 - automate the pushing of the ssh key to the droplet the first time we create the server.
 - automate adding new ssh key to the droplet. Perhaps better done via ansible. See https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/to-existing-droplet/.
 - Explain better the relevance of the DROPLET_SSH_KEY_ID. Mention that it must be manually inserted into DigitalOcean and its private counterpart must be stored in the client machine sshing into the server.

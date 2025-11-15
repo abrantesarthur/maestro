@@ -10,7 +10,7 @@ ANSIBLE_RUN="${SCRIPT_DIR}/ansible/run.sh"
 
 # FIXME: parse optional variables with amount of servers and whether to even create servers
 # Parse mandatory arguments
-SKIP_SERVER=true
+SKIP_SERVER=false
 SKIP_PULUMI=false
 SKIP_ANSIBLE=false
 DIGITAL_OCEAN_API_KEY=""
