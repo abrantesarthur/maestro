@@ -2,8 +2,7 @@ FROM oven/bun:1.3.1
 
 WORKDIR /app
 
-COPY package.json ./
-COPY server.ts ./
+COPY package.json server.ts bun.lock ./
 
 EXPOSE 3000
 

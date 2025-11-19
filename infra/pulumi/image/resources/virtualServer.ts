@@ -1,0 +1,79 @@
+import * as pulumi from "@pulumi/pulumi";
+import * as digitalOcean from "@pulumi/digitalocean";
+
+/** The arguments for constructing a VirtualServer instance */
+export interface VirtualServerArgs {
+  /** The DNS domain */
+  image: pulumi.Input<string>;
+  /** The virtual server size */
+  size: pulumi.Input<digitalOcean.DropletSlug>;
+  /** The virtual server region */
+  region: pulumi.Input<digitalOcean.Region>;
+  /** A list of SSH key IDs to enable in this virtual server */
+  sshKeys: pulumi.Input<string[]>;
+  /** A list of tags to add to this droplet */
+  tags: pulumi.Input<VpsTag[]>;
+  /** The virtual server index */
+  index: pulumi.Input<number>;
+}
+
+/** The values that can be used to tag a VirtualServer */
+export enum VpsTag {
+  /** The VPS runs the production environment */
+  Prod = "prod",
+  /** The VPS hosts the backend application */
+  Backend = "backend",
+  /** The VPS hosts the web application */
+  Web = "web",
+  /** We can ssh into the web application via a hostname */
+  Ssh = "ssh",
+}
+
+export class VirtualServer extends pulumi.ComponentResource {
+  readonly id: pulumi.Output<string>;
+  readonly name: pulumi.Output<string>;
+  readonly tags: pulumi.Output<string[]>;
+  readonly ipv4: pulumi.Output<string>;
+  readonly index: pulumi.Output<number>;
+
+  constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
+    super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);
+    const name = VirtualServer.buildResourceName(args);
+    const { image, size, region, sshKeys, tags } = args;
+
+    const virtualServer = new digitalOcean.Droplet(
+      name,
+      {
+        image,
+        size,
+        region,
+        sshKeys,
+        name,
+        tags,
+      },
+      { parent: this },
+    );
+
+    this.id = virtualServer.id;
+    this.name = virtualServer.name;
+    this.tags = virtualServer.tags.apply((t) => t ?? []);
+    this.ipv4 = virtualServer.ipv4Address;
+    this.index = pulumi.output(args.index);
+    this.registerOutputs({
+      id: this.id,
+      name: this.name,
+      tags: this.tags,
+      ipv4: this.ipv4,
+      index: this.index,
+    });
+  }
+
+  /**
+   * Build the Pulumi resource name, encoding every attribute that should trigger replacement.
+   *
+   * @param a - the arguments for building a VirtualServer
+   * @returns the name of the VirtualServer record within Pulumi
+   */
+  private static buildResourceName = (a: VirtualServerArgs): string =>
+    `vps-${a.index}-${a.image}-${a.size}-${a.region}`;
+}

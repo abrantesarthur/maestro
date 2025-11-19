@@ -13,8 +13,7 @@ Run the `run.sh` script. It validates that all required flags are present,  buil
   --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
   --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
   --ssh-key "/path/to/key>" \
-  [--command up|refresh] \
-  [--prod-server-ips '["123.45.678.00","123.45.678.01"]']
+  [--command up|refresh]
 ```
 
 The Pulumi program provisions Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh-a.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh-a`, `ssh-b`, etc).
@@ -45,7 +44,7 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
 | Flag | Purpose |
 | --- | --- |
 | `--command` | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying.   |
-| `--prod-server-ips` | accepts a JSON array of IPv4 addresses (for example `'["123.45.678.00","123.45.678.01"]'`). If provided, Pulumi creates DNS records only for the supplied servers. Otherwise, it creates records for every server it can find.   |
+
 
 ## Components
 

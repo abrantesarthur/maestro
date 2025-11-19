@@ -86,7 +86,7 @@ export class SshTunnel extends pulumi.ComponentResource {
       );
     });
 
-    // create a command to stop cloudflared before we try to destroy a tunnel
+    // create a commands to set and destroy cloudflared on set and destroy this SshTunnel
     createSetCloudflaredCommand({
       namePrefix: resourceName,
       ipv4,

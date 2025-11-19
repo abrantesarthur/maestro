@@ -37,16 +37,18 @@ export const createSetCloudflaredCommand = ({
   tunnel,
   cloudflareApiToken,
 }: SetCloudflaredOptions): command.local.Command => {
-  const localScript = JSON.stringify(path.resolve(__dirname, "start.sh"));
-  const remoteScript = JSON.stringify("/tmp/start.sh");
+  const localStart = JSON.stringify(path.resolve(__dirname, "start.sh"));
+  const remoteStart = JSON.stringify("/tmp/start.sh");
   const stopScript = JSON.stringify(path.resolve(__dirname, "stop.sh"));
   const identityFile = "/root/.ssh/ssh_dalhe_ai";
   const apiTokenEnvVar = "CLOUDFLARE_API_TOKEN";
   const hostEnvVar = "HOST";
   const tunnelId = tunnel.id;
+  const retryAttempts = 30;
+  const retryDelaySeconds = 5;
 
   return new command.local.Command(
-    `${namePrefix}-set-cloudflared`,
+    `${namePrefix}-cloudflared`,
     {
       interpreter: ["/bin/bash", "-c"],
       environment: {
@@ -65,20 +67,54 @@ export const createSetCloudflaredCommand = ({
           // keep dependencies so changes trigger replacements without leaking the value
           void apiToken;
           void host;
+
+          /**
+           * Wraps a command with a retry policy.
+           * @param cmd - the command to retry
+           * @returns retriable command
+           * */
+          const withRetry = (cmd: string): string =>
+            `with_retry ${retryAttempts} ${retryDelaySeconds} ${cmd}`;
           const lines = [
             "set -euo pipefail",
             "",
+            "with_retry() {",
+            "  local attempts=$1",
+            "  shift",
+            "  local delay=$1",
+            "  shift",
+            "  local attempt=1",
+            "  while true; do",
+            '    if "$@"; then',
+            "      return 0",
+            "    fi",
+            "    if (( attempt >= attempts )); then",
+            "      return 1",
+            "    fi",
+            "    attempt=$((attempt + 1))",
+            '    sleep "$delay"',
+            "  done",
+            "}",
+            "",
+            "mkdir -p ~/.ssh",
+            "chmod 700 ~/.ssh",
+            "touch ~/.ssh/known_hosts",
+            "",
             // pre-populate ~/.ssh/known_hosts so the host is trusted by scp and ssh
-            `ssh-keyscan $${hostEnvVar} >> ~/.ssh/known_hosts`,
+            withRetry(`ssh-keyscan $${hostEnvVar} >> ~/.ssh/known_hosts`),
             "",
-            `scp -i ${identityFile} ${localScript} root@$${hostEnvVar}:${remoteScript}`,
+            withRetry(
+              `scp -i ${identityFile} ${localStart} root@$${hostEnvVar}:${remoteStart}`,
+            ),
             "",
-            [
-              `ssh -i ${identityFile} root@$${hostEnvVar} bash ${remoteScript}`,
-              ` --cloudflare-account-id ${accountId}`,
-              ` --cloudflare-tunnel-id ${tunnelId}`,
-              ` --cloudflare-api-key $${apiTokenEnvVar}`,
-            ].join(""),
+            withRetry(
+              [
+                `ssh -i ${identityFile} root@$${hostEnvVar} bash ${remoteStart}`,
+                ` --cloudflare-account-id ${accountId}`,
+                ` --cloudflare-tunnel-id ${tunnelId}`,
+                ` --cloudflare-api-key $${apiTokenEnvVar}`,
+              ].join(""),
+            ),
           ];
 
           return lines.join("\n");
