@@ -15,6 +15,16 @@
     - "{{ nginx_conf_dest }}"
     - "{{ nginx_conf_dest }}sites-enabled/"
 
+- name: Remove default nginx site configuration
+  ansible.builtin.file:
+    path: "{{ nginx_conf_dest }}sites-available/default"
+    state: absent
+
+- name: Remove default nginx site symlink
+  ansible.builtin.file:
+    path: "{{ nginx_conf_dest }}sites-enabled/default"
+    state: absent
+
 - name: Ensure website destination exists
   ansible.builtin.file:
     path: "{{ website_dest_dir }}"
