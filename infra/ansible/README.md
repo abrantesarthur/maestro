@@ -12,7 +12,7 @@ After secrets are in place, `run.sh` builds the execution environment image via 
 
 | Flag | Purpose |
 | --- | --- |
-| `--ssh-hostnames` | Comma-separated list of SSH tunnel hostnames to target (e.g., `ssh-a.dalhe.ai,ssh-b.dalhe.ai`). |
+| `--ssh-hostnames` | Comma-separated list of SSH tunnel hostnames to target (e.g., `ssh0.dalhe.ai,ssh1.dalhe.ai`). |
 | `--ssh-key` | Absolute path to the host SSH private key that should be mounted into the execution environment to provide access to the remote servers. |
 
 ## Components

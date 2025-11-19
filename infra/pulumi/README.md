@@ -2,10 +2,9 @@
 
 This directory contains a Dockerised Pulumi program that provisions the cloudflare environment. The program currently targets the single `prod` stack.
 
-
 ## Workflow
 
-Run the `run.sh` script. It validates that all required flags are present,  builds and runs a docker image that executes Pulumi up or refresh.
+Run the `run.sh` script. It validates that all required flags are present, builds and runs a docker image that executes Pulumi up or refresh.
 
 ```bash
 ./run.sh \
@@ -16,12 +15,12 @@ Run the `run.sh` script. It validates that all required flags are present,  buil
   [--command up|refresh]
 ```
 
-The Pulumi program provisions Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh-a.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh-a`, `ssh-b`, etc).
+The Pulumi program provisions Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh0.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh0`, `ssh-b`, etc).
 
-To connect through the tunnel from your machine, install `cloudflared` locally and add as many of the following entries to your `~/.ssh/config` as there are servers (don't forget to replace `ssh-a` by the appropriate tag):
+To connect through the tunnel from your machine, install `cloudflared` locally and add as many of the following entries to your `~/.ssh/config` as there are servers (don't forget to replace `ssh0` by the appropriate tag):
 
 ```
-Host ssh-a.dalhe.ai
+Host ssh0.dalhe.ai
   ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
   IdentityFile <path to the ssh private key>
 ```
@@ -30,21 +29,19 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
 
 ### Required flags:
 
-
 | Flag | Purpose |
 | --- | --- |
-| `--pulumi-access-token` | authenticates the container with Pulumi Cloud so the program can `pulumi login` non-interactively.  It must have
-   permissions to operate on the `prod` stack. |
+| `--pulumi-access-token` | authenticates the container with Pulumi Cloud so the program can `pulumi login` non-interactively. It must have |
+| permissions to operate on the `prod` stack. |
 | `--cloudflare-api-token` | authorises changes to the target Cloudflare zone. It must have `Zone` → `DNS` → `Edit` and `Account` → `Cloudflare Tunnel` → `Edit` permissions for the dalhe.ai zone (Manage Account → Account API Tokens). |
-| `--digital-ocean-api-key` | is exported as `DIGITAL_OCEAN_API_KEY` and used by `doctl` to look up droplet details. It must have permission to list droplets.   |
-| `--ssh-key` | absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
+| `--digital-ocean-api-key` | is exported as `DIGITAL_OCEAN_API_KEY` and used by `doctl` to look up droplet details. It must have permission to list droplets. |
+| `--ssh-key`| absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
 
 ### Optional flags:
 
 | Flag | Purpose |
 | --- | --- |
-| `--command` | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying.   |
-
+| `--command` | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying. |
 
 ## Components
 

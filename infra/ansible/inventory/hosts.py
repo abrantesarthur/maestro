@@ -4,7 +4,7 @@
 
 Usage:
   Export SSH_HOSTNAMES with a comma- or whitespace-separated list
-  (e.g., "ssh-a.dalhe.ai,ssh-b.dalhe.ai") before invoking Ansible.
+  (e.g., "ssh0.dalhe.ai,ssh-b.dalhe.ai") before invoking Ansible.
 """
 
 from __future__ import annotations
