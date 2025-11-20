@@ -65,6 +65,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: nginx_conf_copy
   notify: Validate nginx configuration
 
 - name: Enable nginx site configuration
@@ -73,7 +74,12 @@
     dest: "{{ nginx_conf_dest }}sites-enabled/dalhe.ai.conf"
     state: link
     force: true
+  register: nginx_site_link
   notify: Validate nginx configuration
+
+- name: Flush handlers if nginx config changed
+  ansible.builtin.meta: flush_handlers
+  when: nginx_conf_copy.changed or nginx_site_link.changed
 
 - name: Ensure nginx service is enabled and running
   ansible.builtin.service:

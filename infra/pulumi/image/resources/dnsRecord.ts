@@ -43,7 +43,7 @@ export class DnsRecord extends pulumi.ComponentResource {
     > = {
       subdomain: "@",
       ttl: 1,
-      proxied: true,
+      proxied: true, //  all traffic goes through Cloudflare and hits 443 on the origin
     };
     const { domain, subdomain, ttl, type, content, proxied } = {
       ...defaults,
