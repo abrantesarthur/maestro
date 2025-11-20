@@ -1,20 +1,7 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import path from "node:path";
-
-/** The options for creating a cloudflared command */
-export interface SetCloudflaredOptions {
-  /** Resource name prefix used for the command instances */
-  namePrefix: string;
-  /** the tunnel resource backing the command */
-  tunnel: pulumi.CustomResource;
-  /** The IP of the server whose tunnel is being set up */
-  ipv4: pulumi.Input<string>;
-  /** The cloudflare account ID */
-  accountId: pulumi.Input<string>;
-  /** the cloudflare api key */
-  cloudflareApiToken: pulumi.Input<string>;
-}
+import { InstallCloudflaredOptions } from "./types";
 
 /**
  * Creates a pulumi command that runs the start.sh script on create and stop.sh on destroy
@@ -30,17 +17,18 @@ export interface SetCloudflaredOptions {
  * @param params - the arguments
  * @returns - a pulumi command
  */
-export const createSetCloudflaredCommand = ({
+export const installCloudflared = ({
   namePrefix,
   ipv4,
   accountId,
   tunnel,
   cloudflareApiToken,
-}: SetCloudflaredOptions): command.local.Command => {
+}: InstallCloudflaredOptions): command.local.Command => {
   const localStart = JSON.stringify(path.resolve(__dirname, "start.sh"));
   const remoteStart = JSON.stringify("/tmp/start.sh");
   const stopScript = JSON.stringify(path.resolve(__dirname, "stop.sh"));
-  const identityFile = "/root/.ssh/ssh_dalhe_ai";
+  const stackConfig = new pulumi.Config("dalhe");
+  const sshKeyPath = stackConfig.require("sshKeyPath");
   const apiTokenEnvVar = "CLOUDFLARE_API_TOKEN";
   const hostEnvVar = "HOST";
   const tunnelId = tunnel.id;
@@ -104,12 +92,12 @@ export const createSetCloudflaredCommand = ({
             withRetry(`ssh-keyscan $${hostEnvVar} >> ~/.ssh/known_hosts`),
             "",
             withRetry(
-              `scp -i ${identityFile} ${localStart} root@$${hostEnvVar}:${remoteStart}`,
+              `scp -i ${sshKeyPath} ${localStart} root@$${hostEnvVar}:${remoteStart}`,
             ),
             "",
             withRetry(
               [
-                `ssh -i ${identityFile} root@$${hostEnvVar} bash ${remoteStart}`,
+                `ssh -i ${sshKeyPath} root@$${hostEnvVar} bash ${remoteStart}`,
                 ` --cloudflare-account-id ${accountId}`,
                 ` --cloudflare-tunnel-id ${tunnelId}`,
                 ` --cloudflare-api-key $${apiTokenEnvVar}`,
@@ -121,7 +109,10 @@ export const createSetCloudflaredCommand = ({
         }),
       delete: pulumi
         .output(ipv4)
-        .apply((host) => `bash ${stopScript} ${JSON.stringify(host)}`),
+        .apply(
+          (host) =>
+            `SSH_KEY_PATH=${sshKeyPath} bash ${stopScript} ${JSON.stringify(host)}`,
+        ),
     },
     {
       parent: tunnel,

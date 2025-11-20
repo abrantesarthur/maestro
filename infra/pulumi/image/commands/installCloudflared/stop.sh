@@ -8,7 +8,6 @@ fi
 
 SSH_USER="root"
 SSH_PORT="22"
-SSH_KEY="/root/.ssh/ssh_dalhe_ai" # mounted by docker run
 HOST="$1"
 
 log() {
@@ -16,7 +15,7 @@ log() {
 }
 
 SSH_OPTS=(
-  -i "${SSH_KEY}"
+  -i "${SSH_KEY_PATH}"
   -p "${SSH_PORT}"
   -o StrictHostKeyChecking=no
   -o UserKnownHostsFile=/dev/null

@@ -1,1 +1,2 @@
-export * from './setCloudflared';
+export * from './installCloudflared';
+export * from './installCertificate';

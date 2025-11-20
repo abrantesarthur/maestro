@@ -1,5 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
+import * as cloudflare from "@pulumi/cloudflare";
 import * as digitalOcean from "@pulumi/digitalocean";
+import * as tls from "@pulumi/tls";
+import { installCertificate } from "../commands/installCertificate";
 
 /** The arguments for constructing a VirtualServer instance */
 export interface VirtualServerArgs {
@@ -53,6 +56,47 @@ export class VirtualServer extends pulumi.ComponentResource {
       },
       { parent: this },
     );
+
+    const stackConfig = new pulumi.Config("dalhe");
+    const domain = stackConfig.require("domain");
+    const certHostnames = [`*.${domain}`, domain];
+    const privateKey = new tls.PrivateKey(
+      `cert-key-${name}`,
+      {
+        algorithm: "RSA",
+        rsaBits: 2048,
+      },
+      { parent: virtualServer },
+    );
+    const certificateRequest = new tls.CertRequest(
+      `cert-csr-${name}`,
+      {
+        privateKeyPem: pulumi.secret(privateKey.privateKeyPem),
+        dnsNames: certHostnames,
+        subject: {
+          commonName: domain,
+        },
+      },
+      { parent: virtualServer },
+    );
+    const originCaCertificate = new cloudflare.OriginCaCertificate(
+      `cert-ca-${name}`,
+      {
+        csr: certificateRequest.certRequestPem,
+        hostnames: certHostnames,
+        requestType: "origin-rsa",
+        requestedValidity: 5475, // 15 years
+      },
+      { parent: virtualServer },
+    );
+    installCertificate({
+      nameSuffix: name,
+      ipv4: virtualServer.ipv4Address,
+      certificatePem: pulumi.secret(originCaCertificate.certificate),
+      privateKeyPem: pulumi.secret(privateKey.privateKeyPem),
+      parent: virtualServer,
+      dependsOn: [virtualServer, originCaCertificate],
+    });
 
     this.id = virtualServer.id;
     this.name = virtualServer.name;

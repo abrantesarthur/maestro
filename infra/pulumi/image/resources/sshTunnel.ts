@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { DnsRecord } from "./dnsRecord";
-import { createSetCloudflaredCommand } from "../commands";
+import { installCloudflared } from "../commands";
 
 /** The SshTunnel configuration options */
 export type SshTunnelConfiguration =
@@ -87,7 +87,7 @@ export class SshTunnel extends pulumi.ComponentResource {
     });
 
     // create a commands to set and destroy cloudflared on set and destroy this SshTunnel
-    createSetCloudflaredCommand({
+    installCloudflared({
       namePrefix: resourceName,
       ipv4,
       accountId,

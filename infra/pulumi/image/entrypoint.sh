@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Ensure the api keys are set in the environment
 if [[ -z "${PULUMI_ACCESS_TOKEN:-}" ]]; then
     echo "PULUMI_ACCESS_TOKEN must be set for Pulumi authentication" >&2
     exit 1
@@ -31,6 +30,12 @@ print_stack_outputs() {
   pulumi stack output --stack prod
   echo "__PULUMI_OUTPUTS_END__"
 }
+
+# Inject required values in the prod configuration
+case "$PULUMI_COMMAND" in
+  up|refresh|cancel)
+    pulumi config set --stack prod dalhe:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
+esac
 
 # Run the requested Pulumi action
 case "$PULUMI_COMMAND" in

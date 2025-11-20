@@ -31,6 +31,7 @@ WORKDIR /workspace
 COPY package.json package-lock.json Pulumi.yaml Pulumi.prod.yaml tsconfig.json index.ts ./
 COPY resources ./resources
 COPY commands ./commands
+COPY providers ./providers
 
 # install the Node packages
 RUN npm install

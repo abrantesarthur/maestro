@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { getZoneId } from "../providers";
 
 /** The arguments for constructing a DnsRecord instance */
 export interface DnsRecordArgs {
@@ -27,9 +28,14 @@ export class DnsRecord extends pulumi.ComponentResource {
   readonly id: pulumi.Output<string>;
 
   constructor(args: DnsRecordArgs, opts?: DnsRecordOptions) {
-    super("dalhe:cloudflare:DnsRecord", DnsRecord.buildResourceName(args), {}, {
-      ...(opts ?? {}),
-    });
+    super(
+      "dalhe:cloudflare:DnsRecord",
+      DnsRecord.buildResourceName(args),
+      {},
+      {
+        ...(opts ?? {}),
+      },
+    );
     const name = DnsRecord.buildResourceName(args);
 
     const defaults: Required<
@@ -50,7 +56,7 @@ export class DnsRecord extends pulumi.ComponentResource {
         name: subdomain,
         ttl,
         type,
-        zoneId: this.getZoneId(domain),
+        zoneId: getZoneId(domain),
         content,
         proxied,
       },
@@ -69,19 +75,6 @@ export class DnsRecord extends pulumi.ComponentResource {
    * @param domain
    * @returns the Cloudflare zone ID as a Pulumi Output
    */
-  private getZoneId = (domain: pulumi.Input<string>): pulumi.Output<string> =>
-    pulumi.output(domain).apply(async (dnsName) => {
-      const { results } = await cloudflare.getZones({
-        name: dnsName,
-        match: "all",
-      });
-      const zone = results.find((zone) => zone.name === dnsName);
-      if (!zone) {
-        throw new Error(`Cloudflare zone for ${dnsName} not found.`);
-      }
-      return zone.id;
-    });
-
   /**
    * Build the Pulumi resource name, encoding every attribute that should trigger replacement.
    * Pulumi keys resources by this string; including subdomain, type, and IPv4 ensures a change
@@ -91,5 +84,5 @@ export class DnsRecord extends pulumi.ComponentResource {
    * @returns the name of the DNS record within Pulumi
    */
   private static buildResourceName = (a: DnsRecordArgs): string =>
-    `dns-${a.type}-${a.subdomain ? `${a.subdomain}.` : ''}${a.domain}`;
+    `dns-${a.type}-${a.subdomain ? `${a.subdomain}.` : ""}${a.domain}`;
 }

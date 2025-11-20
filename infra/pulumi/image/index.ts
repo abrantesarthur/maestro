@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as digitalOcean from "@pulumi/digitalocean";
 import {
   DnsRecord,
+  ZoneSettings,
   SshTunnel,
   VirtualServer,
   VirtualServerArgs,
@@ -10,6 +11,9 @@ import {
 
 const stackConfig = new pulumi.Config("dalhe");
 const domain = stackConfig.require("domain");
+
+// enforce zone-level settings
+new ZoneSettings({ domain });
 
 // provision the virtual private servers
 const VPS_ARGS: VirtualServerArgs[] = [
