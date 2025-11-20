@@ -1,0 +1,5 @@
+---
+docker_packages:
+  - docker.io
+  - python3-docker
+docker_service_name: docker

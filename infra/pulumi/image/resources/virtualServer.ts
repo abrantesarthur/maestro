@@ -28,8 +28,6 @@ export enum VpsTag {
   Backend = "backend",
   /** The VPS hosts the web application */
   Web = "web",
-  /** We can ssh into the web application via a hostname */
-  Ssh = "ssh",
 }
 
 export class VirtualServer extends pulumi.ComponentResource {
@@ -37,7 +35,7 @@ export class VirtualServer extends pulumi.ComponentResource {
   readonly name: pulumi.Output<string>;
   readonly tags: pulumi.Output<string[]>;
   readonly ipv4: pulumi.Output<string>;
-  readonly index: pulumi.Output<number>;
+  readonly index: pulumi.Output<number | undefined>;
 
   constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
     super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);

@@ -131,8 +131,8 @@ run_playbook() {
 # echo "Provisioning groups..."
 # run_playbook "groups.yml"
 
-echo "Provisioning nginx..."
-run_playbook "nginx.yml"
+echo "Provisioning dependencies (docker, nginx)..."
+run_playbook "dependencies.yml"
 popd >/dev/null
 
 echo "Done."

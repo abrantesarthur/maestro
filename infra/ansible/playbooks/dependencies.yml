@@ -1,6 +1,6 @@
----
-- name: Provision nginx
+- name: Provision dependencies
   hosts: all
   become: true
   roles:
+    - docker
     - nginx
