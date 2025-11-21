@@ -16,7 +16,7 @@ const domain = stackConfig.require("domain");
 new ZoneSettings({ domain });
 
 // provision the virtual private servers
-const VPS_ARGS: Omit<VirtualServerArgs, 'index'>[] = [
+const VPS_ARGS: Omit<VirtualServerArgs, "index">[] = [
   {
     image: "ubuntu-25-04-x64",
     size: digitalOcean.DropletSlug.DropletS1VCPU1GB,
@@ -25,7 +25,9 @@ const VPS_ARGS: Omit<VirtualServerArgs, 'index'>[] = [
     tags: [VpsTag.Prod, VpsTag.Backend, VpsTag.Web],
   },
 ];
-const virtualServers = VPS_ARGS.map((a, index) => new VirtualServer({...a, index}));
+const virtualServers = VPS_ARGS.map(
+  (a, index) => new VirtualServer({ ...a, index }),
+);
 
 // create one ssh tunnel for each virtual server
 const sshTunnels = virtualServers.map((vs) =>
@@ -53,3 +55,7 @@ webProdVirualServers.map((vs) =>
 
 // export the outputs we care about so they can be consumed by the pulumi cli
 export const sshHostnames = sshTunnels.map((t) => t.hostname);
+export const hosts = virtualServers.map((vs, i) => ({
+  hostname: sshTunnels[i].hostname,
+  tags: vs.tags,
+}));

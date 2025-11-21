@@ -1,5 +1,5 @@
 ---
-- name: Provision groups
+- name: Provision linux users/groups permissions.
   hosts: all
   become: true
   roles:

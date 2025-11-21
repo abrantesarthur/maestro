@@ -14,10 +14,10 @@ ansible-navigator:
       policy: missing # Only pull the image if it’s not present locally
     environment-variables:
       pass:
-        - SSH_HOSTNAMES
+        - HOSTS
         - SSH_KEY_PATH
   ansible:
     inventory:
       help: False # Do not show inventory help output
       entries:
-        - inventory/hosts.py # Dynamic inventory populated via SSH_HOSTNAMES
+        - inventory/hosts.py # Dynamic inventory populated via HOSTS

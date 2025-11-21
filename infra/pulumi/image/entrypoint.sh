@@ -27,7 +27,7 @@ pulumi login
 
 print_stack_outputs() {
   echo "__PULUMI_OUTPUTS_BEGIN__"
-  pulumi stack output --stack prod
+  pulumi stack output --stack prod --json
   echo "__PULUMI_OUTPUTS_END__"
 }
 

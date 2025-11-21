@@ -1,0 +1,5 @@
+- name: Provision web servers.
+  hosts: web
+  become: true
+  roles:
+    - nginx

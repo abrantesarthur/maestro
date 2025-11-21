@@ -1,0 +1,6 @@
+---
+- name: Provision backend servers.
+  hosts: backend
+  become: true
+  roles:
+    - docker

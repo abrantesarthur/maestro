@@ -80,7 +80,7 @@ cleanup_pulumi_logs() {
 }
 trap cleanup_pulumi_logs EXIT
 
-capture_ssh_hostnames() {
+capture_pulumi_hosts() {
   local pulumi_command="$1"
   local show_logs="${2:-true}"
   local output_log
@@ -100,36 +100,32 @@ capture_ssh_hostnames() {
     )
   fi
 
+
   if [[ "${show_logs}" == "true" ]]; then
-    "${PULUMI_RUN}" "${pulumi_args[@]}" | tee "${output_log}"
+    # Mirror Pulumi output to the terminal while still capturing for parsing.
+    "${PULUMI_RUN}" "${pulumi_args[@]}" | tee "${output_log}" >&2
   else
     "${PULUMI_RUN}" "${pulumi_args[@]}" > "${output_log}"
   fi
 
   local parsed_hosts
   parsed_hosts="$(
-    awk '
-      /__PULUMI_OUTPUTS_BEGIN__/ {capture=1; next}
-      /__PULUMI_OUTPUTS_END__/ {capture=0}
-      capture && $1 == "sshHostnames" {print $2; exit}
-    ' "${output_log}" \
-    | sed 's/^[[:space:]]*\[//; s/\][[:space:]]*$//' \
-    | tr -d '"' \
-    | tr -d '[:space:]'
+    awk '/__PULUMI_OUTPUTS_BEGIN__/{flag=1;next}/__PULUMI_OUTPUTS_END__/{flag=0}flag' "${output_log}" \
+    | jq -c '{hosts: .hosts}'
   )"
 
   printf '%s' "${parsed_hosts}"
 }
 
 # only provision pulumi if requested
-SSH_HOSTNAMES=""
+PULUMI_HOSTS=""
 if [[ "${SKIP_PULUMI}" == "false" ]]; then
   # provision pulumi and capture created ssh hostnames
-  echo "Provisioning cloudflare..."
-  SSH_HOSTNAMES="$(capture_ssh_hostnames "up")"
+  echo "Provisioning pulumi..."
+  PULUMI_HOSTS="$(capture_pulumi_hosts "up")"
 elif [[ "${SKIP_ANSIBLE}" == "false" ]]; then
   echo "Fetching existing Pulumi outputs for Ansible..."
-  SSH_HOSTNAMES="$(capture_ssh_hostnames "output" "false")"
+  PULUMI_HOSTS="$(capture_pulumi_hosts "output" "false")"
 else
   echo "Skipping pulumi provisioning"
 fi
@@ -137,7 +133,7 @@ fi
 # only provision ansible if requested
 if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
   echo "Provisioning ansible..."
-  "${ANSIBLE_RUN}" --ssh-hostnames "${SSH_HOSTNAMES}" --ssh-key "${HOST_SSH_KEY_PATH}"
+  "${ANSIBLE_RUN}" --hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
 else
   echo "Skipping ansible provisioning"
 fi

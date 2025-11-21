@@ -4,7 +4,7 @@ This directory contains the Ansible automation that provisions resources in a se
 
 ## Workflow
 
-Run `./run.sh --ssh-hostnames <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
+Run `./run.sh --hosts <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
 
 After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
 
@@ -12,7 +12,7 @@ After secrets are in place, `run.sh` builds the execution environment image via 
 
 | Flag | Purpose |
 | --- | --- |
-| `--ssh-hostnames` | Comma-separated list of SSH tunnel hostnames to target (e.g., `ssh0.dalhe.ai,ssh1.dalhe.ai`). |
+| `--hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
 | `--ssh-key` | Absolute path to the host SSH private key that should be mounted into the execution environment to provide access to the remote servers. |
 
 ## Components
@@ -25,9 +25,9 @@ After secrets are in place, `run.sh` builds the execution environment image via 
 
 ### Inventory, Hosts, and Groups
 
-`inventory/hosts.yml` defines two hosts under `all`:
-
-- `prod_server` resolves to `ssh.dalhe.ai` and uses the mounted SSH key plus the baked-in Cloudflare proxy command to connect to the server.
+The dynamic inventory (`inventory/hosts.py`) reads the HOSTS JSON provided to `run.sh` and builds:
+- `all` hosts with common vars (including the Cloudflare proxy SSH args).
+- One group per tag listed on each host, so you can target plays to all `backend`, `prod`, `web`, etc. hosts by tag.
 
 ## Prerequisites
 

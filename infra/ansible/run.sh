@@ -8,7 +8,7 @@ EE_IMAGE_TAG="${EE_IMAGE_TAG:-ansible_ee}"
 EE_DEFINITION_FILE="${SCRIPT_DIR}/execution_environment/execution-environment.yml"
 WEBSITE_BUILD_SCRIPT="${SCRIPT_DIR}/scripts/build_website.sh"
 WEBSITE_ASSETS_DIR="${SCRIPT_DIR}/execution_environment/files/website"
-SSH_HOSTNAMES_ARG=""
+HOSTS_ARG=""
 CONTAINER_SSH_KEY_PATH="/root/.ssh/dalhe_ai"
 HOST_SSH_KEY_PATH=""
 
@@ -17,7 +17,7 @@ usage() {
 Usage: $(basename "$0")
 Options:
   -h, --help                       Show this message.
-  --ssh-hostnames <list>           Comma-separated hostnames (required).
+  --hosts <json>                   json with list of hostname and tags(required).
   --ssh-key <path>                 Path to the host SSH private key (required).
 EOF
 }
@@ -29,12 +29,12 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    --ssh-hostnames)
+    --hosts)
       if [[ $# -lt 2 ]]; then
-        echo "Error: --ssh-hostnames requires an argument." >&2
+        echo "Error: --hosts requires an argument." >&2
         exit 1
       fi
-      SSH_HOSTNAMES_ARG="$2"
+      HOSTS_ARG="$2"
       shift 2
       ;;
     --ssh-key)
@@ -52,8 +52,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${SSH_HOSTNAMES_ARG}" ]]; then
-  echo "Error: --ssh-hostnames must be provided with at least one hostname." >&2
+if [[ -z "${HOSTS_ARG}" ]]; then
+  echo "Error: --hosts must be provided with at least one hostname." >&2
   exit 1
 fi
 
@@ -121,18 +121,21 @@ ansible-builder build \
 # helper to run ansible playbooks with shared environment
 run_playbook() {
   local playbook="$1"
-  SSH_HOSTNAMES="${SSH_HOSTNAMES_ARG}" \
+  HOSTS="${HOSTS_ARG}" \
   SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
     ansible-navigator run \
     "playbooks/${playbook}" \
     "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
 }
 
-# echo "Provisioning groups..."
-# run_playbook "groups.yml"
+echo "Provisioning linux permissions..."
+run_playbook "perms.yml"
 
-echo "Provisioning dependencies (docker, nginx)..."
-run_playbook "dependencies.yml"
+echo "Provisioning web server..."
+run_playbook "web.yml"
+
+echo "Provisioning backend..."
+run_playbook "backend.yml"
 popd >/dev/null
 
 echo "Done."
