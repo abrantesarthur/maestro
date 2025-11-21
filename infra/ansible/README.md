@@ -32,9 +32,15 @@ It assumes the backend application image has already been built and pushed to GH
 
 ### Roles and Playbooks
 
-- **`roles/groups`** creates every group listed in `roles/groups/vars/main.yml` while allowing system groups (root, nogroup, etc.) to remain untouched.
+- **roles/groups**: manages system groups from `roles/groups/vars/main.yml`.
+- **roles/docker**: installs and enables the Docker engine and Python bindings.
+- **roles/nginx**: installs and configures nginx for the web tier.
+- **roles/backend_app**: logs into GHCR, pulls the tagged backend image, and runs the backend container in port 3000 by default.
 
-`playbooks` consume these roles via `groups.yml` and actually provisions them.
+Playbooks:
+- **perms.yml**: applies group/permission management.
+- **web.yml**: provisions the web tier (nginx).
+- **backend.yml**: provisions backend hosts (Docker engine + backend_app).
 
 ### Inventory, Hosts, and Groups
 
