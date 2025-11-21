@@ -29,7 +29,7 @@ const virtualServers = VPS_ARGS.map(
   (a, index) => new VirtualServer({ ...a, index }),
 );
 
-// create one ssh tunnel for each virtual server
+// create one tunnel per server so we can SSH while hiding the IP.
 const sshTunnels = virtualServers.map((vs) =>
   pulumi.all([vs.ipv4, vs.index]).apply(([ipv4, index]) => {
     const tunnelName = `ssh${index}`;

@@ -27,5 +27,5 @@
     restart_policy: unless-stopped
     recreate: true
     published_ports:
-      - "{{ backend_host_port }}:{{ backend_container_port }}"
+      - "{{ backend_bind_address }}:{{ backend_host_port }}:{{ backend_container_port }}"
     env: "{{ backend_env }}"

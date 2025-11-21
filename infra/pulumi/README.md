@@ -45,6 +45,9 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
 | --- | --- |
 | `--command` | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying. |
 
+## Ports
+- SSH traffic is exposed via Cloudflare tunnels targeting port 22 on each host; no direct public exposure of port 22 is required when using the tunnel.
+
 ## Components
 
 - `run.sh` ensures the required API tokens are provided, builds the

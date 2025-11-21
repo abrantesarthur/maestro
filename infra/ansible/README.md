@@ -28,10 +28,14 @@ It assumes the backend application image has already been built and pushed to GH
 | `BACKEND_IMAGE` | Image reference pulled by Ansible; defaults to `ghcr.io/dalhe-ai/backend`. |
 | `BACKEND_IMAGE_TAG` | Tag pulled/deployed; defaults to `latest` (override with a CI tag/SHA for reproducible deploys). |
 
+## Ports
+- Web server (nginx): 443 (TLS entrypoint for domains dalhe.ai website).
+
 ## Components
 
 ### Roles and Playbooks
 
+Roles:
 - **roles/groups**: manages system groups from `roles/groups/vars/main.yml`.
 - **roles/docker**: installs and enables the Docker engine and Python bindings.
 - **roles/nginx**: installs and configures nginx for the web tier.

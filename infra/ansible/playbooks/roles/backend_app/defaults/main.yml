@@ -2,6 +2,7 @@
 backend_container_name: backend
 backend_container_port: 3000
 backend_host_port: 3000
+backend_bind_address: 127.0.0.1
 backend_env: {}
 backend_image: "{{ lookup('env', 'BACKEND_IMAGE') }}"
 backend_image_tag: "{{ lookup('env', 'BACKEND_IMAGE_TAG') }}"

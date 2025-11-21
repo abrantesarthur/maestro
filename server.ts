@@ -4,7 +4,7 @@ const server = serve({
   // TODO: read from environment
   port: 3000,
   routes: {
-    "/health": new Response("ok", { status: 200 }),
+    "/health": new Response("ok\n", { status: 200 }),
   },
   // fallback for unmatched routes
   fetch() {
