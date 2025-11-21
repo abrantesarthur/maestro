@@ -12,15 +12,18 @@ Optional env/flags:
   GHCR_IMAGE       Fully-qualified image. Defaults to ghcr.io/dalhe-ai/backend.
   GHCR_USERNAME    GHCR username (defaults to GITHUB_ACTOR if set).
   TAG              Image tag (default: git short SHA).
+  PLATFORMS        Comma-separated platforms for buildx (default: linux/amd64).
 Flags:
   --tag <tag>      Override TAG.
   --latest         Also tag/push :latest.
+  --platforms <p>  Override PLATFORMS (e.g., linux/amd64,linux/arm64).
   -h|--help        Show help.
 EOF
 }
 
 GHCR_IMAGE="${GHCR_IMAGE:-ghcr.io/dalhe-ai/backend}"
 TAG="${TAG:-}"
+PLATFORMS="${PLATFORMS:-linux/amd64}"
 PUSH_LATEST=false
 
 while [[ $# -gt 0 ]]; do
@@ -32,6 +35,10 @@ while [[ $# -gt 0 ]]; do
     --latest)
       PUSH_LATEST=true
       shift 1
+      ;;
+    --platforms)
+      PLATFORMS="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -78,19 +85,17 @@ echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-std
 
 IMAGE_TAG="${GHCR_IMAGE}:${TAG}"
 
-echo "Building ${IMAGE_TAG} from ${ROOT_DIR}/Dockerfile..."
-docker build -f "${ROOT_DIR}/Dockerfile" -t "${IMAGE_TAG}" "${ROOT_DIR}"
-
+echo "Building ${IMAGE_TAG} for platforms ${PLATFORMS} from ${ROOT_DIR}/Dockerfile..."
+build_cmd=(
+  docker buildx build
+  --platform "${PLATFORMS}"
+  -f "${ROOT_DIR}/Dockerfile"
+  -t "${IMAGE_TAG}"
+)
 if [[ "${PUSH_LATEST}" == "true" ]]; then
-  docker tag "${IMAGE_TAG}" "${GHCR_IMAGE}:latest"
+  build_cmd+=(-t "${GHCR_IMAGE}:latest")
 fi
+build_cmd+=("--push" "${ROOT_DIR}")
+"${build_cmd[@]}"
 
-echo "Pushing ${IMAGE_TAG}..."
-docker push "${IMAGE_TAG}"
-
-if [[ "${PUSH_LATEST}" == "true" ]]; then
-  echo "Pushing ${GHCR_IMAGE}:latest..."
-  docker push "${GHCR_IMAGE}:latest"
-fi
-
-echo "Done. Published ${IMAGE_TAG}${PUSH_LATEST:+ and :latest}."
+echo "Done. Published ${IMAGE_TAG}${PUSH_LATEST:+ and :latest}.${PLATFORMS:+ Platforms: ${PLATFORMS}.}"

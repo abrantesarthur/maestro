@@ -1,0 +1,31 @@
+---
+- name: Ensure GHCR credentials are present
+  ansible.builtin.assert:
+    that:
+      - ghcr_token | length > 0
+      - ghcr_username | length > 0
+    fail_msg: "GHCR_TOKEN and GHCR_USERNAME must be provided to pull from GHCR."
+
+- name: Log into GHCR
+  community.docker.docker_login:
+    registry_url: ghcr.io
+    username: "{{ ghcr_username }}"
+    password: "{{ ghcr_token }}"
+  no_log: true
+
+- name: Pull backend image
+  community.docker.docker_image:
+    name: "{{ backend_image }}"
+    tag: "{{ backend_image_tag }}"
+    source: pull
+    force_source: true
+
+- name: Run backend container
+  community.docker.docker_container:
+    name: "{{ backend_container_name }}"
+    image: "{{ backend_image }}:{{ backend_image_tag }}"
+    restart_policy: unless-stopped
+    recreate: true
+    published_ports:
+      - "{{ backend_host_port }}:{{ backend_container_port }}"
+    env: "{{ backend_env }}"

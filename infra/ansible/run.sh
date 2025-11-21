@@ -8,6 +8,10 @@ EE_IMAGE_TAG="${EE_IMAGE_TAG:-ansible_ee}"
 EE_DEFINITION_FILE="${SCRIPT_DIR}/execution_environment/execution-environment.yml"
 WEBSITE_BUILD_SCRIPT="${SCRIPT_DIR}/scripts/build_website.sh"
 WEBSITE_ASSETS_DIR="${SCRIPT_DIR}/execution_environment/files/website"
+BACKEND_IMAGE="${BACKEND_IMAGE:-ghcr.io/dalhe-ai/backend}"
+BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-latest}"
+GHCR_TOKEN="${GHCR_TOKEN:-}"
+GHCR_USERNAME="${GHCR_USERNAME:-${GITHUB_ACTOR:-}}"
 HOSTS_ARG=""
 CONTAINER_SSH_KEY_PATH="/root/.ssh/dalhe_ai"
 HOST_SSH_KEY_PATH=""
@@ -17,7 +21,7 @@ usage() {
 Usage: $(basename "$0")
 Options:
   -h, --help                       Show this message.
-  --hosts <json>                   json with list of hostname and tags(required).
+  --hosts <json>                   json with list of hostname and tags (e.g., --hosts {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}) (required)
   --ssh-key <path>                 Path to the host SSH private key (required).
 EOF
 }
@@ -59,6 +63,16 @@ fi
 
 if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
   echo "Error: --ssh-key must be provided and point to the host SSH private key." >&2
+  exit 1
+fi
+
+if [[ -z "${GHCR_TOKEN}" ]]; then
+  echo "Error: GHCR_TOKEN must be set for GHCR authentication." >&2
+  exit 1
+fi
+
+if [[ -z "${GHCR_USERNAME}" ]]; then
+  echo "Error: GHCR_USERNAME or GITHUB_ACTOR must be set for GHCR authentication." >&2
   exit 1
 fi
 
@@ -123,6 +137,10 @@ run_playbook() {
   local playbook="$1"
   HOSTS="${HOSTS_ARG}" \
   SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
+  GHCR_TOKEN="${GHCR_TOKEN}" \
+  GHCR_USERNAME="${GHCR_USERNAME}" \
+  BACKEND_IMAGE="${BACKEND_IMAGE}" \
+  BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
     ansible-navigator run \
     "playbooks/${playbook}" \
     "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"

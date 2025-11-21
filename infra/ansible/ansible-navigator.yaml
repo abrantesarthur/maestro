@@ -16,6 +16,10 @@ ansible-navigator:
       pass:
         - HOSTS
         - SSH_KEY_PATH
+        - GHCR_TOKEN
+        - GHCR_USERNAME
+        - BACKEND_IMAGE
+        - BACKEND_IMAGE_TAG
   ansible:
     inventory:
       help: False # Do not show inventory help output

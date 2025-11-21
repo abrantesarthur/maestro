@@ -11,6 +11,7 @@ dependencies:
     package_pip: ansible-core==2.17.1 # pin to the latest Ansible core for cache-race fixes
   ansible_runner:
     package_pip: ansible-runner==2.4.0 # upgraded for the latest executor fixes
+  galaxy: requirements.yml # The content (e.g., docker_login, docker_image, etc) to bake into the execution environment image
   system: # linux system packages to install
     - openssh-clients # required for SSH connections to remote hosts.
 

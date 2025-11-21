@@ -13,6 +13,10 @@ DIGITALOCEAN_TOKEN=""
 PULUMI_ACCESS_TOKEN=""
 CLOUDFLARE_API_TOKEN=""
 HOST_SSH_KEY_PATH=""
+GHCR_TOKEN=""
+GHCR_USERNAME=""
+BACKEND_IMAGE=""
+BACKEND_IMAGE_TAG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-pulumi)
@@ -43,6 +47,26 @@ while [[ $# -gt 0 ]]; do
       HOST_SSH_KEY_PATH="$2"
       shift 2
       ;;
+     --ghcr-token)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      GHCR_TOKEN="$2"
+      shift 2
+      ;;
+     --ghcr-username)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      GHCR_USERNAME="$2"
+      shift 2
+      ;;
+     --backend-image)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      BACKEND_IMAGE="$2"
+      shift 2
+      ;;
+     --backend-image-tag)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      BACKEND_IMAGE_TAG="$2"
+      shift 2
+      ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
       exit 1
@@ -66,6 +90,12 @@ fi
 
 if [[ "${SKIP_PULUMI}" == "false" ]]; then
   require_var "${CLOUDFLARE_API_TOKEN}" 'Error: --cloudflare-api-token <token> is required when running Pulumi.'
+  require_var "${DIGITALOCEAN_TOKEN}" 'Error: --digital-ocean-token <api_key> is required when running Pulumi.'
+fi
+
+if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
+  require_var "${GHCR_TOKEN}" 'Error: --ghcr-token <token> is required when running Ansible.'
+  require_var "${GHCR_USERNAME}" 'Error: --ghcr-username <username> is required when running Ansible.'
 fi
 
 
@@ -133,7 +163,11 @@ fi
 # only provision ansible if requested
 if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
   echo "Provisioning ansible..."
-  "${ANSIBLE_RUN}" --hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
+  GHCR_TOKEN="${GHCR_TOKEN}" \
+  GHCR_USERNAME="${GHCR_USERNAME}" \
+  BACKEND_IMAGE="${BACKEND_IMAGE}" \
+  BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
+    "${ANSIBLE_RUN}" --hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
 else
   echo "Skipping ansible provisioning"
 fi
