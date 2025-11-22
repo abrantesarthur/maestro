@@ -4,7 +4,7 @@ This directory contains the Ansible automation that provisions resources in a se
 
 ## Workflow
 
-Run `./run.sh --ssh-hosts <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
+Run `./run.sh --ssh-hosts <list> --ssh-key <path>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
 
 After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
 It assumes the backend application image has already been built and pushed to GHCR under the tag you provide.
@@ -32,7 +32,7 @@ It assumes the backend application image has already been built and pushed to GH
 
 ## Ports
 
-- Web server (nginx): 443 (TLS entrypoint for domains dalhe.ai website).
+- 443: listens for dalhe.ai TLS connections
 
 ## Components
 
@@ -70,10 +70,3 @@ All playbooks are idempotent. Running them repeatedly will either make changes (
 ## Future improvements
 
 - right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). This way, we can provision nginx only on servers with the website.
-
-### Future Improvements
-
-- limit IPs that can send requests to the server (e.g., only from cloudflare?)
-- udpate nginx to forward requests from webhook.dalhe.ai to the port and preserves headers required by Meta (e.g., X-Hub-Signature-256).
-- implement UFW policies
-- implement cloudflare DNS records to forward requests to the webserver
