@@ -1,6 +1,7 @@
 ---
-- name: Provision linux users/groups permissions.
+- name: Provision general permissioning in all hosts (firewall policies, groups, etc.)
   hosts: all
   become: true
   roles:
+    - ufw
     - groups

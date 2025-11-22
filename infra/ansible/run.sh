@@ -146,7 +146,7 @@ run_playbook() {
     "--container-options=-v=${HOST_SSH_KEY_PATH}:${CONTAINER_SSH_KEY_PATH}:ro"
 }
 
-echo "Provisioning linux permissions..."
+echo "Provisioning permissions..."
 run_playbook "perms.yml"
 
 echo "Provisioning web server..."

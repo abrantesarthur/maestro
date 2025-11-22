@@ -1,0 +1,34 @@
+---
+- name: Install ufw
+  ansible.builtin.package:
+    name: ufw
+    state: present
+
+- name: Allow outgoing traffic by default
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Deny incoming traffic by default (still allows incoming localhost traffic)
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Remove any existing wide-open HTTPS rules allowing traffic from anywhere
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    to_port: 443
+    delete: true
+
+- name: Allow HTTPS traffic from Cloudflare
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    to_port: 443
+    from_ip: "{{ item }}"
+  loop: "{{ ufw_cloudflare_ipv4_cidrs }}"
+
+- name: Enable ufw
+  community.general.ufw:
+    state: enabled

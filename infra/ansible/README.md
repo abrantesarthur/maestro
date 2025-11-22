@@ -40,6 +40,7 @@ It assumes the backend application image has already been built and pushed to GH
 
 Roles:
 
+- **roles/ufw**: installs and configures UFW to deny inbound traffic by default while allowing SSH (22) and backend (3000) from localhost (via cloudflared) and HTTPS (443) only from Cloudflare IP ranges.
 - **roles/groups**: manages system groups from `roles/groups/vars/main.yml`.
 - **roles/docker**: installs and enables the Docker engine and Python bindings.
 - **roles/nginx**: installs and configures nginx for the web tier.
