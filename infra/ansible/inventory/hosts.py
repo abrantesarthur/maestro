@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-"""Dynamic inventory that maps HOSTS into Ansible hosts and tag-based groups.
+"""Dynamic inventory that maps SSH_HOSTS into Ansible hosts and tag-based groups.
 
 Usage:
-  Export HOSTS with a single-line JSON list of hostname and tags before invoking Ansible.
+  Export SSH_HOSTS with a single-line JSON list of hostname and tags before invoking Ansible.
   Example: {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}
 
   Inventory output shape (for the example above):
@@ -30,17 +30,17 @@ class HostEntry(TypedDict):
 
 
 def parse_hosts() -> List[HostEntry]:
-    hosts_arg = os.environ.get("HOSTS", "").strip()
+    hosts_arg = os.environ.get("SSH_HOSTS", "").strip()
     if not hosts_arg:
         sys.stderr.write(
-            "HOSTS must be set with a single-line JSON object or array containing hosts and tags.\n"
+            "SSH_HOSTS must be set with a single-line JSON object or array containing hosts and tags.\n"
         )
         sys.exit(1)
 
     try:
         parsed_hosts = json.loads(hosts_arg)
     except json.JSONDecodeError as exc:
-        sys.stderr.write(f"Invalid HOSTS JSON: {exc}\n")
+        sys.stderr.write(f"Invalid SSH_HOSTS JSON: {exc}\n")
         sys.exit(1)
 
     # allow passing either {"hosts": [...]} or directly [...]
@@ -50,7 +50,7 @@ def parse_hosts() -> List[HostEntry]:
         hosts_list = parsed_hosts
 
     if not isinstance(hosts_list, list) or not hosts_list:
-        sys.stderr.write("HOSTS must contain a non-empty 'hosts' array.\n")
+        sys.stderr.write("SSH_HOSTS must contain a non-empty 'hosts' array.\n")
         sys.exit(1)
 
     normalized_hosts: List[HostEntry] = []

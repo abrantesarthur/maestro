@@ -12,7 +12,7 @@ BACKEND_IMAGE="${BACKEND_IMAGE:-ghcr.io/dalhe-ai/backend}"
 BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-latest}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
 GHCR_USERNAME="${GHCR_USERNAME:-${GITHUB_ACTOR:-}}"
-HOSTS_ARG=""
+SSH_HOSTS_ARG=""
 CONTAINER_SSH_KEY_PATH="/root/.ssh/dalhe_ai"
 HOST_SSH_KEY_PATH=""
 
@@ -21,7 +21,7 @@ usage() {
 Usage: $(basename "$0")
 Options:
   -h, --help                       Show this message.
-  --hosts <json>                   json with list of hostname and tags (e.g., --hosts {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}) (required)
+  --ssh-hosts <json>                   json with list of hostname and tags (e.g., --ssh-hosts {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}) (required)
   --ssh-key <path>                 Path to the host SSH private key (required).
 EOF
 }
@@ -33,12 +33,12 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    --hosts)
+    --ssh-hosts)
       if [[ $# -lt 2 ]]; then
-        echo "Error: --hosts requires an argument." >&2
+        echo "Error: --ssh-hosts requires an argument." >&2
         exit 1
       fi
-      HOSTS_ARG="$2"
+      SSH_HOSTS_ARG="$2"
       shift 2
       ;;
     --ssh-key)
@@ -56,8 +56,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${HOSTS_ARG}" ]]; then
-  echo "Error: --hosts must be provided with at least one hostname." >&2
+if [[ -z "${SSH_HOSTS_ARG}" ]]; then
+  echo "Error: --ssh-hosts must be provided with at least one hostname." >&2
   exit 1
 fi
 
@@ -135,7 +135,7 @@ ansible-builder build \
 # helper to run ansible playbooks with shared environment
 run_playbook() {
   local playbook="$1"
-  HOSTS="${HOSTS_ARG}" \
+  SSH_HOSTS="${SSH_HOSTS_ARG}" \
   SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}" \
   GHCR_TOKEN="${GHCR_TOKEN}" \
   GHCR_USERNAME="${GHCR_USERNAME}" \

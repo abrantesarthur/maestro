@@ -3,6 +3,7 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as digitalOcean from "@pulumi/digitalocean";
 import * as tls from "@pulumi/tls";
 import { installCertificate } from "../commands/installCertificate";
+import { Tunnel, TunnelIngress, TunnelIngressProtocol } from "./tunnel";
 
 /** The arguments for constructing a VirtualServer instance */
 export interface VirtualServerArgs {
@@ -24,6 +25,8 @@ export interface VirtualServerArgs {
 export enum VpsTag {
   /** The VPS runs the production environment */
   Prod = "prod",
+  /** The VPS runs the staging environment */
+  Staging = "staging",
   /** The VPS hosts the backend application */
   Backend = "backend",
   /** The VPS hosts the web application */
@@ -36,6 +39,8 @@ export class VirtualServer extends pulumi.ComponentResource {
   readonly tags: pulumi.Output<string[]>;
   readonly ipv4: pulumi.Output<string>;
   readonly index: pulumi.Output<number | undefined>;
+  readonly sshHostname: pulumi.Output<string>;
+  readonly httpHostname: pulumi.Output<string>;
 
   constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
     super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);
@@ -96,11 +101,46 @@ export class VirtualServer extends pulumi.ComponentResource {
       dependsOn: [virtualServer, originCaCertificate],
     });
 
+    // create one tunnel per server so we can SSH and send http requests via hostnames while hiding the IP.
+    // IMPORTANT: For now we support only one prod server. To add more, we need to consider
+    // how to load balance requests from api.dalhe.ai to 2 production servers.
+    const ingresses = pulumi
+      .all([args.index, args.tags])
+      .apply(([index, tags]) => {
+        const ingressList: TunnelIngress[] = [
+          {
+            hostname: `ssh${index}.${domain}`,
+            protocol: TunnelIngressProtocol.Ssh,
+            port: 22,
+          },
+        ];
+        if (tags.includes(VpsTag.Backend)) {
+          const isStaging = tags.includes(VpsTag.Staging);
+          ingressList.push({
+            hostname: `${isStaging ? "staging-" : ""}api.${domain}`,
+            protocol: TunnelIngressProtocol.Http,
+            port: 3000,
+          });
+        }
+        return ingressList;
+      });
+
+    const tunnel = new Tunnel(
+      {
+        name,
+        ipv4: virtualServer.ipv4Address,
+        ingresses,
+      },
+      { parent: virtualServer },
+    );
+
     this.id = virtualServer.id;
     this.name = virtualServer.name;
     this.tags = virtualServer.tags.apply((t) => t ?? []);
     this.ipv4 = virtualServer.ipv4Address;
     this.index = pulumi.output(args.index);
+    this.sshHostname = tunnel.sshHostname;
+    this.httpHostname = tunnel.httpHostname;
     this.registerOutputs({
       id: this.id,
       name: this.name,

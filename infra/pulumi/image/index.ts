@@ -3,7 +3,6 @@ import * as digitalOcean from "@pulumi/digitalocean";
 import {
   DnsRecord,
   ZoneSettings,
-  SshTunnel,
   VirtualServer,
   VirtualServerArgs,
   VpsTag,
@@ -15,7 +14,7 @@ const domain = stackConfig.require("domain");
 // enforce zone-level settings
 new ZoneSettings({ domain });
 
-// provision the virtual private servers
+// provision the virtual private servers.
 const VPS_ARGS: Omit<VirtualServerArgs, "index">[] = [
   {
     image: "ubuntu-25-04-x64",
@@ -27,18 +26,6 @@ const VPS_ARGS: Omit<VirtualServerArgs, "index">[] = [
 ];
 const virtualServers = VPS_ARGS.map(
   (a, index) => new VirtualServer({ ...a, index }),
-);
-
-// create one tunnel per server so we can SSH while hiding the IP.
-const sshTunnels = virtualServers.map((vs) =>
-  pulumi.all([vs.ipv4, vs.index]).apply(([ipv4, index]) => {
-    const tunnelName = `ssh${index}`;
-    return new SshTunnel({
-      name: tunnelName,
-      ipv4,
-      hostname: `${tunnelName}.${domain}`,
-    });
-  }),
 );
 
 // create A DNS records for each web production server
@@ -54,8 +41,7 @@ webProdVirualServers.map((vs) =>
 );
 
 // export the outputs we care about so they can be consumed by the pulumi cli
-export const sshHostnames = sshTunnels.map((t) => t.hostname);
-export const hosts = virtualServers.map((vs, i) => ({
-  hostname: sshTunnels[i].hostname,
+export const hosts = virtualServers.map((vs) => ({
+  hostname: vs.sshHostname,
   tags: vs.tags,
 }));

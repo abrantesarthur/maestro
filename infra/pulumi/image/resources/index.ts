@@ -1,4 +1,4 @@
 export * from "./dnsRecord";
-export * from "./sshTunnel";
+export * from "./tunnel";
 export * from "./virtualServer";
 export * from "./zoneSettings";

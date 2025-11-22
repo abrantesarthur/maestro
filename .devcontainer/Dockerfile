@@ -5,6 +5,8 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
+# FIXME: install jq and cloudflared
+
 # refreshes package lists.
 RUN apt-get update
 # install curl, ca-certificates and docker cli

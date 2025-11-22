@@ -98,6 +98,15 @@ if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
   require_var "${GHCR_USERNAME}" 'Error: --ghcr-username <username> is required when running Ansible.'
 fi
 
+ensure_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    log "Error: required command '$1' not found in PATH." >&2
+    exit 1
+  fi
+}
+ensure_command jq
+ensure_command cloudflared
+
 
 declare -a PULUMI_OUTPUT_LOGS=()
 
@@ -147,6 +156,49 @@ capture_pulumi_hosts() {
   printf '%s' "${parsed_hosts}"
 }
 
+wait_for_tunnel() {
+  local host="$1"
+  local attempts="${2:-12}"
+  local delay_seconds="${3:-5}"
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if ssh \
+      -o ProxyCommand="cloudflared access ssh --hostname ${host}" \
+      -o BatchMode=yes \
+      -o ConnectTimeout=5 \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -i "${HOST_SSH_KEY_PATH}" \
+      "root@${host}" \
+      exit >/dev/null 2>&1; then
+      echo "Tunnel reachable: ${host}"
+      return 0
+    fi
+    echo "Waiting for tunnel ${host} to become reachable (attempt ${attempt}/${attempts})..."
+    sleep "${delay_seconds}"
+  done
+
+  echo "Error: tunnel ${host} not reachable after ${attempts} attempts." >&2
+  return 1
+}
+
+wait_for_tunnels_ready() {
+  local pulumi_hosts_json="$1"
+
+  local tunnel_hosts=()
+  while IFS= read -r host; do
+    tunnel_hosts+=("${host}")
+  done < <(printf '%s' "${pulumi_hosts_json}" | jq -r '(.hosts // [])[].hostname // empty')
+  if ((${#tunnel_hosts[@]} == 0)); then
+    echo "Error: no tunnel hostnames found in PULUMI_HOSTS." >&2
+    exit 1
+  fi
+
+  for host in "${tunnel_hosts[@]}"; do
+    wait_for_tunnel "${host}"
+  done
+}
+
 # only provision pulumi if requested
 PULUMI_HOSTS=""
 if [[ "${SKIP_PULUMI}" == "false" ]]; then
@@ -160,14 +212,17 @@ else
   echo "Skipping pulumi provisioning"
 fi
 
-# only provision ansible if requested
-if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
+
+# only provision ansible if requested or if no hosts were returned by pulumi
+if [[ "${SKIP_ANSIBLE}" == "false" && "${PULUMI_HOSTS}" != "{\"hosts\":null}" ]]; then
+  echo "Checking tunnel readiness before running Ansible..."
+  wait_for_tunnels_ready "${PULUMI_HOSTS}"
   echo "Provisioning ansible..."
   GHCR_TOKEN="${GHCR_TOKEN}" \
   GHCR_USERNAME="${GHCR_USERNAME}" \
   BACKEND_IMAGE="${BACKEND_IMAGE}" \
   BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
-    "${ANSIBLE_RUN}" --hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
+    "${ANSIBLE_RUN}" --ssh-hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
 else
   echo "Skipping ansible provisioning"
 fi
