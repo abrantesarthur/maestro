@@ -7,21 +7,17 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 `run.sh` is an orchestration script that wires the Pulumi and Ansible provisioning into a single command.
 
 ```bash
-./run.sh \
-  --digital-ocean-token "$DIGITALOCEAN_TOKEN" \
-  --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
-  --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
-  --ssh-key "$HOME/.ssh/ssh_dalhe_ai"
+./run.sh
 ```
 
-## Required flags
+### Required env:
 
-| Flag                     | Purpose                                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `--digital-ocean-token`  | Token with permission to list SSH keys, create droplets, list droplets, and destroy droplets.                                        |
-| `--pulumi-access-token`  | Pulumi Cloud access token that can log into and mutate the `prod` stack.                                                             |
-| `--cloudflare-api-token` | Cloudflare token with `Zone → DNS → Edit` and `Account → Cloudflare Tunnel → Edit` permissions for the dalhe.ai account.             |
-| `--ssh-key`              | Path to the SSH private key that can reach every server. The same key is bind-mounted inside both the Pulumi and Ansible containers. |
+| Variable           | Purpose                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets.                                                                                     |
+| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. It defaults to the value of the BWS_PROD_INFRA_PROJECT_ID environment variable |
+
+## Required flags
 
 ## Optional Flags
 
@@ -40,6 +36,7 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 - Make changes inside the relevant component directory following its README.
 - Keep commits scoped to a single infrastructure component to simplify rollbacks.
 
-### Prerequisites
+## FIXME:
 
-- The SSH private key passed via `--ssh-key` must already match a public key uploaded to DigitalOcean so both Pulumi (for remote commands) and Ansible can log into the droplets.
+- explain the purpose of the .env file
+- rename the Pulumi.yaml name to something other than cloudflared, as it includes digital ocean resources as well.

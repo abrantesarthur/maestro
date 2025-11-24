@@ -5,3 +5,4 @@ bun.lockb
 **/ansible/**/ansible-navigator.log
 infra/website/dist/
 **/ansible/**/execution_environment/files/website/
+.env

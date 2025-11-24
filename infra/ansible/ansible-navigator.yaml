@@ -20,6 +20,7 @@ ansible-navigator:
         - GHCR_USERNAME
         - BACKEND_IMAGE
         - BACKEND_IMAGE_TAG
+        - BACKEND_PORT
   ansible:
     inventory:
       help: False # Do not show inventory help output

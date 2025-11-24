@@ -53,7 +53,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-ensure_command() {
+require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     log "Error: required command '$1' not found in PATH." >&2
     exit 1
@@ -61,7 +61,7 @@ ensure_command() {
 }
 
 ensure_website_submodule() {
-  ensure_command git
+  require_command git
   if [[ -d "${WEBSITE_DIR}" ]]; then
     return
   fi
@@ -92,7 +92,7 @@ PACKAGE_MANAGER="bun"
 
 
 build_with_bun() {
-  ensure_command bun
+  require_command bun
   bun install
   bun run build
 }

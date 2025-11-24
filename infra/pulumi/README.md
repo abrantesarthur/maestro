@@ -8,14 +8,12 @@ Run the `run.sh` script. It validates that all required flags are present, build
 
 ```bash
 ./run.sh \
-  --pulumi-access-token "$PULUMI_ACCESS_TOKEN" \
-  --cloudflare-api-token "$CLOUDFLARE_API_TOKEN" \
-  --digital-ocean-api-key "$DIGITAL_OCEAN_API_KEY" \
   --ssh-key "/path/to/key>" \
   [--command up|refresh]
 ```
 
 The Pulumi program provisions:
+
 1. DigitalOcean virtual servers that come with cloudflared and ssl/tls certificates properly installed, so Cloudflare can provision tunnels and https connections properly.
 2. Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh0.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh0`, `ssh-b`, etc).
 
@@ -29,23 +27,22 @@ Host ssh0.dalhe.ai
 
 In the event that a server is destroyed, pulumi correctly takes down the tunnels that were linked to it.
 
-### Required flags:
+### Required env:
 
-| Flag | Purpose |
-| --- | --- |
-| `--pulumi-access-token` | authenticates the container with Pulumi Cloud so the program can `pulumi login` non-interactively. It must have |
-| permissions to operate on the `prod` stack. |
-| `--cloudflare-api-token` | authorises changes to the target Cloudflare zone. It must have `Zone` → `DNS` → `Edit`, `Zone` → `SSL and Certificates` → `Edit`, `Zone` → `Zone Settings` → `Edit`, and `Account` → `Cloudflare Tunnel` → `Edit` permissions for the dalhe.ai zone (Manage Account → Account API Tokens). |
-| `--digital-ocean-api-key` | is exported as `DIGITAL_OCEAN_API_KEY` and used by `doctl` to look up droplet details. It must have permission to list droplets. |
-| `--ssh-key`| absolute path to the private key that can SSH into the production servers. The script bind-mounts this key into the Pulumi container at `/root/.ssh/ssh_dalhe_ai` so destroy operations can stop remote `cloudflared` daemons. |
+| Variable           | Purpose                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets.                                                                                     |
+| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. It defaults to the value of the BWS_PROD_INFRA_PROJECT_ID environment variable |
 
 ### Optional flags:
 
-| Flag | Purpose |
-| --- | --- |
-| `--command` | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying. |
+| Flag         | Purpose                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--command`  | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying. |
+| `--skip-bws` | whether to skip fetching secrets from Bitwaden Secrets Manager, typically because the secrets are already injected in the environment.                          |
 
 ## Ports
+
 - SSH traffic is exposed via Cloudflare tunnels targeting port 22 on each host; no direct public exposure of port 22 is required when using the tunnel.
 
 ## Components

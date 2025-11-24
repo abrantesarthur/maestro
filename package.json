@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Dalhe's backend implementing an LLM agent.",
   "scripts": {
-    "start": "bun run server.ts",
+    "dev": "bun --env-file=local.env run --watch src/server.ts",
     "lint": "bunx eslint ."
   },
   "devDependencies": {

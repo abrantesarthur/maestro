@@ -1,72 +1,55 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 PULUMI_RUN="${SCRIPT_DIR}/pulumi/run.sh"
 ANSIBLE_RUN="${SCRIPT_DIR}/ansible/run.sh"
 
+# import helper functions
+source "$HELPERS_PATH"
+
+# Create a require_cmd and require_var functions with custom logger
+log() {
+  echo "[infra/run.sh] $*"
+}
+require_cmd() {
+  require_command log "$@"
+}
+require_var() {
+  require_variable log "$@"
+}
+require_bws_var() {
+  require_bws_variable log "$@"
+}
+
 # Parse mandatory arguments
+log "Parsing flags..."
 SKIP_PULUMI=false
 SKIP_ANSIBLE=false
-DIGITALOCEAN_TOKEN=""
-PULUMI_ACCESS_TOKEN=""
-CLOUDFLARE_API_TOKEN=""
-HOST_SSH_KEY_PATH=""
-GHCR_TOKEN=""
-GHCR_USERNAME=""
 BACKEND_IMAGE=""
 BACKEND_IMAGE_TAG=""
+BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-pulumi)
-        SKIP_PULUMI=true
-        shift 1
+      SKIP_PULUMI=true
+      shift 1
     ;;
     --skip-ansible)
-        SKIP_ANSIBLE=true
-        shift 1
+      SKIP_ANSIBLE=true
+      shift 1
     ;;
-    --digital-ocean-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      DIGITALOCEAN_TOKEN="$2"
-      shift 2
-      ;;
-    --pulumi-access-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      PULUMI_ACCESS_TOKEN="$2"
-      shift 2
-      ;;
-    --cloudflare-api-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      CLOUDFLARE_API_TOKEN="$2"
-      shift 2
-      ;;
-     --ssh-key)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      HOST_SSH_KEY_PATH="$2"
-      shift 2
-      ;;
-     --ghcr-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      GHCR_TOKEN="$2"
-      shift 2
-      ;;
-     --ghcr-username)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      GHCR_USERNAME="$2"
-      shift 2
-      ;;
-     --backend-image)
+    --backend-image)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       BACKEND_IMAGE="$2"
       shift 2
-      ;;
-     --backend-image-tag)
+    ;;
+    --backend-image-tag)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       BACKEND_IMAGE_TAG="$2"
-      shift 2
-      ;;
+    shift 2
+    ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
       exit 1
@@ -74,38 +57,31 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-require_var() {
-  local value="$1"
-  local message="$2"
-  if [[ -z "${value}" ]]; then
-    printf '%s\n' "${message}" >&2
-    exit 1
-  fi
-}
+log "Ensuring required commands exist..."
+require_cmd jq
+require_cmd cloudflared
+
+log "Fetching secrets from bitwarden secrets manager..."
+BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
+source_bws_secrets
+
+log "Ensuring required secrets and variables exist in the environment..."
+require_bws_var 'GHCR_TOKEN'
+require_bws_var 'VPS_SSH_KEY'
 
 if [[ "${SKIP_PULUMI}" == "false" || "${SKIP_ANSIBLE}" == "false" ]]; then
-  require_var "${PULUMI_ACCESS_TOKEN}" 'Error: --pulumi-access-token <token> is required when interacting with Pulumi.'
-  require_var "${HOST_SSH_KEY_PATH}" 'Error: --ssh-key </path/to/key> is required for Pulumi or Ansible.'
+  require_bws_var 'PULUMI_ACCESS_TOKEN'
 fi
 
 if [[ "${SKIP_PULUMI}" == "false" ]]; then
-  require_var "${CLOUDFLARE_API_TOKEN}" 'Error: --cloudflare-api-token <token> is required when running Pulumi.'
-  require_var "${DIGITALOCEAN_TOKEN}" 'Error: --digital-ocean-token <api_key> is required when running Pulumi.'
+  require_bws_var 'CLOUDFLARE_API_TOKEN'
+  require_bws_var 'DIGITALOCEAN_TOKEN'
 fi
 
 if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
-  require_var "${GHCR_TOKEN}" 'Error: --ghcr-token <token> is required when running Ansible.'
-  require_var "${GHCR_USERNAME}" 'Error: --ghcr-username <username> is required when running Ansible.'
+  require_bws_var 'GHCR_TOKEN'
+  require_bws_var 'GHCR_USERNAME'
 fi
-
-ensure_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    log "Error: required command '$1' not found in PATH." >&2
-    exit 1
-  fi
-}
-ensure_command jq
-ensure_command cloudflared
 
 
 declare -a PULUMI_OUTPUT_LOGS=()
@@ -119,6 +95,10 @@ cleanup_pulumi_logs() {
 }
 trap cleanup_pulumi_logs EXIT
 
+# write Bitwarden-provided SSH key to a secure temp file for mounting into the container
+SSH_KEY_TEMP_FILE="$(create_temp_secret_file VPS_SSH_KEY)"
+trap 'rm -f "${SSH_KEY_TEMP_FILE}"' EXIT
+
 capture_pulumi_hosts() {
   local pulumi_command="$1"
   local show_logs="${2:-true}"
@@ -127,18 +107,9 @@ capture_pulumi_hosts() {
   PULUMI_OUTPUT_LOGS+=("${output_log}")
 
   local pulumi_args=(
-    --pulumi-access-token "${PULUMI_ACCESS_TOKEN}"
     --command "${pulumi_command}"
+    --skip-bws # we already inject the secrets  
   )
-
-  if [[ "${pulumi_command}" != "output" ]]; then
-    pulumi_args+=(
-      --cloudflare-api-token "${CLOUDFLARE_API_TOKEN}"
-      --digital-ocean-token "${DIGITALOCEAN_TOKEN}"
-      --ssh-key "${HOST_SSH_KEY_PATH}"
-    )
-  fi
-
 
   if [[ "${show_logs}" == "true" ]]; then
     # Mirror Pulumi output to the terminal while still capturing for parsing.
@@ -158,8 +129,8 @@ capture_pulumi_hosts() {
 
 wait_for_tunnel() {
   local host="$1"
-  local attempts="${2:-12}"
-  local delay_seconds="${3:-5}"
+  local attempts="${2:-30}"
+  local delay_seconds="${3:-10}"
 
   for ((attempt = 1; attempt <= attempts; attempt++)); do
     if ssh \
@@ -168,17 +139,17 @@ wait_for_tunnel() {
       -o ConnectTimeout=5 \
       -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null \
-      -i "${HOST_SSH_KEY_PATH}" \
+      -i "${SSH_KEY_TEMP_FILE}" \
       "root@${host}" \
       exit >/dev/null 2>&1; then
-      echo "Tunnel reachable: ${host}"
+      log "Tunnel reachable: ${host}"
       return 0
     fi
-    echo "Waiting for tunnel ${host} to become reachable (attempt ${attempt}/${attempts})..."
+    log "Waiting for tunnel ${host} to become reachable (attempt ${attempt}/${attempts})..."
     sleep "${delay_seconds}"
   done
 
-  echo "Error: tunnel ${host} not reachable after ${attempts} attempts." >&2
+  log "Error: tunnel ${host} not reachable after ${attempts} attempts." >&2
   return 1
 }
 
@@ -190,7 +161,7 @@ wait_for_tunnels_ready() {
     tunnel_hosts+=("${host}")
   done < <(printf '%s' "${pulumi_hosts_json}" | jq -r '(.hosts // [])[].hostname // empty')
   if ((${#tunnel_hosts[@]} == 0)); then
-    echo "Error: no tunnel hostnames found in PULUMI_HOSTS." >&2
+    log "Error: no tunnel hostnames found in PULUMI_HOSTS." >&2
     exit 1
   fi
 
@@ -203,26 +174,25 @@ wait_for_tunnels_ready() {
 PULUMI_HOSTS=""
 if [[ "${SKIP_PULUMI}" == "false" ]]; then
   # provision pulumi and capture created ssh hostnames
-  echo "Provisioning pulumi..."
+  log "Provisioning pulumi..."
   PULUMI_HOSTS="$(capture_pulumi_hosts "up")"
 elif [[ "${SKIP_ANSIBLE}" == "false" ]]; then
-  echo "Fetching existing Pulumi outputs for Ansible..."
+  log "Fetching existing Pulumi outputs for Ansible..."
   PULUMI_HOSTS="$(capture_pulumi_hosts "output" "false")"
 else
-  echo "Skipping pulumi provisioning"
+  log "Skipping pulumi provisioning"
 fi
 
-
 # only provision ansible if requested or if no hosts were returned by pulumi
-if [[ "${SKIP_ANSIBLE}" == "false" && "${PULUMI_HOSTS}" != "{\"hosts\":null}" ]]; then
-  echo "Checking tunnel readiness before running Ansible..."
+if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" != "{\"hosts\":null}" ]]; then
+  log "Checking tunnel readiness before running Ansible..."
   wait_for_tunnels_ready "${PULUMI_HOSTS}"
-  echo "Provisioning ansible..."
+  log "Provisioning ansible..."
   GHCR_TOKEN="${GHCR_TOKEN}" \
   GHCR_USERNAME="${GHCR_USERNAME}" \
   BACKEND_IMAGE="${BACKEND_IMAGE}" \
   BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
-    "${ANSIBLE_RUN}" --ssh-hosts "${PULUMI_HOSTS}" --ssh-key "${HOST_SSH_KEY_PATH}"
+    "${ANSIBLE_RUN}" --ssh-hosts "${PULUMI_HOSTS}" --skip-bws
 else
-  echo "Skipping ansible provisioning"
+  log "Skipping ansible provisioning"
 fi

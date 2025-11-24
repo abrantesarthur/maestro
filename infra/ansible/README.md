@@ -4,7 +4,7 @@ This directory contains the Ansible automation that provisions resources in a se
 
 ## Workflow
 
-Run `./run.sh --ssh-hosts <list> --ssh-key <path>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
+Run `./run.sh --ssh-hosts <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
 
 After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
 It assumes the backend application image has already been built and pushed to GHCR under the tag you provide.
@@ -14,14 +14,13 @@ It assumes the backend application image has already been built and pushed to GH
 | Flag          | Purpose                                                                                                                                                                                                                                                                       |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--ssh-hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
-| `--ssh-key`   | Absolute path to the host SSH private key that should be mounted into the execution environment to provide access to the remote servers.                                                                                                                                      |
 
-## Required Environment
+### Required Environment:
 
-| Variable                         | Purpose                                                                                                       |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `GHCR_TOKEN`                     | GitHub token used to authenticate against GHCR when pulling the backend image (must include `read:packages`). |
-| `GHCR_USERNAME` / `GITHUB_ACTOR` | Username for GHCR login. `GHCR_USERNAME` overrides; otherwise `GITHUB_ACTOR` must be set.                     |
+| Variable           | Purpose                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets.                                                                                     |
+| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. It defaults to the value of the BWS_PROD_INFRA_PROJECT_ID environment variable |
 
 ## Optional Environment
 

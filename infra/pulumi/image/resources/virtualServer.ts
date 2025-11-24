@@ -62,6 +62,7 @@ export class VirtualServer extends pulumi.ComponentResource {
 
     const stackConfig = new pulumi.Config("dalhe");
     const domain = stackConfig.require("domain");
+    const backendPort = stackConfig.require("backendPort");
     const certHostnames = [`*.${domain}`, domain];
     const privateKey = new tls.PrivateKey(
       `cert-key-${name}`,
@@ -119,7 +120,7 @@ export class VirtualServer extends pulumi.ComponentResource {
           ingressList.push({
             hostname: `${isStaging ? "staging-" : ""}api.${domain}`,
             protocol: TunnelIngressProtocol.Http,
-            port: 3000,
+            port: Number(backendPort),
           });
         }
         return ingressList;

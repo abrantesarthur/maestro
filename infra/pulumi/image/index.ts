@@ -10,6 +10,7 @@ import {
 
 const stackConfig = new pulumi.Config("dalhe");
 const domain = stackConfig.require("domain");
+console.log({ domain });
 
 // enforce zone-level settings
 new ZoneSettings({ domain });

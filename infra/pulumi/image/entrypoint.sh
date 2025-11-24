@@ -1,25 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
-if [[ -z "${PULUMI_ACCESS_TOKEN:-}" ]]; then
-    echo "PULUMI_ACCESS_TOKEN must be set for Pulumi authentication" >&2
+log () {
+  local msg="${1}"
+  echo "[pulumi-image]: ${msg}"
+}
+
+require_env_var() {
+  local name="${1:-}"
+  local value="${!name-}"
+
+  if [ -z "$value" ]; then
+    log "Error: environment variable '$name' must be set"
     exit 1
-fi
-if [[ -z "${PULUMI_COMMAND:-}" ]]; then
-    echo "PULUMI_COMMAND must be set for how to run pulumi" >&2
-    exit 1
-fi
+  fi
+}
+require_env_var "BACKEND_PORT"
+require_env_var "SSH_PORT"
+require_env_var "PULUMI_ACCESS_TOKEN" 
+require_env_var "PULUMI_COMMAND" 
+require_env_var "PULUMI_SSH_KEY_PATH" 
 
 # Only provisioning commands need provider credentials
 if [[ "${PULUMI_COMMAND}" != "output" ]]; then
-    if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-        echo "CLOUDFLARE_API_TOKEN must be set for Cloudflare authentication" >&2
-        exit 1
-    fi
-    if [[ -z "${DIGITALOCEAN_TOKEN:-}" ]]; then
-        echo "DIGITALOCEAN_TOKEN must be set for Digital Ocean authentication" >&2
-        exit 1
-    fi
+  require_env_var "CLOUDFLARE_API_TOKEN"
+  require_env_var "DIGITALOCEAN_TOKEN"
 fi
 
 # Use PULUMI_ACCESS_TOKEN to log into Pulumi Cloud at api.pulumi.com without prompting.
@@ -35,6 +40,8 @@ print_stack_outputs() {
 case "$PULUMI_COMMAND" in
   up|refresh|cancel)
     pulumi config set --stack prod dalhe:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
+    pulumi config set --stack prod dalhe:backendPort "$BACKEND_PORT" --non-interactive
+    pulumi config set --stack prod dalhe:sshPort "$SSH_PORT" --non-interactive
 esac
 
 # Run the requested Pulumi action

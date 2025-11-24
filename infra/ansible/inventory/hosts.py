@@ -32,8 +32,9 @@ class HostEntry(TypedDict):
 def parse_hosts() -> List[HostEntry]:
     hosts_arg = os.environ.get("SSH_HOSTS", "").strip()
     if not hosts_arg:
+
         sys.stderr.write(
-            "SSH_HOSTS must be set with a single-line JSON object or array containing hosts and tags.\n"
+            f"SSH_HOSTS {hosts_arg} must be set with a single-line JSON object or array containing hosts and tags.\n"
         )
         sys.exit(1)
 

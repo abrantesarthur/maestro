@@ -14,6 +14,14 @@
     direction: incoming
     policy: deny
 
+# allow ssh traffic from anywhere so pulumi can remove cloudflared.
+# otherwise, pulumi is blocked from destroying the ssh tunnels.
+- name: Allow SSH traffic from anywhere
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    to_port: 22
+
 - name: Remove any existing wide-open HTTPS rules allowing traffic from anywhere
   community.general.ufw:
     rule: allow

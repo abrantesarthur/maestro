@@ -2,43 +2,46 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/../.." && pwd)/helpers.sh"
+SHARED_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
+PULUMI_ENV_PATH="${SCRIPT_DIR}/.env"
 BUILD_CONTEXT="${SCRIPT_DIR}/image"
 IMAGE_NAME="dalhe_pulumi"
 
+# import helper functions
+source "$HELPERS_PATH"
+
+log() {
+  echo "[infra/pulumi/run.sh] $*"
+}
+require_cmd() {
+  require_command log "$@"
+}
+require_var() {
+  require_variable log "$@"
+}
+require_f() {
+  require_file log "$@"
+}
+require_bws_var() {
+  require_bws_variable log "$@"
+}
 
 # parse then validate the flags
-PULUMI_ACCESS_TOKEN=""
-CLOUDFLARE_API_TOKEN=""
-DIGITALOCEAN_TOKEN=""
+log "Parsing flags..."
 PULUMI_COMMAND="up"
-HOST_SSH_KEY_PATH=""
-PULUMI_SSH_KEY_PATH="/root/.ssh/ssh_dalhe_ai"
+SKIP_BWS=false
+BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --pulumi-access-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      PULUMI_ACCESS_TOKEN="$2"
-      shift 2
-      ;;
-    --cloudflare-api-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      CLOUDFLARE_API_TOKEN="$2"
-      shift 2
-      ;;
-    --digital-ocean-token)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      DIGITALOCEAN_TOKEN="$2"
-      shift 2
-      ;;
     --command)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       PULUMI_COMMAND="$2"
       shift 2
       ;;
-    --ssh-key)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      HOST_SSH_KEY_PATH="$2"
-      shift 2
+    --skip-bws)
+      SKIP_BWS=true
+      shift 1
       ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
@@ -53,7 +56,7 @@ case "$PULUMI_COMMAND" in
   up|refresh|cancel|output)
     ;;
   *)
-    printf 'Invalid value for --command: %s. Expected "up", "refresh", "cancel", or "output".\n' "$PULUMI_COMMAND" >&2
+    log "Invalid value for --command: '${PULUMI_COMMAND}'. Expected 'up', 'refresh', 'cancel', or 'output'.\n" >&2
     exit 1
     ;;
 esac
@@ -63,57 +66,52 @@ if [[ "${PULUMI_COMMAND}" == "output" ]]; then
   NEEDS_PROVIDER_CREDS=false
 fi
 
+if [[ "${SKIP_BWS}" == "false" ]]; then
+  log "Fetching secrets from Bitwarden Secrets Manager..."
+  source_bws_secrets
+else
+  log "Skipping fetch of secrets from Bitwarden Secrets Manager..."
+fi
+
+log "Ensuring required flags and environment variables..."
 # require mandatory api keys
-if [[ -z "${PULUMI_ACCESS_TOKEN}" ]]; then
-  printf 'Error: --pulumi-access-token <token> is required.\n' >&2
-  exit 1
-fi
+require_var "${PULUMI_ACCESS_TOKEN-}" 'PULUMI_ACCESS_TOKEN is required.'
 if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
-  if [[ -z "${CLOUDFLARE_API_TOKEN}" ]]; then
-    printf 'Error: --cloudflare-api-token <token> is required.\n' >&2
-    exit 1
-  fi
-  if [[ -z "${DIGITALOCEAN_TOKEN}" ]]; then
-    printf 'Error: --digital-ocean-token <api_key> is required.\n' >&2
-    exit 1
-  fi
-  if [[ -z "${HOST_SSH_KEY_PATH}" ]]; then
-    printf 'Error: --ssh-key </path/to/key> is required.\n' >&2
-    exit 1
-  fi
-  if [[ ! -f "${HOST_SSH_KEY_PATH}" ]]; then
-    printf 'Error: %s does not exist or is not a file.\n' "${HOST_SSH_KEY_PATH}" >&2
-    exit 1
-  fi
+  require_var "${CLOUDFLARE_API_TOKEN-}" 'CLOUDFLARE_API_TOKEN is required.'
+  require_var "${DIGITALOCEAN_TOKEN-}" 'DIGITALOCEAN_TOKEN is required.'
 fi
+require_bws_var 'VPS_SSH_KEY'
 
-# convert SSH key path to absolute for docker volume mounting
-if [[ -n "${HOST_SSH_KEY_PATH}" && "${HOST_SSH_KEY_PATH}" != /* ]]; then
-  HOST_SSH_KEY_PATH="$(cd "$(dirname "${HOST_SSH_KEY_PATH}")" && pwd)/$(basename "${HOST_SSH_KEY_PATH}")"
-fi
+# write Bitwarden-provided SSH key to a secure temp file for mounting into the container
+SSH_KEY_TEMP_FILE="$(create_temp_secret_file VPS_SSH_KEY)"
+trap 'rm -f "${SSH_KEY_TEMP_FILE}"' EXIT
 
-echo "Building Docker image ${IMAGE_NAME}..."
+log "Building Docker image ${IMAGE_NAME}..."
 if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); then
   printf 'Failed to build Docker image "%s". Docker responded with:\n%s\n' "${IMAGE_NAME}" "${build_output}" >&2
   exit 1
 fi
 
-echo "Running the ${IMAGE_NAME} container..."
+log "Running the ${IMAGE_NAME} image..."
 docker_env=(
+  --env-file=${SHARED_ENV_PATH}
+  --env-file=${PULUMI_ENV_PATH}
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
 )
 docker_cmd=(docker run -it --rm)
 if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
+  PULUMI_SSH_KEY_PATH="/root/.ssh/ssh_dalhe_ai"
   docker_env+=(
     -e "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
     -e "DIGITALOCEAN_TOKEN=${DIGITALOCEAN_TOKEN}"
     -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
   )
-  docker_cmd+=(-v "${HOST_SSH_KEY_PATH}:${PULUMI_SSH_KEY_PATH}:ro")
+  docker_cmd+=(-v "${SSH_KEY_TEMP_FILE}:${PULUMI_SSH_KEY_PATH}:ro")
 fi
 
 docker_cmd+=("${docker_env[@]}")
 docker_cmd+=("${IMAGE_NAME}")
 
+# FIXME: improve logging
 "${docker_cmd[@]}"
