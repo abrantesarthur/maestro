@@ -31,7 +31,6 @@ require_bws_var() {
 log "Parsing flags..."
 PULUMI_COMMAND="up"
 SKIP_BWS=false
-BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --command)
@@ -67,10 +66,10 @@ if [[ "${PULUMI_COMMAND}" == "output" ]]; then
 fi
 
 if [[ "${SKIP_BWS}" == "false" ]]; then
-  log "Fetching secrets from Bitwarden Secrets Manager..."
+  log "Fetching secrets from Bitwarden..."
   source_bws_secrets
 else
-  log "Skipping fetch of secrets from Bitwarden Secrets Manager..."
+  log "Skipping fetch of secrets from Bitwarden..."
 fi
 
 log "Ensuring required flags and environment variables..."

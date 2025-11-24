@@ -29,7 +29,6 @@ SKIP_PULUMI=false
 SKIP_ANSIBLE=false
 BACKEND_IMAGE=""
 BACKEND_IMAGE_TAG=""
-BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-pulumi)
@@ -61,8 +60,7 @@ log "Ensuring required commands exist..."
 require_cmd jq
 require_cmd cloudflared
 
-log "Fetching secrets from bitwarden secrets manager..."
-BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
+log "Fetching secrets from Bitwarden..."
 source_bws_secrets
 
 log "Ensuring required secrets and variables exist in the environment..."

@@ -5,7 +5,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/../.." && pwd)/helpers.sh"
 SKIP_BWS=false
-BWS_PROJECT_ID="${BWS_PROJECT_ID:-${BWS_PROD_INFRA_PROJECT_ID:-}}"
 
 # import helper functions
 source "$HELPERS_PATH"
@@ -69,15 +68,16 @@ log "Ensuring required flags..."
 require_var "${SSH_HOSTS_ARG}" '--ssh-hosts must be provided with at least one hostname.'
 
 if [[ "${SKIP_BWS}" == "false" ]]; then
-  log "Fetching secrets from Bitwarden Secrets Manager..."
+  log "Fetching secrets from Bitwarden..."
   source_bws_secrets
 else
-  log "Skipping fetch of secrets from Bitwarden Secrets Manager..."
+  log "Skipping fetch of secrets from Bitwarden..."
 fi
 log "Ensuring required environment..."
 require_bws_var 'GHCR_TOKEN'
 require_bws_var 'GHCR_USERNAME'
 require_bws_var 'VPS_SSH_KEY'
+require_bws_var 'WHATSAPP_VERIFY_TOKEN'
 
 log "ensure ansible-builder and ansible-navigator are installed..."
 if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigator >/dev/null 2>&1; then

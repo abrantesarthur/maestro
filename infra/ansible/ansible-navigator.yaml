@@ -21,6 +21,7 @@ ansible-navigator:
         - BACKEND_IMAGE
         - BACKEND_IMAGE_TAG
         - BACKEND_PORT
+        - WHATSAPP_VERIFY_TOKEN
   ansible:
     inventory:
       help: False # Do not show inventory help output

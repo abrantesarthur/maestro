@@ -17,17 +17,17 @@ It assumes the backend application image has already been built and pushed to GH
 
 ### Required Environment:
 
-| Variable           | Purpose                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets.                                                                                     |
-| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. It defaults to the value of the BWS_PROD_INFRA_PROJECT_ID environment variable |
+| Variable           | Purpose                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets. |
 
 ## Optional Environment
 
-| Variable            | Purpose                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------ |
-| `BACKEND_IMAGE`     | Image reference pulled by Ansible; defaults to `ghcr.io/dalhe-ai/backend`.                       |
-| `BACKEND_IMAGE_TAG` | Tag pulled/deployed; defaults to `latest` (override with a CI tag/SHA for reproducible deploys). |
+| Variable            | Purpose                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
+| `BACKEND_IMAGE`     | Image reference pulled by Ansible; defaults to `ghcr.io/dalhe-ai/backend`.                                                     |
+| `BACKEND_IMAGE_TAG` | Tag pulled/deployed; defaults to `latest` (override with a CI tag/SHA for reproducible deploys).                               |
 
 ## Ports
 

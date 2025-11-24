@@ -87,11 +87,15 @@ require_command() {
   fi
 }
 
+# fetches secrets from BWS_PROJECT_ID if specified. Otherwise, fetches from all projects.
 source_bws_secrets () {
   require_command echo bws
-  require_variable "${BWS_PROJECT_ID:-}" "Missing BWS_PROJECT_ID in the environment".
   set -a
+  if [[ -z "${BWS_PROJECT_ID:-}" ]]; then
+    eval "$(bws secret list -o env)"
+  else
     eval "$(bws secret list -o env "${BWS_PROJECT_ID}")"
+  fi
   set +a
 }
 
