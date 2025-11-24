@@ -79,7 +79,6 @@ if [[ "${SKIP_PULUMI}" == "false" ]]; then
 fi
 
 if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
-  require_bws_var 'GHCR_TOKEN'
   require_bws_var 'GHCR_USERNAME'
 fi
 
@@ -188,8 +187,6 @@ if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" 
   log "Checking tunnel readiness before running Ansible..."
   wait_for_tunnels_ready "${PULUMI_HOSTS}"
   log "Provisioning ansible..."
-  GHCR_TOKEN="${GHCR_TOKEN}" \
-  GHCR_USERNAME="${GHCR_USERNAME}" \
   BACKEND_IMAGE="${BACKEND_IMAGE}" \
   BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
     "${ANSIBLE_RUN}" --ssh-hosts "${PULUMI_HOSTS}" --skip-bws
