@@ -137,8 +137,6 @@ run_playbook() {
 # export hard-coded environment variables
 export SSH_HOSTS="${SSH_HOSTS_ARG}"
 export SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}"
-export GHCR_TOKEN="${GHCR_TOKEN}"
-export GHCR_USERNAME="${GHCR_USERNAME}"
 export BACKEND_IMAGE="${BACKEND_IMAGE:-ghcr.io/dalhe-ai/backend}"
 export BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-latest}"
 # export environment variables from shared infra/shared.env

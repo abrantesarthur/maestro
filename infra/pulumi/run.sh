@@ -93,19 +93,19 @@ if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); th
 fi
 
 log "Running the ${IMAGE_NAME} image..."
+PULUMI_SSH_KEY_PATH="/root/.ssh/ssh_dalhe_ai"
 docker_env=(
   --env-file=${SHARED_ENV_PATH}
   --env-file=${PULUMI_ENV_PATH}
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
+  -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
 )
 docker_cmd=(docker run -it --rm)
 if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
-  PULUMI_SSH_KEY_PATH="/root/.ssh/ssh_dalhe_ai"
   docker_env+=(
     -e "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}"
     -e "DIGITALOCEAN_TOKEN=${DIGITALOCEAN_TOKEN}"
-    -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
   )
   docker_cmd+=(-v "${SSH_KEY_TEMP_FILE}:${PULUMI_SSH_KEY_PATH}:ro")
 fi
