@@ -26,10 +26,14 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 
 ## Optional Flags
 
-| Flag             | Purpose                                       |
-| ---------------- | --------------------------------------------- |
-| `--skip-pulumi`  | Skips running the Pulumi stack.               |
-| `--skip-ansible` | Skips the Ansible provisioning step entirely. |
+| Flag             | Purpose                                                        |
+| ---------------- | -------------------------------------------------------------- |
+| `--skip-pulumi`  | Skips running the Pulumi stack.                                |
+| `--skip-ansible` | Skips the Ansible provisioning step entirely.                  |
+| `--skip-bws`     | Whether to skip pulling secrets from Bitwarden Secrets Manager |
+| `--skip-web`     | Whether to skip provisioning web.                              |
+| `--skip-backend` | Whether to skip provisioning backend.                          |
+| `--skip-perms`   | Whether to skip provisioning perms.                            |
 
 ## Components
 

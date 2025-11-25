@@ -29,6 +29,9 @@ SKIP_PULUMI=false
 SKIP_ANSIBLE=false
 BACKEND_IMAGE=""
 BACKEND_IMAGE_TAG=""
+SKIP_WEB=false
+SKIP_BACKEND=false
+SKIP_PERMS=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-pulumi)
@@ -47,7 +50,19 @@ while [[ $# -gt 0 ]]; do
     --backend-image-tag)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       BACKEND_IMAGE_TAG="$2"
-    shift 2
+      shift 2
+    ;;
+    --skip-web)
+      SKIP_WEB=true
+      shift 1
+    ;;
+    --skip-backend)
+      SKIP_BACKEND=true
+      shift 1
+    ;;
+    --skip-perms)
+      SKIP_PERMS=true
+      shift 1
     ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
@@ -185,9 +200,24 @@ if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" 
   log "Checking tunnel readiness before running Ansible..."
   wait_for_tunnels_ready "${PULUMI_HOSTS}"
   log "Provisioning ansible..."
+  ansible_args=(
+    --ssh-hosts "${PULUMI_HOSTS}"
+    --skip-bws
+  )
+
+  if [[ "${SKIP_WEB}" == "true" ]]; then
+    ansible_args+=(--skip-web)
+  fi
+  if [[ "${SKIP_BACKEND}" == "true" ]]; then
+    ansible_args+=(--skip-backend)
+  fi
+  if [[ "${SKIP_PERMS}" == "true" ]]; then
+    ansible_args+=(--skip-perms)
+  fi
+
   BACKEND_IMAGE="${BACKEND_IMAGE}" \
   BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
-    "${ANSIBLE_RUN}" --ssh-hosts "${PULUMI_HOSTS}" --skip-bws
+    "${ANSIBLE_RUN}" "${ansible_args[@]}"
 else
   log "Skipping ansible provisioning"
 fi

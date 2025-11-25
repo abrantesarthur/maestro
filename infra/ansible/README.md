@@ -15,6 +15,15 @@ It assumes the backend application image has already been built and pushed to GH
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--ssh-hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
 
+## Optional Flags
+
+| Flag             | Purpose                                                        |
+| ---------------- | -------------------------------------------------------------- |
+| `--skip-bws`     | Whether to skip pulling secrets from Bitwarden Secrets Manager |
+| `--skip-web`     | Whether to skip provisioning web.                              |
+| `--skip-backend` | Whether to skip provisioning backend.                          |
+| `--skip-perms`   | Whether to skip provisioning perms.                            |
+
 ### Required Environment:
 
 | Variable           | Purpose                                                                  |

@@ -4,7 +4,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/../.." && pwd)/helpers.sh"
-SKIP_BWS=false
 
 # import helper functions
 source "$HELPERS_PATH"
@@ -36,6 +35,10 @@ EOF
 
 # require needed flags
 SSH_HOSTS_ARG=""
+SKIP_BWS=false
+SKIP_WEB=false
+SKIP_BACKEND=false
+SKIP_PERMS=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
@@ -49,6 +52,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-bws)
       SKIP_BWS=true
+      shift 1
+      ;;
+    --skip-web)
+      SKIP_WEB=true
+      shift 1
+      ;;
+    --skip-backend)
+      SKIP_BACKEND=true
+      shift 1
+      ;;
+    --skip-perms)
+      SKIP_PERMS=true
       shift 1
       ;;
     *)
@@ -78,6 +93,7 @@ require_bws_var 'GHCR_TOKEN'
 require_bws_var 'GHCR_USERNAME'
 require_bws_var 'VPS_SSH_KEY'
 require_bws_var 'WHATSAPP_VERIFY_TOKEN'
+require_bws_var 'WHATSAPP_APP_SECRET'
 
 log "ensure ansible-builder and ansible-navigator are installed..."
 if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigator >/dev/null 2>&1; then
@@ -110,9 +126,16 @@ if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigato
 fi
 
 
-log "Building website assets for Ansible execution environment..."
 WEBSITE_ASSETS_DIR="${SCRIPT_DIR}/execution_environment/files/website"
-"${WEBSITE_BUILD_SCRIPT}" --output-dir "${WEBSITE_ASSETS_DIR}" >/dev/null; 
+if [[ "${SKIP_WEB}" == "false" ]]; then
+  log "Building website assets for Ansible execution environment..."
+  "${WEBSITE_BUILD_SCRIPT}" --output-dir "${WEBSITE_ASSETS_DIR}" >/dev/null;
+else
+  log "Skipping building website assets for Ansible execution environment; creating empty directory..."
+  rm -rf "${WEBSITE_ASSETS_DIR}"
+  mkdir -p "${WEBSITE_ASSETS_DIR}"
+fi
+
 
 log "Building Ansible execution environment image 'ansible_ee'..."
 pushd "${SCRIPT_DIR}" >/dev/null
@@ -146,15 +169,28 @@ source "${INFRA_ENV_PATH}"
 set +a
 
 
-log "Provisioning web server..."
-run_playbook "web.yml"
+if [[ "${SKIP_WEB}" == "false" ]]; then
+  log "Provisioning web server..."
+  run_playbook "web.yml"
+else
+  log "Skipping provisioning web server..."
+fi
 
-log "Provisioning backend..."
-run_playbook "backend.yml"
+if [[ "${SKIP_BACKEND}" == "false" ]]; then
+  log "Provisioning backend..."
+  run_playbook "backend.yml"
+else
+  log "Skipping provisioning backend..."
+fi
+
+if [[ "${SKIP_PERMS}" == "false" ]]; then
+  log "Provisioning permissions..."
+  run_playbook "perms.yml"
+else
+  log "Skipping provisioning permissions..."
+fi
 
 # we recommen running this playbook last because it may block connections to the server.
-log "Provisioning permissions..."
-run_playbook "perms.yml"
 popd >/dev/null
 
 log "Done."
