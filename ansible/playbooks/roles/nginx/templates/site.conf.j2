@@ -1,12 +1,11 @@
-
 server {
-  server_name dalhe.ai www.dalhe.ai;
+  server_name {{ domain }} www.{{ domain }};
 
-  root /var/www/dalhe.ai/website;
+  root /var/www/{{ domain }}/website;
   index index.html;
 
-  access_log /var/log/nginx/dalhe.ai.access.log timed;
-  error_log  /var/log/nginx/dalhe.ai.error.log;
+  access_log /var/log/nginx/{{ domain }}.access.log timed;
+  error_log  /var/log/nginx/{{ domain }}.error.log;
 
   location / {
     try_files $uri $uri/ /index.html;
@@ -32,3 +31,4 @@ server {
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'" always;
 
 }
+

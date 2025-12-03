@@ -13,6 +13,7 @@
     mode: "0755"
   loop:
     - "{{ nginx_conf_dest }}"
+    - "{{ nginx_conf_dest }}sites-available/"
     - "{{ nginx_conf_dest }}sites-enabled/"
 
 - name: Remove default nginx site configuration
@@ -58,20 +59,20 @@
     mode: "0644"
     directory_mode: "0755"
 
-- name: Deploy nginx configuration
-  ansible.builtin.copy:
-    src: "{{ nginx_conf_src }}"
-    dest: "{{ nginx_conf_dest }}"
+- name: Deploy nginx site configuration
+  ansible.builtin.template:
+    src: site.conf.j2
+    dest: "{{ nginx_conf_dest }}sites-available/{{ domain }}.conf"
     owner: root
     group: root
     mode: "0644"
-  register: nginx_conf_copy
+  register: nginx_conf_template
   notify: Validate nginx configuration
 
 - name: Enable nginx site configuration
   ansible.builtin.file:
-    src: "{{ nginx_conf_dest }}sites-available/dalhe.ai.conf"
-    dest: "{{ nginx_conf_dest }}sites-enabled/dalhe.ai.conf"
+    src: "{{ nginx_conf_dest }}sites-available/{{ domain }}.conf"
+    dest: "{{ nginx_conf_dest }}sites-enabled/{{ domain }}.conf"
     state: link
     force: true
   register: nginx_site_link
@@ -79,7 +80,7 @@
 
 - name: Flush handlers if nginx config changed
   ansible.builtin.meta: flush_handlers
-  when: nginx_conf_copy.changed or nginx_site_link.changed
+  when: nginx_conf_template.changed or nginx_site_link.changed
 
 - name: Ensure nginx service is enabled and running
   ansible.builtin.service:

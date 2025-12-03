@@ -1,7 +1,7 @@
 ---
 nginx_service_name: nginx
-nginx_conf_src: /opt/nginx/
 nginx_conf_dest: /etc/nginx/
 nginx_validate_command: nginx -t
 website_src_dir: /opt/website
-website_dest_dir: /var/www/dalhe.ai/website
+domain: "{{ lookup('env', 'DOMAIN') }}"
+website_dest_dir: "/var/www/{{ domain }}/website"

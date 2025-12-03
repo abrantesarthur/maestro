@@ -16,8 +16,6 @@ dependencies:
     - openssh-clients # required for SSH connections to remote hosts.
 
 additional_build_files:
-  - src: files/nginx/
-    dest: files/nginx/
   - src: files/website/
     dest: files/website/
     
@@ -27,5 +25,4 @@ additional_build_steps:
     - RUN dnf config-manager addrepo --from-repofile https://pkg.cloudflare.com/cloudflared-ascii.repo
     - RUN dnf install -y cloudflared
   append_final:
-    - COPY _build/files/nginx /opt/nginx
     - COPY _build/files/website /opt/website
