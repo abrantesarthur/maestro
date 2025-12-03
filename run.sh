@@ -11,7 +11,7 @@ source "$HELPERS_PATH"
 
 # Create a require_cmd and require_var functions with custom logger
 log() {
-  echo "[infra/run.sh] $*"
+  echo "[maestro] $*"
 }
 require_cmd() {
   require_command log "$@"

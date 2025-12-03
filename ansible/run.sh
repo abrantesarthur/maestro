@@ -9,7 +9,7 @@ HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 source "$HELPERS_PATH"
 
 log() {
-  echo "[infra/ansible/run.sh] $*"
+  echo "[maestro/ansible] $*"
 }
 require_cmd() {
   require_command log "$@"

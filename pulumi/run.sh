@@ -12,7 +12,7 @@ IMAGE_NAME="dalhe_pulumi"
 source "$HELPERS_PATH"
 
 log() {
-  echo "[infra/pulumi/run.sh] $*"
+  echo "[maestro/pulumi] $*"
 }
 require_cmd() {
   require_command log "$@"
