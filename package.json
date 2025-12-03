@@ -1,9 +1,8 @@
 {
-  "name": "Dalhe Backend Server",
-  "version": "1.0.0",
+  "name": "Maestro",
+  "version": "0.1.0",
   "description": "Dalhe's backend implementing an LLM agent.",
   "scripts": {
-    "dev": "bun --env-file=local.env run --watch src/server.ts",
     "lint": "bunx eslint ."
   },
   "devDependencies": {
@@ -19,6 +18,6 @@
     "typescript-eslint": "^8.46.2"
   },
   "dependencies": {
-    "bunweb": "0.4.0"
+    "bunweb": "0.5.0"
   }
 }

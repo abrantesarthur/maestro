@@ -1,51 +1,51 @@
-# Backend
+# Infra
 
-Lightweight Bun HTTP service exposing a `/health` endpoint on port 3000.
+Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. Each component stays in its own subdirectory with dedicated documentation and deployment scripts.
 
 ## Workflow
 
-```bash
-# Default image ghcr.io/dalhe-ai/backend, tag from git short SHA
-./deploy_image.sh --latest
+`run.sh` is an orchestration script that wires the Pulumi and Ansible provisioning into a single command.
 
-# Override the tag or image if needed
-# GHCR_IMAGE="ghcr.io/dalhe-ai/backend" TAG="v0.1.0" ./deploy_image.sh --platforms linux/amd64,linux/arm64
+```bash
+./run.sh
 ```
 
-## Required environment
+### Required env:
 
-| Variable           | Purpose                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets.                                                                                     |
-| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. It defaults to the value of the BWS_PROD_INFRA_PROJECT_ID environment variable |
+| Variable           | Purpose                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets. |
 
-## Optional environment
+### Optional env:
 
-| Variable     | Purpose                                                          |
-| ------------ | ---------------------------------------------------------------- |
-| `GHCR_IMAGE` | Target image reference; defaults to `ghcr.io/dalhe-ai/backend`.  |
-| `TAG`        | Image tag; defaults to the git short SHA if not set.             |
-| `PLATFORMS`  | Comma-separated platforms for buildx; defaults to `linux/amd64`. |
+| Variable         | Purpose                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_PROJECT_ID` | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
 
-## Optional flags
+## Required flags
 
-| Flag              | Purpose                                                                     |
-| ----------------- | --------------------------------------------------------------------------- |
-| `--tag <tag>`     | Override the image tag instead of using the git short SHA.                  |
-| `--latest`        | Also tag and push the image as `:latest`.                                   |
-| `--platforms <p>` | Override platforms (e.g., `linux/amd64,linux/arm64`) for multi-arch builds. |
-| `-h`, `--help`    | Show script usage.                                                          |
+## Optional Flags
+
+| Flag             | Purpose                                                        |
+| ---------------- | -------------------------------------------------------------- |
+| `--skip-pulumi`  | Skips running the Pulumi stack.                                |
+| `--skip-ansible` | Skips the Ansible provisioning step entirely.                  |
+| `--skip-bws`     | Whether to skip pulling secrets from Bitwarden Secrets Manager |
+| `--skip-web`     | Whether to skip provisioning web.                              |
+| `--skip-backend` | Whether to skip provisioning backend.                          |
+| `--skip-perms`   | Whether to skip provisioning perms.                            |
 
 ## Components
 
-`local.env`: The environment injected into the app when running locally.
+- `pulumi/` — Pulumi programs for provisioning Cloudflare DNS and related cloud resources.
+- `ansible/` — Ansible execution environment, inventories, and playbooks that configures the servers (e.g., nginx, groups, etc).
 
-# TODO:
+## Working In This Folder
 
-- Security: configure mTLS for webhooks https://developers.facebook.com/docs/graph-api/webhooks/getting-started/#mtls-for-webhooks
-- Logs: how can we easily see production logs?
-- Update this README and Notion security to mention BWS.
-  - We create a token issued for my specific macbook m4 that can be used to access the secrets.
-    - locally, we store it at the gitignored .env for convenience
-    - point of failure: BitWarden master password + 2FA.
-- Update this README to mention how to retrieve a new token for this machine
+- Make changes inside the relevant component directory following its README.
+- Keep commits scoped to a single infrastructure component to simplify rollbacks.
+
+## FIXME:
+
+- explain the purpose of the .env file
+- rename the Pulumi.yaml name to something other than cloudflared, as it includes digital ocean resources as well.

@@ -1,8 +1,8 @@
 node_modules/
 bin/
 bun.lockb
-**/ansible/**/context
-**/ansible/**/ansible-navigator.log
-infra/website/dist/
-**/ansible/**/execution_environment/files/website/
+ansible/**/context
+ansible/**/ansible-navigator.log
+website/dist/
+ansible/**/execution_environment/files/website/
 .env
