@@ -5,7 +5,7 @@ backend_host_port: "{{ lookup('env', 'BACKEND_PORT') }}"
 backend_bind_address: 127.0.0.1
 backend_env: { 
   PORT: "{{ lookup('env', 'BACKEND_PORT') }}",
-  WHATSAPP_VERIFY_TOKEN: "{{ lookup('env', 'WHATSAPP_VERIFY_TOKEN') }}"
+  WHATSAPP_VERIFY_TOKEN: "{{ lookup('env', 'WHATSAPP_VERIFY_TOKEN') }}",
   WHATSAPP_APP_SECRET: "{{ lookup('env', 'WHATSAPP_APP_SECRET') }}"
 }
 backend_image: "{{ lookup('env', 'BACKEND_IMAGE') }}"

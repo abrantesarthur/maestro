@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
+HELPERS_PATH="$(cd -- "${SCRIPT_DIR}" && pwd)/helpers.sh"
 PULUMI_RUN="${SCRIPT_DIR}/pulumi/run.sh"
 ANSIBLE_RUN="${SCRIPT_DIR}/ansible/run.sh"
 

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/../.." && pwd)/helpers.sh"
+HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 
 # import helper functions
 source "$HELPERS_PATH"

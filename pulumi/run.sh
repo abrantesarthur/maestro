@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/../.." && pwd)/helpers.sh"
+HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 SHARED_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
 PULUMI_ENV_PATH="${SCRIPT_DIR}/.env"
 BUILD_CONTEXT="${SCRIPT_DIR}/image"
