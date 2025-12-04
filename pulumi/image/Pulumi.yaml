@@ -1,4 +1,4 @@
-name: provisioner
+name: maestro
 description: Infrastructure provisioning with Pulumi
 runtime:
   name: nodejs

@@ -8,7 +8,7 @@ import {
   VpsTag,
 } from "./resources";
 
-const stackConfig = new pulumi.Config("provisioner");
+const stackConfig = new pulumi.Config("maestro");
 const domain = stackConfig.require("domain");
 console.log({ domain });
 

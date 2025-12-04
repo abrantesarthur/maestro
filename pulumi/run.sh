@@ -6,13 +6,13 @@ HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 SHARED_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
 PULUMI_ENV_PATH="${SCRIPT_DIR}/.env"
 BUILD_CONTEXT="${SCRIPT_DIR}/image"
-IMAGE_NAME="provisioner_pulumi"
+IMAGE_NAME="maestro_pulumi"
 
 # import helper functions
 source "$HELPERS_PATH"
 
 log() {
-  echo "[provisioner/pulumi] $*"
+  echo "[maestro/pulumi] $*"
 }
 require_cmd() {
   require_command log "$@"

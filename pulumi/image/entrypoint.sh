@@ -41,11 +41,11 @@ print_stack_outputs() {
 # Inject required values in the prod configuration
 case "$PULUMI_COMMAND" in
   up|refresh|cancel)
-    pulumi config set --stack prod provisioner:domain "$DOMAIN" --non-interactive
-    pulumi config set --stack prod provisioner:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
-    pulumi config set --stack prod provisioner:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
-    pulumi config set --stack prod provisioner:backendPort "$BACKEND_PORT" --non-interactive
-    pulumi config set --stack prod provisioner:sshPort "$SSH_PORT" --non-interactive
+    pulumi config set --stack prod maestro:domain "$DOMAIN" --non-interactive
+    pulumi config set --stack prod maestro:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
+    pulumi config set --stack prod maestro:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
+    pulumi config set --stack prod maestro:backendPort "$BACKEND_PORT" --non-interactive
+    pulumi config set --stack prod maestro:sshPort "$SSH_PORT" --non-interactive
 esac
 
 # Run the requested Pulumi action
