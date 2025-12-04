@@ -4,9 +4,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
+ANSIBLE_ENV_PATH="${SCRIPT_DIR}/.env"
 
 # import helper functions
 source "$HELPERS_PATH"
+
+# source local ansible .env if it exists
+if [[ -f "${ANSIBLE_ENV_PATH}" ]]; then
+  set -a
+  source "${ANSIBLE_ENV_PATH}"
+  set +a
+fi
 
 log() {
   echo "[maestro/ansible] $*"
@@ -160,8 +168,13 @@ run_playbook() {
 # export hard-coded environment variables
 export SSH_HOSTS="${SSH_HOSTS_ARG}"
 export SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}"
-export BACKEND_IMAGE="${BACKEND_IMAGE:-ghcr.io/dalhe-ai/backend}"
-export BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-latest}"
+# validate backend image configuration when deploying backend
+if [[ "${SKIP_BACKEND}" == "false" ]]; then
+  require_var "${BACKEND_IMAGE:-}" 'BACKEND_IMAGE is required when deploying backend (e.g., ghcr.io/your-org/your-app).'
+  require_var "${BACKEND_IMAGE_TAG:-}" 'BACKEND_IMAGE_TAG is required when deploying backend (e.g., latest, v1.0.0, sha-abc123).'
+fi
+export BACKEND_IMAGE="${BACKEND_IMAGE:-}"
+export BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-}"
 # export environment variables from shared infra/shared.env
 INFRA_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
 set -a

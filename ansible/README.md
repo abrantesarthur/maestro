@@ -13,7 +13,7 @@ It assumes the backend application image has already been built and pushed to GH
 
 | Flag          | Purpose                                                                                                                                                                                                                                                                       |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--ssh-hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
+| `--ssh-hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
 
 ## Optional Flags
 
@@ -26,21 +26,27 @@ It assumes the backend application image has already been built and pushed to GH
 
 ### Required Environment:
 
-| Variable           | Purpose                                                                  |
-| ------------------ | ------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets. |
+| Variable            | Purpose                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `BWS_ACCESS_TOKEN`  | Bitwarden Secrets Manager's token required for retrieving other secrets.                             |
+| `BACKEND_IMAGE`     | Full ghcr.io image reference (e.g., `ghcr.io/your-org/your-app`). Required when deploying backend.   |
+| `BACKEND_IMAGE_TAG` | Image tag to deploy (e.g., `latest`, `v1.0.0`, `sha-abc123`). Required when deploying backend.       |
 
 ## Optional Environment
 
 | Variable            | Purpose                                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
-| `BACKEND_IMAGE`     | Image reference pulled by Ansible; defaults to `ghcr.io/dalhe-ai/backend`.                                                     |
-| `BACKEND_IMAGE_TAG` | Tag pulled/deployed; defaults to `latest` (override with a CI tag/SHA for reproducible deploys).                               |
+
+## Container Registry
+
+Currently only GitHub Container Registry (ghcr.io) images are supported. The playbook authenticates using `GHCR_USERNAME` and `GHCR_TOKEN` secrets from Bitwarden.
+
+To use a different registry, you would need to modify the `backend_app` role to support alternative authentication methods.
 
 ## Ports
 
-- 443: listens for dalhe.ai TLS connections
+- 443: listens for TLS connections
 
 ## Components
 
