@@ -23,6 +23,21 @@ require_var() {
 require_bws_var() {
   require_bws_variable log "$@"
 }
+cfg_get() {
+  config_get log "${CONFIG_FILE}" "$@"
+}
+cfg_get_bool() {
+  config_get_bool log "${CONFIG_FILE}" "$@"
+}
+cfg_get_array() {
+  config_get_array log "${CONFIG_FILE}" "$@"
+}
+cfg_export_map() {
+  config_export_map log "${CONFIG_FILE}" "$@"
+}
+cfg_has() {
+  config_has log "${CONFIG_FILE}" "$@"
+}
 
 # Parse minimal CLI arguments (only --config and --dry-run supported)
 log "Parsing arguments..."
@@ -60,37 +75,36 @@ log "Loading configuration from ${CONFIG_FILE}..."
 # ============================================
 
 # Domain configuration (shared between pulumi and ansible)
-# FIXME: create custom config_<suffix> functions that use the custom 'log' function above
-DOMAIN="$(config_get "${CONFIG_FILE}" '.domain' '')"
+DOMAIN="$(cfg_get '.domain' '')"
 require_var "${DOMAIN}" "domain is required in ${CONFIG_FILE}"
 # FIXME: update example.maestro.yaml's comments to specify required and optional values.
 
 # Pulumi configuration
-PULUMI_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.pulumi.enabled' 'true')"
-PULUMI_COMMAND="$(config_get "${CONFIG_FILE}" '.pulumi.command' 'up')"
-CLOUDFLARE_ACCOUNT_ID="$(config_get "${CONFIG_FILE}" '.pulumi.cloudflare_account_id' '')"
-SSH_PORT="$(config_get "${CONFIG_FILE}" '.pulumi.ssh_port' '22')"
+PULUMI_ENABLED="$(cfg_get_bool '.pulumi.enabled' 'true')"
+PULUMI_COMMAND="$(cfg_get '.pulumi.command' 'up')"
+CLOUDFLARE_ACCOUNT_ID="$(cfg_get '.pulumi.cloudflare_account_id' '')"
+SSH_PORT="$(cfg_get '.pulumi.ssh_port' '22')"
 
 # Ansible configuration
-ANSIBLE_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.enabled' 'true')"
-WEBSITE_DIR="$(config_get "${CONFIG_FILE}" '.ansible.website_dir' '')"
+ANSIBLE_ENABLED="$(cfg_get_bool '.ansible.enabled' 'true')"
+WEBSITE_DIR="$(cfg_get '.ansible.website_dir' '')"
 
 # Ansible sub-components
-WEB_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.web.enabled' 'true')"
-BACKEND_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.backend.enabled' 'true')"
-PERMS_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.perms.enabled' 'true')"
+WEB_ENABLED="$(cfg_get_bool '.ansible.web.enabled' 'true')"
+BACKEND_ENABLED="$(cfg_get_bool '.ansible.backend.enabled' 'true')"
+PERMS_ENABLED="$(cfg_get_bool '.ansible.perms.enabled' 'true')"
 
 # Backend configuration
-BACKEND_IMAGE="$(config_get "${CONFIG_FILE}" '.ansible.backend.image' '')"
-BACKEND_IMAGE_TAG="$(config_get "${CONFIG_FILE}" '.ansible.backend.tag' '')"
-BACKEND_PORT="$(config_get "${CONFIG_FILE}" '.ansible.backend.port' '3000')"
+BACKEND_IMAGE="$(cfg_get '.ansible.backend.image' '')"
+BACKEND_IMAGE_TAG="$(cfg_get '.ansible.backend.tag' '')"
+BACKEND_PORT="$(cfg_get '.ansible.backend.port' '3000')"
 
 # Secrets configuration
-SECRETS_PROVIDER="$(config_get "${CONFIG_FILE}" '.secrets.provider' 'bws')"
-BWS_PROJECT_ID="$(config_get "${CONFIG_FILE}" '.secrets.project_id' '')"
+SECRETS_PROVIDER="$(cfg_get '.secrets.provider' 'bws')"
+BWS_PROJECT_ID="$(cfg_get '.secrets.project_id' '')"
 
 # Export backend environment variables from YAML (ansible.backend.env -> BACKEND_ENV_*)
-config_export_map "${CONFIG_FILE}" '.ansible.backend.env' 'BACKEND_ENV_'
+cfg_export_map '.ansible.backend.env' 'BACKEND_ENV_'
 
 # Auto-inject PORT into the container environment from backend.port
 export BACKEND_ENV_PORT="${BACKEND_PORT}"
@@ -175,7 +189,7 @@ fi
 # Validate user-specified BWS secrets from config
 while IFS= read -r var; do
   [[ -n "${var}" ]] && require_bws_var "${var}"
-done < <(config_get_array "${CONFIG_FILE}" '.secrets.required_vars')
+done < <(cfg_get_array '.secrets.required_vars')
 
 # ============================================
 # Setup and helper functions

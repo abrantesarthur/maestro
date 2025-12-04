@@ -120,19 +120,34 @@ create_temp_secret_file() {
 # ============================================
 
 # Read a value from a YAML config file
-# Usage: config_get <config_file> <yq_path> [default_value]
+# Usage: config_get <log_fn?> <config_file> <yq_path> [default_value]
 # Example: config_get maestro.yaml '.domain' 'example.com'
+# Example: config_get my_log maestro.yaml '.domain' 'example.com'
 config_get() {
-  local config_file="${1:?config file required}"
-  local yq_path="${2:?yq path required}"
-  local default_value="${3:-}"
+  local echo_fn="echo"
+  local config_file
+  local yq_path
+  local default_value=""
+
+  # Support optional echo/log function as the first argument.
+  # Detect by checking if first arg is a file or a function name
+  if [[ -f "$1" ]]; then
+    config_file="$1"
+    yq_path="${2:?yq path required}"
+    default_value="${3:-}"
+  else
+    echo_fn="$1"
+    config_file="${2:?config file required}"
+    yq_path="${3:?yq path required}"
+    default_value="${4:-}"
+  fi
 
   if [[ ! -f "${config_file}" ]]; then
     if [[ -n "${default_value}" ]]; then
       echo "${default_value}"
       return 0
     fi
-    echo "Config file not found: ${config_file}" >&2
+    "${echo_fn}" "Config file not found: ${config_file}" >&2
     return 1
   fi
 
@@ -148,14 +163,27 @@ config_get() {
 }
 
 # Read a boolean value from YAML config (returns "true" or "false")
-# Usage: config_get_bool <config_file> <yq_path> [default_value]
+# Usage: config_get_bool <log_fn?> <config_file> <yq_path> [default_value]
 config_get_bool() {
-  local config_file="${1:?config file required}"
-  local yq_path="${2:?yq path required}"
-  local default_value="${3:-false}"
+  local echo_fn="echo"
+  local config_file
+  local yq_path
+  local default_value="false"
+
+  # Support optional echo/log function as the first argument.
+  if [[ -f "$1" ]]; then
+    config_file="$1"
+    yq_path="${2:?yq path required}"
+    default_value="${3:-false}"
+  else
+    echo_fn="$1"
+    config_file="${2:?config file required}"
+    yq_path="${3:?yq path required}"
+    default_value="${4:-false}"
+  fi
 
   local value
-  value="$(config_get "${config_file}" "${yq_path}" "${default_value}")"
+  value="$(config_get "${echo_fn}" "${config_file}" "${yq_path}" "${default_value}")"
 
   # Normalize to lowercase and check for truthy values
   case "${value,,}" in
@@ -169,12 +197,24 @@ config_get_bool() {
 }
 
 # Read an array from YAML config as newline-separated values
-# Usage: config_get_array <config_file> <yq_path>
+# Usage: config_get_array <log_fn?> <config_file> <yq_path>
 config_get_array() {
-  local config_file="${1:?config file required}"
-  local yq_path="${2:?yq path required}"
+  local echo_fn="echo"
+  local config_file
+  local yq_path
+
+  # Support optional echo/log function as the first argument.
+  if [[ -f "$1" ]]; then
+    config_file="$1"
+    yq_path="${2:?yq path required}"
+  else
+    echo_fn="$1"
+    config_file="${2:?config file required}"
+    yq_path="${3:?yq path required}"
+  fi
 
   if [[ ! -f "${config_file}" ]]; then
+    "${echo_fn}" "Config file not found: ${config_file}" >&2
     return 0
   fi
 
@@ -182,14 +222,28 @@ config_get_array() {
 }
 
 # Read key-value pairs from a YAML map and export as environment variables
-# Usage: config_export_map <config_file> <yq_path> [prefix]
+# Usage: config_export_map <log_fn?> <config_file> <yq_path> [prefix]
 # Example: config_export_map maestro.yaml '.ansible.backend.env' 'BACKEND_ENV_'
 config_export_map() {
-  local config_file="${1:?config file required}"
-  local yq_path="${2:?yq path required}"
-  local prefix="${3:-}"
+  local echo_fn="echo"
+  local config_file
+  local yq_path
+  local prefix=""
+
+  # Support optional echo/log function as the first argument.
+  if [[ -f "$1" ]]; then
+    config_file="$1"
+    yq_path="${2:?yq path required}"
+    prefix="${3:-}"
+  else
+    echo_fn="$1"
+    config_file="${2:?config file required}"
+    yq_path="${3:?yq path required}"
+    prefix="${4:-}"
+  fi
 
   if [[ ! -f "${config_file}" ]]; then
+    "${echo_fn}" "Config file not found: ${config_file}" >&2
     return 0
   fi
 
@@ -204,12 +258,24 @@ config_export_map() {
 }
 
 # Check if a YAML path exists and is not null
-# Usage: config_has <config_file> <yq_path>
+# Usage: config_has <log_fn?> <config_file> <yq_path>
 config_has() {
-  local config_file="${1:?config file required}"
-  local yq_path="${2:?yq path required}"
+  local echo_fn="echo"
+  local config_file
+  local yq_path
+
+  # Support optional echo/log function as the first argument.
+  if [[ -f "$1" ]]; then
+    config_file="$1"
+    yq_path="${2:?yq path required}"
+  else
+    echo_fn="$1"
+    config_file="${2:?config file required}"
+    yq_path="${3:?yq path required}"
+  fi
 
   if [[ ! -f "${config_file}" ]]; then
+    "${echo_fn}" "Config file not found: ${config_file}" >&2
     return 1
   fi
 
