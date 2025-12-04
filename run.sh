@@ -5,11 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}" && pwd)/helpers.sh"
 PULUMI_RUN="${SCRIPT_DIR}/pulumi/run.sh"
 ANSIBLE_RUN="${SCRIPT_DIR}/ansible/run.sh"
+CONFIG_FILE="${SCRIPT_DIR}/maestro.yaml"
 
 # import helper functions
 source "$HELPERS_PATH"
 
-# Create a require_cmd and require_var functions with custom logger
+# Create logging and require functions with custom logger
 log() {
   echo "[maestro] $*"
 }
@@ -23,55 +24,18 @@ require_bws_var() {
   require_bws_variable log "$@"
 }
 
-# Parse mandatory arguments
-log "Parsing flags..."
-SKIP_PULUMI=false
-SKIP_ANSIBLE=false
-BACKEND_IMAGE=""
-BACKEND_IMAGE_TAG=""
-WEBSITE_DIR=""
-SKIP_WEB=false
-SKIP_BACKEND=false
-SKIP_PERMS=false
+# Parse minimal CLI arguments (only --config and --dry-run supported)
+log "Parsing arguments..."
+DRY_RUN=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --skip-pulumi)
-      SKIP_PULUMI=true
+    --dry-run)
+      DRY_RUN=true
       shift 1
-    ;;
-    --skip-ansible)
-      SKIP_ANSIBLE=true
-      shift 1
-    ;;
-    --backend-image)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      BACKEND_IMAGE="$2"
-      shift 2
-    ;;
-    --backend-image-tag)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      BACKEND_IMAGE_TAG="$2"
-      shift 2
-    ;;
-    --website-dir)
-      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
-      WEBSITE_DIR="$2"
-      shift 2
-    ;;
-    --skip-web)
-      SKIP_WEB=true
-      shift 1
-    ;;
-    --skip-backend)
-      SKIP_BACKEND=true
-      shift 1
-    ;;
-    --skip-perms)
-      SKIP_PERMS=true
-      shift 1
-    ;;
+      ;;
     *)
       printf 'Unknown option: %s\n' "$1" >&2
+      printf 'Usage: %s [--dry-run]\n' "$0" >&2
       exit 1
       ;;
   esac
@@ -79,38 +43,139 @@ done
 
 log "Ensuring required commands exist..."
 require_cmd jq
+require_cmd yq
 require_cmd cloudflared
 
-log "Fetching secrets from Bitwarden..."
-source_bws_secrets
+# Validate config file exists
+if [[ ! -f "${CONFIG_FILE}" ]]; then
+  log "Error: Config file not found at ${CONFIG_FILE}"
+  log "Create a maestro.yaml file. See example.maestro.yaml for a template."
+  exit 1
+fi
+
+log "Loading configuration from ${CONFIG_FILE}..."
+
+# ============================================
+# Read configuration from YAML
+# ============================================
+
+# Domain configuration (shared between pulumi and ansible)
+# FIXME: create custom config_<suffix> functions that use the custom 'log' function above
+DOMAIN="$(config_get "${CONFIG_FILE}" '.domain' '')"
+require_var "${DOMAIN}" "domain is required in ${CONFIG_FILE}"
+# FIXME: update example.maestro.yaml's comments to specify required and optional values.
+
+# Pulumi configuration
+PULUMI_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.pulumi.enabled' 'true')"
+PULUMI_COMMAND="$(config_get "${CONFIG_FILE}" '.pulumi.command' 'up')"
+CLOUDFLARE_ACCOUNT_ID="$(config_get "${CONFIG_FILE}" '.pulumi.cloudflare_account_id' '')"
+SSH_PORT="$(config_get "${CONFIG_FILE}" '.pulumi.ssh_port' '22')"
+
+# Ansible configuration
+ANSIBLE_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.enabled' 'true')"
+WEBSITE_DIR="$(config_get "${CONFIG_FILE}" '.ansible.website_dir' '')"
+
+# Ansible sub-components
+WEB_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.web.enabled' 'true')"
+BACKEND_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.backend.enabled' 'true')"
+PERMS_ENABLED="$(config_get_bool "${CONFIG_FILE}" '.ansible.perms.enabled' 'true')"
+
+# Backend configuration
+BACKEND_IMAGE="$(config_get "${CONFIG_FILE}" '.ansible.backend.image' '')"
+BACKEND_IMAGE_TAG="$(config_get "${CONFIG_FILE}" '.ansible.backend.tag' '')"
+BACKEND_PORT="$(config_get "${CONFIG_FILE}" '.ansible.backend.port' '3000')"
+
+# Secrets configuration
+SECRETS_PROVIDER="$(config_get "${CONFIG_FILE}" '.secrets.provider' 'bws')"
+BWS_PROJECT_ID="$(config_get "${CONFIG_FILE}" '.secrets.project_id' '')"
+
+# Export backend environment variables from YAML (ansible.backend.env -> BACKEND_ENV_*)
+config_export_map "${CONFIG_FILE}" '.ansible.backend.env' 'BACKEND_ENV_'
+
+# ============================================
+# Validate configuration
+# ============================================
+
+if [[ "${PULUMI_ENABLED}" == "true" ]]; then
+  require_var "${CLOUDFLARE_ACCOUNT_ID}" "pulumi.cloudflare_account_id is required when pulumi is enabled"
+fi
+
+if [[ "${ANSIBLE_ENABLED}" == "true" && "${WEB_ENABLED}" == "true" ]]; then
+  require_var "${WEBSITE_DIR}" "ansible.website_dir is required when web provisioning is enabled"
+fi
+
+if [[ "${ANSIBLE_ENABLED}" == "true" && "${BACKEND_ENABLED}" == "true" ]]; then
+  require_var "${BACKEND_IMAGE}" "ansible.backend.image is required when backend provisioning is enabled"
+  require_var "${BACKEND_IMAGE_TAG}" "ansible.backend.tag is required when backend provisioning is enabled"
+fi
+
+# ============================================
+# Display configuration (dry-run mode)
+# ============================================
+
+if [[ "${DRY_RUN}" == "true" ]]; then
+  log "Dry-run mode enabled. Configuration loaded:"
+  log "  domain: ${DOMAIN}"
+  log "  pulumi.enabled: ${PULUMI_ENABLED}"
+  log "  pulumi.command: ${PULUMI_COMMAND}"
+  log "  pulumi.cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID}"
+  log "  pulumi.ssh_port: ${SSH_PORT}"
+  log "  ansible.enabled: ${ANSIBLE_ENABLED}"
+  log "  ansible.website_dir: ${WEBSITE_DIR}"
+  log "  ansible.web.enabled: ${WEB_ENABLED}"
+  log "  ansible.backend.enabled: ${BACKEND_ENABLED}"
+  log "  ansible.backend.image: ${BACKEND_IMAGE}"
+  log "  ansible.backend.tag: ${BACKEND_IMAGE_TAG}"
+  log "  ansible.backend.port: ${BACKEND_PORT}"
+  log "  ansible.perms.enabled: ${PERMS_ENABLED}"
+  log "  secrets.provider: ${SECRETS_PROVIDER}"
+  log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
+  # Show BACKEND_ENV_* variables
+  log "  Backend environment variables:"
+  env | grep '^BACKEND_ENV_' | while read -r line; do
+    log "    ${line}"
+  done || log "    (none)"
+  exit 0
+fi
+
+# ============================================
+# Fetch secrets from Bitwarden
+# ============================================
+# FIXME: fail if SECRETS_PROVIDER is not bws
+if [[ "${SECRETS_PROVIDER}" == "bws" ]]; then
+  log "Fetching secrets from Bitwarden..."
+  # Export BWS_PROJECT_ID if specified in config
+  if [[ -n "${BWS_PROJECT_ID}" ]]; then
+    export BWS_PROJECT_ID
+  fi
+  source_bws_secrets
+fi
 
 log "Ensuring required secrets and variables exist in the environment..."
 require_bws_var 'GHCR_TOKEN'
 require_bws_var 'VPS_SSH_KEY'
 
-if [[ "${SKIP_PULUMI}" == "false" || "${SKIP_ANSIBLE}" == "false" ]]; then
+if [[ "${PULUMI_ENABLED}" == "true" || "${ANSIBLE_ENABLED}" == "true" ]]; then
   require_bws_var 'PULUMI_ACCESS_TOKEN'
 fi
 
-if [[ "${SKIP_PULUMI}" == "false" ]]; then
+if [[ "${PULUMI_ENABLED}" == "true" ]]; then
   require_bws_var 'CLOUDFLARE_API_TOKEN'
   require_bws_var 'DIGITALOCEAN_TOKEN'
 fi
 
-if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
+if [[ "${ANSIBLE_ENABLED}" == "true" ]]; then
   require_bws_var 'GHCR_USERNAME'
 fi
 
-# Validate user-specified BWS secrets
-if [[ -n "${BWS_REQUIRED_VARS:-}" ]]; then
-  IFS=',' read -ra BWS_VARS <<< "${BWS_REQUIRED_VARS}"
-  for var in "${BWS_VARS[@]}"; do
-    # Trim whitespace
-    var="${var#"${var%%[![:space:]]*}"}"
-    var="${var%"${var##*[![:space:]]}"}"
-    [[ -n "${var}" ]] && require_bws_var "${var}"
-  done
-fi
+# Validate user-specified BWS secrets from config
+while IFS= read -r var; do
+  [[ -n "${var}" ]] && require_bws_var "${var}"
+done < <(config_get_array "${CONFIG_FILE}" '.secrets.required_vars')
+
+# ============================================
+# Setup and helper functions
+# ============================================
 
 declare -a PULUMI_OUTPUT_LOGS=()
 
@@ -133,6 +198,12 @@ capture_pulumi_hosts() {
   local output_log
   output_log="$(mktemp -t pulumi_output)"
   PULUMI_OUTPUT_LOGS+=("${output_log}")
+
+  # Export configuration as environment variables for pulumi/run.sh
+  export DOMAIN
+  export CLOUDFLARE_ACCOUNT_ID
+  export SSH_PORT
+  export BACKEND_PORT
 
   local pulumi_args=(
     --command "${pulumi_command}"
@@ -198,45 +269,56 @@ wait_for_tunnels_ready() {
   done
 }
 
-# only provision pulumi if requested
+# ============================================
+# Run Pulumi provisioning
+# ============================================
+
 PULUMI_HOSTS=""
-if [[ "${SKIP_PULUMI}" == "false" ]]; then
-  # provision pulumi and capture created ssh hostnames
+if [[ "${PULUMI_ENABLED}" == "true" ]]; then
   log "Provisioning pulumi..."
-  PULUMI_HOSTS="$(capture_pulumi_hosts "up")"
-elif [[ "${SKIP_ANSIBLE}" == "false" ]]; then
+  PULUMI_HOSTS="$(capture_pulumi_hosts "${PULUMI_COMMAND}")"
+elif [[ "${ANSIBLE_ENABLED}" == "true" ]]; then
   log "Fetching existing Pulumi outputs for Ansible..."
   PULUMI_HOSTS="$(capture_pulumi_hosts "output" "false")"
 else
   log "Skipping pulumi provisioning"
 fi
 
-# only provision ansible if requested or if no hosts were returned by pulumi
-if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" != "{\"hosts\":null}" ]]; then
+# ============================================
+# Run Ansible provisioning
+# ============================================
+
+if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" != "{\"hosts\":null}" ]]; then
   log "Checking tunnel readiness before running Ansible..."
   wait_for_tunnels_ready "${PULUMI_HOSTS}"
   log "Provisioning ansible..."
+
+  # Export configuration as environment variables for ansible/run.sh
+  export DOMAIN
+  export BACKEND_PORT
+  export BACKEND_IMAGE
+  export BACKEND_IMAGE_TAG
+
   ansible_args=(
     --ssh-hosts "${PULUMI_HOSTS}"
     --skip-bws
   )
 
-  if [[ "${SKIP_WEB}" == "true" ]]; then
-    ansible_args+=(--skip-web)
-  else
+  if [[ "${WEB_ENABLED}" == "true" ]]; then
     ansible_args+=(--website-dir "${WEBSITE_DIR}")
+  else
+    ansible_args+=(--skip-web)
   fi
-  if [[ "${SKIP_BACKEND}" == "true" ]]; then
+  if [[ "${BACKEND_ENABLED}" != "true" ]]; then
     ansible_args+=(--skip-backend)
   fi
-  if [[ "${SKIP_PERMS}" == "true" ]]; then
+  if [[ "${PERMS_ENABLED}" != "true" ]]; then
     ansible_args+=(--skip-perms)
   fi
 
-  BWS_REQUIRED_VARS="${BWS_REQUIRED_VARS:-}" \
-  BACKEND_IMAGE="${BACKEND_IMAGE}" \
-  BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
-    "${ANSIBLE_RUN}" "${ansible_args[@]}"
+  "${ANSIBLE_RUN}" "${ansible_args[@]}"
 else
   log "Skipping ansible provisioning"
 fi
+
+log "Done."

@@ -1,46 +1,109 @@
 # Maestro
 
-## Workflow
+Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible to provision and configure cloud infrastructure.
 
-`run.sh` is an orchestration script that wires the Pulumi and Ansible provisioning into a single command.
+## Quick Start
 
-```bash
-./run.sh
+1. Copy the example configuration file:
+
+   ```bash
+   cp example.maestro.yaml maestro.yaml
+   ```
+
+2. Edit `maestro.yaml` with your configuration (domain, Cloudflare account ID, etc.)
+
+3. Set your Bitwarden Secrets Manager access token:
+
+   ```bash
+   export BWS_ACCESS_TOKEN="your_bws_access_token"
+   ```
+
+4. Run the orchestration:
+   ```bash
+   ./run.sh
+   ```
+
+## Configuration
+
+All configuration is managed through a single YAML file: `maestro.yaml`
+
+See `example.maestro.yaml` for a fully documented template with all available options.
+
+### Configuration Structure
+
+```yaml
+domain: example.com # Domain for DNS and nginx
+
+pulumi:
+  enabled: true # Enable/disable Pulumi provisioning
+  command: up # Pulumi command: up, refresh, cancel, output
+  cloudflare_account_id: "" # Your Cloudflare account ID
+  ssh_port: 22 # SSH port for tunnels
+
+ansible:
+  enabled: true # Enable/disable Ansible provisioning
+  website_dir: "/path/to/site" # Path to website source
+  web:
+    enabled: true # Enable/disable web (nginx) provisioning
+  backend:
+    enabled: true # Enable/disable backend provisioning
+    image: ghcr.io/org/app # Container image
+    tag: latest # Image tag
+    port: 3000 # Backend port
+    env: # Environment variables for container
+      PORT: 3000
+      DATABASE_URL: postgres://...
+  perms:
+    enabled: true # Enable/disable permissions provisioning
+
+secrets:
+  provider: bws # Secrets provider (bws = Bitwarden)
+  project_id: "" # Optional BWS project ID
+  required_vars: [] # Additional secrets to validate
 ```
 
-### Required env:
+### Required Environment Variable
 
-| Variable           | Purpose                                                                  |
-| ------------------ | ------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets. |
+| Variable           | Purpose                                                                |
+| ------------------ | ---------------------------------------------------------------------- |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. |
 
-### Optional env:
+### CLI Options
 
-| Variable            | Purpose                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
-| `BWS_REQUIRED_VARS` | Comma-separated list of BWS secret names to validate (e.g., `MY_API_KEY,DATABASE_PASSWORD`). Validated before provisioning.    |
+| Flag        | Purpose                                 |
+| ----------- | --------------------------------------- |
+| `--dry-run` | Preview configuration without executing |
 
-## Required flags
+### Secrets
 
-## Optional Flags
+Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-| Flag                   | Purpose                                                            |
-| ---------------------- | ------------------------------------------------------------------ |
-| `--skip-pulumi`        | Skips running the Pulumi stack.                                    |
-| `--skip-ansible`       | Skips the Ansible provisioning step entirely.                      |
-| `--skip-bws`           | Whether to skip pulling secrets from Bitwarden Secrets Manager     |
-| `--website-dir <path>` | Path to the website source directory (required unless --skip-web). |
-| `--skip-web`           | Whether to skip provisioning web.                                  |
-| `--skip-backend`       | Whether to skip provisioning backend.                              |
-| `--skip-perms`         | Whether to skip provisioning perms.                                |
+# FIXME: explain VPS_SSH_KEY better
+
+# FIXME: explain somewhere that we currently only support DigitalOcean and add a Future Improvements section asking for more support later
+
+| Secret                 | Purpose                            |
+| ---------------------- | ---------------------------------- |
+| `VPS_SSH_KEY`          | SSH private key for server access  |
+| `GHCR_TOKEN`           | GitHub Container Registry token    |
+| `GHCR_USERNAME`        | GitHub Container Registry username |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token          |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token               |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token             |
+
+You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`.
 
 ## Components
 
-- `pulumi/` — Pulumi programs for provisioning Cloudflare DNS and related cloud resources.
-- `ansible/` — Ansible execution environment, inventories, and playbooks that configures the servers (e.g., nginx, groups, etc).
+- `pulumi/` — Pulumi programs for provisioning Cloudflare DNS, DigitalOcean VPS, and SSH tunneling into the servers.
+- `ansible/` — Ansible execution environment, inventories, and playbooks that configure the servers.
 
-## Working In This Folder
+## Workflow
 
-- Make changes inside the relevant component directory following its README.
-- Keep commits scoped to a single infrastructure component to simplify rollbacks.
+`run.sh` orchestrates the entire provisioning process:
+
+1. Loads configuration from `maestro.yaml`
+2. Fetches secrets from Bitwarden Secrets Manager
+3. Runs Pulumi to provision cloud infrastructure (DNS, servers, tunnels)
+4. Waits for servers to accept connection via SSH tunnels.
+5. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)

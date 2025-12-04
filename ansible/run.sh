@@ -4,17 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
-ANSIBLE_ENV_PATH="${SCRIPT_DIR}/.env"
 
 # import helper functions
 source "$HELPERS_PATH"
-
-# source local ansible .env if it exists
-if [[ -f "${ANSIBLE_ENV_PATH}" ]]; then
-  set -a
-  source "${ANSIBLE_ENV_PATH}"
-  set +a
-fi
 
 log() {
   echo "[maestro/ansible] $*"
@@ -39,6 +31,10 @@ Options:
   -h, --help                       Show this message.
   --ssh-hosts <json>               json with list of hostname and tags (e.g., --ssh-hosts {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}) (required)
   --website-dir <path>             Path to the website source directory (required unless --skip-web)
+  --skip-bws                       Skip fetching secrets from Bitwarden Secrets Manager
+  --skip-web                       Skip provisioning web server
+  --skip-backend                   Skip provisioning backend
+  --skip-perms                     Skip provisioning permissions
 EOF
 }
 
@@ -100,29 +96,24 @@ if [[ "${SKIP_WEB}" == "false" ]]; then
   require_var "${WEBSITE_DIR}" '--website-dir is required when building website (use --skip-web to skip).'
 fi
 
+log "Ensuring required configuration from environment..."
+# Configuration is passed via environment variables from parent run.sh
+require_var "${DOMAIN-}" 'DOMAIN environment variable is required (set in maestro.yaml).'
+require_var "${BACKEND_PORT-}" 'BACKEND_PORT environment variable is required (set in maestro.yaml).'
+
 if [[ "${SKIP_BWS}" == "false" ]]; then
   log "Fetching secrets from Bitwarden..."
   source_bws_secrets
 else
   log "Skipping fetch of secrets from Bitwarden..."
 fi
-log "Ensuring required environment..."
+
+log "Ensuring required secrets..."
 require_bws_var 'GHCR_TOKEN'
 require_bws_var 'GHCR_USERNAME'
 require_bws_var 'VPS_SSH_KEY'
 
-# Validate user-specified BWS secrets
-if [[ -n "${BWS_REQUIRED_VARS:-}" ]]; then
-  IFS=',' read -ra BWS_VARS <<< "${BWS_REQUIRED_VARS}"
-  for var in "${BWS_VARS[@]}"; do
-    # Trim whitespace
-    var="${var#"${var%%[![:space:]]*}"}"
-    var="${var%"${var##*[![:space:]]}"}"
-    [[ -n "${var}" ]] && require_bws_var "${var}"
-  done
-fi
-
-log "ensure ansible-builder and ansible-navigator are installed..."
+log "Ensuring ansible-builder and ansible-navigator are installed..."
 if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigator >/dev/null 2>&1; then
   log "ansible-builder not found; installing Ansible tooling via pip..."
 
@@ -184,21 +175,22 @@ run_playbook() {
     "--container-options=-v=${SSH_KEY_TEMP_FILE}:${CONTAINER_SSH_KEY_PATH}:ro"
 }
 
-# export hard-coded environment variables
+# Export variables for Ansible inventory and playbooks
+# SSH_HOSTS and SSH_KEY_PATH are used by the dynamic inventory (inventory/hosts.py)
 export SSH_HOSTS="${SSH_HOSTS_ARG}"
 export SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}"
-# validate backend image configuration when deploying backend
+
+# DOMAIN and BACKEND_PORT are already in environment from parent run.sh
+# BACKEND_ENV_* variables are already exported by parent run.sh
+
+# Validate backend image configuration when deploying backend
 if [[ "${SKIP_BACKEND}" == "false" ]]; then
-  require_var "${BACKEND_IMAGE:-}" 'BACKEND_IMAGE is required when deploying backend (e.g., ghcr.io/your-org/your-app).'
-  require_var "${BACKEND_IMAGE_TAG:-}" 'BACKEND_IMAGE_TAG is required when deploying backend (e.g., latest, v1.0.0, sha-abc123).'
+  require_var "${BACKEND_IMAGE:-}" 'BACKEND_IMAGE is required when deploying backend (set in maestro.yaml).'
+  require_var "${BACKEND_IMAGE_TAG:-}" 'BACKEND_IMAGE_TAG is required when deploying backend (set in maestro.yaml).'
 fi
+# Export for Ansible even if empty (will be validated above when needed)
 export BACKEND_IMAGE="${BACKEND_IMAGE:-}"
 export BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG:-}"
-# export environment variables from shared infra/shared.env
-INFRA_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
-set -a
-source "${INFRA_ENV_PATH}"  
-set +a
 
 
 if [[ "${SKIP_WEB}" == "false" ]]; then
@@ -222,7 +214,7 @@ else
   log "Skipping provisioning permissions..."
 fi
 
-# we recommen running this playbook last because it may block connections to the server.
+# we recommend running this playbook last because it may block connections to the server.
 popd >/dev/null
 
 log "Done."

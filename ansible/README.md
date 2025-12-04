@@ -1,89 +1,78 @@
 # Ansible Provisioning
 
-This directory contains the Ansible automation that provisions resources in a server.
+This directory contains the Ansible automation that configures provisioned servers.
 
 ## Workflow
 
-Run `./run.sh --ssh-hosts <list>` with the required flags. The script validates required inputs and ensures `ansible-builder`/`ansible-navigator` exist before doing any work. Then, it builds the execution environment image, and uses `ansible-navigator` to run the container.
+This script is typically called by the parent `run.sh` which handles configuration loading from `maestro.yaml`. For standalone usage:
 
-After secrets are in place, `run.sh` builds the execution environment image via `ansible-builder` and then provisions the ansible playbooks.
-It assumes the backend application image has already been built and pushed to GHCR under the tag you provide.
+```bash
+# Configuration is passed via environment variables
+export DOMAIN="example.com"
+export BACKEND_PORT="3000"
+export BACKEND_IMAGE="ghcr.io/your-org/your-app"
+export BACKEND_IMAGE_TAG="latest"
+export BACKEND_ENV_PORT="3000"
+export BWS_ACCESS_TOKEN="your_bws_token"
 
-## Required Flags
+./run.sh \
+  --ssh-hosts '{"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod","web"]}]}' \
+  --website-dir "/path/to/website"
+```
 
-| Flag                   | Purpose                                                                                                                                                                                                                                                                          |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--ssh-hosts`          | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
-| `--website-dir <path>` | Path to the website source directory. Required unless `--skip-web` is specified.                                                                                                                                                                                                 |
+The script validates required inputs, ensures `ansible-builder`/`ansible-navigator` exist, builds the execution environment image, and runs the playbooks.
 
-## Optional Flags
+## Configuration
 
-| Flag             | Purpose                                                        |
-| ---------------- | -------------------------------------------------------------- |
-| `--skip-bws`     | Whether to skip pulling secrets from Bitwarden Secrets Manager |
-| `--skip-web`     | Whether to skip provisioning web.                              |
-| `--skip-backend` | Whether to skip provisioning backend.                          |
-| `--skip-perms`   | Whether to skip provisioning perms.                            |
+Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
 
-### Required Environment:
+# FIXME: add "Description" column explaining what each env var is used for.
 
-| Variable            | Purpose                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `BWS_ACCESS_TOKEN`  | Bitwarden Secrets Manager's token required for retrieving other secrets.                           |
-| `BACKEND_IMAGE`     | Full ghcr.io image reference (e.g., `ghcr.io/your-org/your-app`). Required when deploying backend. |
-| `BACKEND_IMAGE_TAG` | Image tag to deploy (e.g., `latest`, `v1.0.0`, `sha-abc123`). Required when deploying backend.     |
+| Variable            | Source in maestro.yaml  |
+| ------------------- | ----------------------- |
+| `DOMAIN`            | `domain`                |
+| `BACKEND_PORT`      | `ansible.backend.port`  |
+| `BACKEND_IMAGE`     | `ansible.backend.image` |
+| `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   |
+| `BACKEND_ENV_*`     | `ansible.backend.env.*` |
 
-## Optional Environment
+### Backend Container Environment
 
-| Variable            | Purpose                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
-| `BWS_REQUIRED_VARS` | Comma-separated list of BWS secret names to validate before provisioning (e.g., `MY_API_KEY,DATABASE_PASSWORD`).               |
+Environment variables needed by your backend containerized application can be configured in `maestro.yaml` under `ansible.backend.env`:
+
+```yaml
+ansible:
+  backend:
+    env:
+      PORT: 3000
+      DATABASE_URL: postgres://user:pass@host:5432/db
+      API_KEY: your_api_key
+```
+
+Each key-value pair becomes an environment variable in the container (e.g., `PORT=3000`).
+
+## CLI Flags
+
+| Flag                   | Purpose                                                         |
+| ---------------------- | --------------------------------------------------------------- |
+| `--ssh-hosts <json>`   | JSON list of hosts and tags (required)                          |
+| `--website-dir <path>` | Path to website source directory (required unless `--skip-web`) |
+| `--skip-bws`           | Skip fetching secrets from Bitwarden                            |
+| `--skip-web`           | Skip provisioning web server                                    |
+| `--skip-backend`       | Skip provisioning backend                                       |
+| `--skip-perms`         | Skip provisioning permissions                                   |
+
+## Required Secrets (from Bitwarden)
+
+| Secret          | Purpose                            |
+| --------------- | ---------------------------------- |
+| `GHCR_TOKEN`    | GitHub Container Registry token    |
+| `GHCR_USERNAME` | GitHub Container Registry username |
+| `VPS_SSH_KEY`   | SSH key for server access          |
 
 ## Container Registry
 
 Currently only GitHub Container Registry (ghcr.io) images are supported. The playbook authenticates using `GHCR_USERNAME` and `GHCR_TOKEN` secrets from Bitwarden.
-
-To use a different registry, you would need to modify the `backend_app` role to support alternative authentication methods.
-
-## Backend Container Environment
-
-Environment variables for your backend container are configured using the `BACKEND_ENV_` prefix convention.
-
-### How It Works
-
-1. Any environment variable starting with `BACKEND_ENV_` is automatically detected
-2. The `BACKEND_ENV_` prefix is stripped from the variable name
-3. The resulting key-value pair is passed to the Docker container
-
-This allows you to configure any environment variable your application needs without modifying the Ansible role.
-
-### Examples
-
-| Environment Variable                      | Container Receives            |
-| ----------------------------------------- | ----------------------------- |
-| `BACKEND_ENV_PORT=3000`                   | `PORT=3000`                   |
-| `BACKEND_ENV_DATABASE_URL=postgres://...` | `DATABASE_URL=postgres://...` |
-| `BACKEND_ENV_API_KEY=secret`              | `API_KEY=secret`              |
-
-### Configuration
-
-Add your backend environment variables to `ansible/.env`:
-
-```bash
-# Required for most apps
-BACKEND_ENV_PORT=3000
-
-# Your app-specific variables
-BACKEND_ENV_DATABASE_URL=postgres://user:pass@host:5432/db
-BACKEND_ENV_REDIS_URL=redis://localhost:6379
-```
-
-See `ansible/example.env` for a complete template.
-
-## Ports
-
-- 443: listens for TLS connections
 
 ## Components
 
@@ -91,34 +80,33 @@ See `ansible/example.env` for a complete template.
 
 Roles:
 
-- **roles/ufw**: installs and configures UFW to deny inbound traffic by default while allowing SSH (22) and backend (3000) from localhost (via cloudflared) and HTTPS (443) only from Cloudflare IP ranges.
-- **roles/groups**: manages system groups from `roles/groups/vars/main.yml`.
-- **roles/docker**: installs and enables the Docker engine and Python bindings.
-- **roles/nginx**: installs and configures nginx for the web tier.
-- **roles/backend_app**: logs into GHCR, pulls the tagged backend image, and runs the backend container in port 3000 by default.
+- **roles/ufw**: Installs and configures UFW to deny inbound traffic by default while allowing SSH (22) and backend from localhost (via cloudflared) and HTTPS (443) only from Cloudflare IP ranges.
+- **roles/groups**: Manages system groups from `roles/groups/vars/main.yml`.
+- **roles/docker**: Installs and enables the Docker engine and Python bindings.
+- **roles/nginx**: Installs and configures nginx for the web tier.
+- **roles/backend_app**: Logs into GHCR, pulls the tagged backend image, and runs the backend container.
 
 Playbooks:
 
-- **perms.yml**: applies group/permission management.
-- **web.yml**: provisions the web tier (nginx).
-- **backend.yml**: provisions backend hosts (Docker engine + backend_app).
+- **perms.yml**: Applies group/permission management.
+- **web.yml**: Provisions the web tier (nginx).
+- **backend.yml**: Provisions backend hosts (Docker engine + backend_app).
 
 ### Inventory, Hosts, and Groups
 
-The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON provided to `run.sh` and builds:
+The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds:
 
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
-- One group per tag listed on each host, so you can target plays to all `backend`, `prod`, `web`, etc. hosts by tag.
+
+# FIXME: allo to specify tags in the maestro.yaml configuration
+
+- One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
 
 ## Prerequisites
 
 - Docker installed locally (the script builds and runs a container).
-- The `ansible-builder` and `ansible-navigator` programs must be installed.
+- The `ansible-builder` and `ansible-navigator` programs (auto-installed if missing).
 
 ## Idempotence
 
 All playbooks are idempotent. Running them repeatedly will either make changes (if drift is detected) or do nothing (if the server already matches the declared state).
-
-## Future improvements
-
-- right now there is no distinction between servers. We should support different provisionings for different kinds of servers (e.g. web servers, backend servers. etc). This way, we can provision nginx only on servers with the website.

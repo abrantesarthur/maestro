@@ -1,5 +1,5 @@
 {
-  "name": "Dalhe Backend",
+  "name": "Maestro",
   "build": {
     "dockerfile": "Dockerfile",
     "context": "."

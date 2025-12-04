@@ -1,50 +1,67 @@
 # Pulumi Infrastructure
 
-This directory contains a Dockerised Pulumi program that provisions the cloudflare environment. The program currently targets the single `prod` stack.
+This directory contains a Dockerised Pulumi program that provisions the Cloudflare environment. The program currently targets the single `prod` stack.
+
+# FIXME: update example.maestro.yaml configuration to support more stacks
 
 ## Workflow
 
-Run the `run.sh` script. It validates that all required flags are present, builds and runs a docker image that executes Pulumi up or refresh.
+This script is typically called by the parent `run.sh` which handles configuration loading from `maestro.yaml`. For standalone usage:
 
 ```bash
-./run.sh \
-  --ssh-key "/path/to/key>" \
-  [--command up|refresh]
+# Configuration is passed via environment variables
+export DOMAIN="example.com"
+export CLOUDFLARE_ACCOUNT_ID="your_account_id"
+export SSH_PORT="22"
+export BACKEND_PORT="3000"
+export BWS_ACCESS_TOKEN="your_bws_token"
+
+./run.sh --command up
 ```
 
 The Pulumi program provisions:
 
-1. DigitalOcean virtual servers that come with cloudflared and ssl/tls certificates properly installed, so Cloudflare can provision tunnels and https connections properly.
-2. Cloudflare resources, including DNS A records pointing `dalhe.ai` to our webservers and tunnels allowing us to ssh to our servers via `ssh0.dalhe.ai`, `ssh-b.dalhe.ai`, etc. Notice that, these URIs will only work if we tagged our servers appropriately (i.e., with `ssh0`, `ssh-b`, etc).
+1. DigitalOcean virtual servers that come with cloudflared and SSL/TLS certificates properly installed, so Cloudflare can provision tunnels and HTTPS connections properly.
+2. Cloudflare resources, including DNS A records pointing your domain to webservers and tunnels allowing SSH access via `ssh0.example.com`, `ssh1.example.com`, etc.
 
-To connect through the tunnel from your machine, install `cloudflared` locally and add as many of the following entries to your `~/.ssh/config` as there are servers (don't forget to replace `ssh0` by the appropriate tag):
+# FIXME: add link to tutorial or instructions for installing cloudflared.
+
+To connect through the tunnel from your machine, install `cloudflared` locally and add entries to your `~/.ssh/config`:
 
 ```
-Host ssh0.dalhe.ai
+Host ssh0.example.com
   ProxyCommand /opt/homebrew/bin/cloudflared access ssh --hostname %h
   IdentityFile <path to the ssh private key>
 ```
 
-In the event that a server is destroyed, pulumi correctly takes down the tunnels that were linked to it.
+In the event that a server is destroyed, Pulumi correctly takes down the tunnels that were linked to it.
 
-### Required env:
+## Configuration
 
-| Variable           | Purpose                                                                  |
-| ------------------ | ------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager's token required for retrieving other secrets. |
+Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
 
-### Optional env:
+| Variable                | Source in maestro.yaml         |
+| ----------------------- | ------------------------------ |
+| `DOMAIN`                | `domain`                       |
+| `CLOUDFLARE_ACCOUNT_ID` | `pulumi.cloudflare_account_id` |
+| `SSH_PORT`              | `pulumi.ssh_port`              |
+| `BACKEND_PORT`          | `ansible.backend.port`         |
 
-| Variable         | Purpose                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_PROJECT_ID` | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
+## Required Secrets (from Bitwarden)
 
-### Optional flags:
+| Secret                 | Purpose                         |
+| ---------------------- | ------------------------------- |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API access           |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         |
+| `VPS_SSH_KEY`          | SSH key for server provisioning |
 
-| Flag         | Purpose                                                                                                                                                         |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--command`  | controls the Pulumi action (`up` by default). Supported values are `up` to apply infrastructure changes and `refresh` to reconcile the state without deploying. |
-| `--skip-bws` | whether to skip fetching secrets from Bitwaden Secrets Manager, typically because the secrets are already injected in the environment.                          |
+## Optional CLI Flags
+
+| Flag         | Purpose                                                                   |
+| ------------ | ------------------------------------------------------------------------- |
+| `--command`  | Pulumi action: `up`, `refresh`, `cancel`, or `output` (default: `up`)     |
+| `--skip-bws` | Skip fetching secrets from Bitwarden (use when called from parent script) |
 
 ## Ports
 
@@ -52,14 +69,11 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
 
 ## Components
 
-- `run.sh` ensures the required API tokens are provided, builds the
-  `dalhe_pulumi` Docker image, and starts a container with those credentials.
+- `run.sh` validates configuration, builds the Docker image, and starts a container.
 - `image/` holds the Pulumi project.
-- `image/entrypoint.sh` runs inside the container. It validates the environment
-  variables and executes pulumi.
-- `image/Pulumi.<stack>.yaml` specifies stack-specific configuration values, such as the domain and cloudflare accountId.
-- `image/providers/` hosts the services that discovers our infrastructure, such as the cloudflare zone id.
-- `image/resources/` defines the record components at our disposal for provisioning resources.
+- `image/entrypoint.sh` runs inside the container and executes Pulumi commands.
+- `image/providers/` hosts services that discover infrastructure (e.g., Cloudflare zone ID).
+- `image/resources/` defines record components for provisioning resources.
 
 ## Prerequisites
 
@@ -67,5 +81,4 @@ In the event that a server is destroyed, pulumi correctly takes down the tunnels
 
 ## Current Limitations
 
-- Only the `prod` stack is wired up; adding more stacks will require code and
-  configuration changes.
+- Only the `prod` stack is wired up; adding more stacks will require code and configuration changes.

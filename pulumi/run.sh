@@ -3,8 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
-SHARED_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
-PULUMI_ENV_PATH="${SCRIPT_DIR}/.env"
 BUILD_CONTEXT="${SCRIPT_DIR}/image"
 IMAGE_NAME="maestro_pulumi"
 
@@ -72,8 +70,14 @@ else
   log "Skipping fetch of secrets from Bitwarden..."
 fi
 
-log "Ensuring required flags and environment variables..."
-# require mandatory api keys
+log "Ensuring required configuration from environment..."
+# Configuration is passed via environment variables from parent run.sh
+require_var "${DOMAIN-}" 'DOMAIN environment variable is required (set in maestro.yaml).'
+require_var "${CLOUDFLARE_ACCOUNT_ID-}" 'CLOUDFLARE_ACCOUNT_ID environment variable is required (set in maestro.yaml).'
+require_var "${SSH_PORT-}" 'SSH_PORT environment variable is required (set in maestro.yaml).'
+require_var "${BACKEND_PORT-}" 'BACKEND_PORT environment variable is required (set in maestro.yaml).'
+
+log "Ensuring required secrets..."
 require_var "${PULUMI_ACCESS_TOKEN-}" 'PULUMI_ACCESS_TOKEN is required.'
 if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then
   require_var "${CLOUDFLARE_API_TOKEN-}" 'CLOUDFLARE_API_TOKEN is required.'
@@ -93,9 +97,13 @@ fi
 
 log "Running the ${IMAGE_NAME} image..."
 PULUMI_SSH_KEY_PATH="/root/.ssh/id_rsa"
+
+# Pass configuration via environment variables (no more .env files)
 docker_env=(
-  --env-file=${SHARED_ENV_PATH}
-  --env-file=${PULUMI_ENV_PATH}
+  -e "DOMAIN=${DOMAIN}"
+  -e "BACKEND_PORT=${BACKEND_PORT}"
+  -e "SSH_PORT=${SSH_PORT}"
+  -e "CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}"
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
   -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
@@ -112,5 +120,4 @@ fi
 docker_cmd+=("${docker_env[@]}")
 docker_cmd+=("${IMAGE_NAME}")
 
-# FIXME: improve logging
 "${docker_cmd[@]}"

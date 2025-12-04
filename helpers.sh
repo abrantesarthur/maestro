@@ -114,3 +114,107 @@ create_temp_secret_file() {
 
   echo "${tmp_file}"
 }
+
+# ============================================
+# YAML Configuration Helpers (requires yq)
+# ============================================
+
+# Read a value from a YAML config file
+# Usage: config_get <config_file> <yq_path> [default_value]
+# Example: config_get maestro.yaml '.domain' 'example.com'
+config_get() {
+  local config_file="${1:?config file required}"
+  local yq_path="${2:?yq path required}"
+  local default_value="${3:-}"
+
+  if [[ ! -f "${config_file}" ]]; then
+    if [[ -n "${default_value}" ]]; then
+      echo "${default_value}"
+      return 0
+    fi
+    echo "Config file not found: ${config_file}" >&2
+    return 1
+  fi
+
+  local value
+  value="$(yq eval "${yq_path} // \"\"" "${config_file}" 2>/dev/null)"
+
+  # Return default if value is empty or null
+  if [[ -z "${value}" || "${value}" == "null" ]]; then
+    echo "${default_value}"
+  else
+    echo "${value}"
+  fi
+}
+
+# Read a boolean value from YAML config (returns "true" or "false")
+# Usage: config_get_bool <config_file> <yq_path> [default_value]
+config_get_bool() {
+  local config_file="${1:?config file required}"
+  local yq_path="${2:?yq path required}"
+  local default_value="${3:-false}"
+
+  local value
+  value="$(config_get "${config_file}" "${yq_path}" "${default_value}")"
+
+  # Normalize to lowercase and check for truthy values
+  case "${value,,}" in
+    true|yes|1|on)
+      echo "true"
+      ;;
+    *)
+      echo "false"
+      ;;
+  esac
+}
+
+# Read an array from YAML config as newline-separated values
+# Usage: config_get_array <config_file> <yq_path>
+config_get_array() {
+  local config_file="${1:?config file required}"
+  local yq_path="${2:?yq path required}"
+
+  if [[ ! -f "${config_file}" ]]; then
+    return 0
+  fi
+
+  yq eval "${yq_path} // [] | .[]" "${config_file}" 2>/dev/null
+}
+
+# Read key-value pairs from a YAML map and export as environment variables
+# Usage: config_export_map <config_file> <yq_path> [prefix]
+# Example: config_export_map maestro.yaml '.ansible.backend.env' 'BACKEND_ENV_'
+config_export_map() {
+  local config_file="${1:?config file required}"
+  local yq_path="${2:?yq path required}"
+  local prefix="${3:-}"
+
+  if [[ ! -f "${config_file}" ]]; then
+    return 0
+  fi
+
+  local keys_values
+  keys_values="$(yq eval "${yq_path} // {} | to_entries | .[] | .key + \"=\" + (.value | tostring)" "${config_file}" 2>/dev/null)"
+
+  while IFS='=' read -r key value; do
+    if [[ -n "${key}" ]]; then
+      export "${prefix}${key}=${value}"
+    fi
+  done <<< "${keys_values}"
+}
+
+# Check if a YAML path exists and is not null
+# Usage: config_has <config_file> <yq_path>
+config_has() {
+  local config_file="${1:?config file required}"
+  local yq_path="${2:?yq path required}"
+
+  if [[ ! -f "${config_file}" ]]; then
+    return 1
+  fi
+
+  local value
+  value="$(yq eval "${yq_path}" "${config_file}" 2>/dev/null)"
+
+  [[ -n "${value}" && "${value}" != "null" ]]
+}
