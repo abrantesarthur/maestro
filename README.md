@@ -1,6 +1,4 @@
-# Infra
-
-Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. Each component stays in its own subdirectory with dedicated documentation and deployment scripts.
+# Maestro
 
 ## Workflow
 
@@ -46,8 +44,3 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 
 - Make changes inside the relevant component directory following its README.
 - Keep commits scoped to a single infrastructure component to simplify rollbacks.
-
-## FIXME:
-
-- explain the purpose of the .env file
-- rename the Pulumi.yaml name to something other than cloudflared, as it includes digital ocean resources as well.
