@@ -100,8 +100,17 @@ log "Ensuring required environment..."
 require_bws_var 'GHCR_TOKEN'
 require_bws_var 'GHCR_USERNAME'
 require_bws_var 'VPS_SSH_KEY'
-require_bws_var 'WHATSAPP_VERIFY_TOKEN'
-require_bws_var 'WHATSAPP_APP_SECRET'
+
+# Validate user-specified BWS secrets
+if [[ -n "${BWS_REQUIRED_VARS:-}" ]]; then
+  IFS=',' read -ra BWS_VARS <<< "${BWS_REQUIRED_VARS}"
+  for var in "${BWS_VARS[@]}"; do
+    # Trim whitespace
+    var="${var#"${var%%[![:space:]]*}"}"
+    var="${var%"${var##*[![:space:]]}"}"
+    [[ -n "${var}" ]] && require_bws_var "${var}"
+  done
+fi
 
 log "ensure ansible-builder and ansible-navigator are installed..."
 if ! command -v ansible-builder >/dev/null 2>&1 || ! command -v ansible-navigator >/dev/null 2>&1; then

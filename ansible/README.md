@@ -11,8 +11,8 @@ It assumes the backend application image has already been built and pushed to GH
 
 ## Required Flags
 
-| Flag          | Purpose                                                                                                                                                                                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flag          | Purpose                                                                                                                                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--ssh-hosts` | A JSON list of hosts and their tags (e.g., {"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod"]}]}). Tags on each host become Ansible inventory groups, that playbooks can target. For instance, we can decide to provision nginx only on hosts tagged with `web`. |
 
 ## Optional Flags
@@ -26,23 +26,59 @@ It assumes the backend application image has already been built and pushed to GH
 
 ### Required Environment:
 
-| Variable            | Purpose                                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `BWS_ACCESS_TOKEN`  | Bitwarden Secrets Manager's token required for retrieving other secrets.                             |
-| `BACKEND_IMAGE`     | Full ghcr.io image reference (e.g., `ghcr.io/your-org/your-app`). Required when deploying backend.   |
-| `BACKEND_IMAGE_TAG` | Image tag to deploy (e.g., `latest`, `v1.0.0`, `sha-abc123`). Required when deploying backend.       |
+| Variable            | Purpose                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `BWS_ACCESS_TOKEN`  | Bitwarden Secrets Manager's token required for retrieving other secrets.                           |
+| `BACKEND_IMAGE`     | Full ghcr.io image reference (e.g., `ghcr.io/your-org/your-app`). Required when deploying backend. |
+| `BACKEND_IMAGE_TAG` | Image tag to deploy (e.g., `latest`, `v1.0.0`, `sha-abc123`). Required when deploying backend.     |
 
 ## Optional Environment
 
 | Variable            | Purpose                                                                                                                        |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
+| `BWS_REQUIRED_VARS` | Comma-separated list of BWS secret names to validate before provisioning (e.g., `MY_API_KEY,DATABASE_PASSWORD`).               |
 
 ## Container Registry
 
 Currently only GitHub Container Registry (ghcr.io) images are supported. The playbook authenticates using `GHCR_USERNAME` and `GHCR_TOKEN` secrets from Bitwarden.
 
 To use a different registry, you would need to modify the `backend_app` role to support alternative authentication methods.
+
+## Backend Container Environment
+
+Environment variables for your backend container are configured using the `BACKEND_ENV_` prefix convention.
+
+### How It Works
+
+1. Any environment variable starting with `BACKEND_ENV_` is automatically detected
+2. The `BACKEND_ENV_` prefix is stripped from the variable name
+3. The resulting key-value pair is passed to the Docker container
+
+This allows you to configure any environment variable your application needs without modifying the Ansible role.
+
+### Examples
+
+| Environment Variable                      | Container Receives            |
+| ----------------------------------------- | ----------------------------- |
+| `BACKEND_ENV_PORT=3000`                   | `PORT=3000`                   |
+| `BACKEND_ENV_DATABASE_URL=postgres://...` | `DATABASE_URL=postgres://...` |
+| `BACKEND_ENV_API_KEY=secret`              | `API_KEY=secret`              |
+
+### Configuration
+
+Add your backend environment variables to `ansible/.env`:
+
+```bash
+# Required for most apps
+BACKEND_ENV_PORT=3000
+
+# Your app-specific variables
+BACKEND_ENV_DATABASE_URL=postgres://user:pass@host:5432/db
+BACKEND_ENV_REDIS_URL=redis://localhost:6379
+```
+
+See `ansible/example.env` for a complete template.
 
 ## Ports
 

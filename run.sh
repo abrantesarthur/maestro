@@ -95,6 +95,16 @@ if [[ "${SKIP_ANSIBLE}" == "false" ]]; then
   require_bws_var 'GHCR_USERNAME'
 fi
 
+# Validate user-specified BWS secrets
+if [[ -n "${BWS_REQUIRED_VARS:-}" ]]; then
+  IFS=',' read -ra BWS_VARS <<< "${BWS_REQUIRED_VARS}"
+  for var in "${BWS_VARS[@]}"; do
+    # Trim whitespace
+    var="${var#"${var%%[![:space:]]*}"}"
+    var="${var%"${var##*[![:space:]]}"}"
+    [[ -n "${var}" ]] && require_bws_var "${var}"
+  done
+fi
 
 declare -a PULUMI_OUTPUT_LOGS=()
 
@@ -215,6 +225,7 @@ if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" 
     ansible_args+=(--skip-perms)
   fi
 
+  BWS_REQUIRED_VARS="${BWS_REQUIRED_VARS:-}" \
   BACKEND_IMAGE="${BACKEND_IMAGE}" \
   BACKEND_IMAGE_TAG="${BACKEND_IMAGE_TAG}" \
     "${ANSIBLE_RUN}" "${ansible_args[@]}"
