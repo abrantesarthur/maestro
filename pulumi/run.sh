@@ -6,13 +6,13 @@ HELPERS_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/helpers.sh"
 SHARED_ENV_PATH="$(cd -- "${SCRIPT_DIR}/.." && pwd)/shared.env"
 PULUMI_ENV_PATH="${SCRIPT_DIR}/.env"
 BUILD_CONTEXT="${SCRIPT_DIR}/image"
-IMAGE_NAME="dalhe_pulumi"
+IMAGE_NAME="provisioner_pulumi"
 
 # import helper functions
 source "$HELPERS_PATH"
 
 log() {
-  echo "[maestro/pulumi] $*"
+  echo "[provisioner/pulumi] $*"
 }
 require_cmd() {
   require_command log "$@"
@@ -92,7 +92,7 @@ if ! build_output=$(docker build -t "${IMAGE_NAME}" "${BUILD_CONTEXT}" 2>&1); th
 fi
 
 log "Running the ${IMAGE_NAME} image..."
-PULUMI_SSH_KEY_PATH="/root/.ssh/ssh_dalhe_ai"
+PULUMI_SSH_KEY_PATH="/root/.ssh/id_rsa"
 docker_env=(
   --env-file=${SHARED_ENV_PATH}
   --env-file=${PULUMI_ENV_PATH}

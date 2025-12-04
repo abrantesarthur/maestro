@@ -17,6 +17,8 @@ require_env_var() {
 }
 require_env_var "BACKEND_PORT"
 require_env_var "SSH_PORT"
+require_env_var "DOMAIN"
+require_env_var "CLOUDFLARE_ACCOUNT_ID"
 require_env_var "PULUMI_ACCESS_TOKEN" 
 require_env_var "PULUMI_COMMAND" 
 require_env_var "PULUMI_SSH_KEY_PATH" 
@@ -39,9 +41,11 @@ print_stack_outputs() {
 # Inject required values in the prod configuration
 case "$PULUMI_COMMAND" in
   up|refresh|cancel)
-    pulumi config set --stack prod dalhe:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
-    pulumi config set --stack prod dalhe:backendPort "$BACKEND_PORT" --non-interactive
-    pulumi config set --stack prod dalhe:sshPort "$SSH_PORT" --non-interactive
+    pulumi config set --stack prod provisioner:domain "$DOMAIN" --non-interactive
+    pulumi config set --stack prod provisioner:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
+    pulumi config set --stack prod provisioner:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
+    pulumi config set --stack prod provisioner:backendPort "$BACKEND_PORT" --non-interactive
+    pulumi config set --stack prod provisioner:sshPort "$SSH_PORT" --non-interactive
 esac
 
 # Run the requested Pulumi action

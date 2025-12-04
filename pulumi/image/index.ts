@@ -8,7 +8,7 @@ import {
   VpsTag,
 } from "./resources";
 
-const stackConfig = new pulumi.Config("dalhe");
+const stackConfig = new pulumi.Config("provisioner");
 const domain = stackConfig.require("domain");
 console.log({ domain });
 

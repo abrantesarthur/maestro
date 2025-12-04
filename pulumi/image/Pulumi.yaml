@@ -1,10 +1,6 @@
-name: cloudflare
-description: A minimal Cloudflare Typescript Pulumi program
+name: provisioner
+description: Infrastructure provisioning with Pulumi
 runtime:
   name: nodejs
   options:
     packagemanager: npm
-config:
-  pulumi:tags:
-    value:
-      pulumi:template: typescript
