@@ -77,7 +77,6 @@ log "Loading configuration from ${CONFIG_FILE}..."
 # Domain configuration (shared between pulumi and ansible)
 DOMAIN="$(cfg_get '.domain' '')"
 require_var "${DOMAIN}" "domain is required in ${CONFIG_FILE}"
-# FIXME: update example.maestro.yaml's comments to specify required and optional values.
 
 # Pulumi configuration
 PULUMI_ENABLED="$(cfg_get_bool '.pulumi.enabled' 'true')"
