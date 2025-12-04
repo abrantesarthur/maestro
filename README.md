@@ -78,18 +78,20 @@ secrets:
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-# FIXME: explain VPS_SSH_KEY better
+# FIXME: explain somewhere that we currently only support DigitalOcean and add a Future Improvements section asking for more support later.
 
-# FIXME: explain somewhere that we currently only support DigitalOcean and add a Future Improvements section asking for more support later
+# FIXME: update Future Improvements section to say that we need to figure out a way
 
-| Secret                 | Purpose                            |
-| ---------------------- | ---------------------------------- |
-| `VPS_SSH_KEY`          | SSH private key for server access  |
-| `GHCR_TOKEN`           | GitHub Container Registry token    |
-| `GHCR_USERNAME`        | GitHub Container Registry username |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token          |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token               |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token             |
+to provision the ssh keys into the servers automatically
+
+| Secret                 | Purpose                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. |
+| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  |
+| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           |
 
 You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`.
 
