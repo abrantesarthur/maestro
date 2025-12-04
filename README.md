@@ -18,23 +18,24 @@ Infrastructure-as-code and operations tooling for the dalhe.ai stack live here. 
 
 ### Optional env:
 
-| Variable           | Purpose                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_PROJECT_ID`   | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
-| `BWS_REQUIRED_VARS` | Comma-separated list of BWS secret names to validate (e.g., `MY_API_KEY,DATABASE_PASSWORD`). Validated before provisioning.   |
+| Variable            | Purpose                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_PROJECT_ID`    | The id of the Bitwarden Secrets Manager's project from which to draw secrets. If omitted, we fetch secrets from every project. |
+| `BWS_REQUIRED_VARS` | Comma-separated list of BWS secret names to validate (e.g., `MY_API_KEY,DATABASE_PASSWORD`). Validated before provisioning.    |
 
 ## Required flags
 
 ## Optional Flags
 
-| Flag             | Purpose                                                        |
-| ---------------- | -------------------------------------------------------------- |
-| `--skip-pulumi`  | Skips running the Pulumi stack.                                |
-| `--skip-ansible` | Skips the Ansible provisioning step entirely.                  |
-| `--skip-bws`     | Whether to skip pulling secrets from Bitwarden Secrets Manager |
-| `--skip-web`     | Whether to skip provisioning web.                              |
-| `--skip-backend` | Whether to skip provisioning backend.                          |
-| `--skip-perms`   | Whether to skip provisioning perms.                            |
+| Flag                   | Purpose                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `--skip-pulumi`        | Skips running the Pulumi stack.                                    |
+| `--skip-ansible`       | Skips the Ansible provisioning step entirely.                      |
+| `--skip-bws`           | Whether to skip pulling secrets from Bitwarden Secrets Manager     |
+| `--website-dir <path>` | Path to the website source directory (required unless --skip-web). |
+| `--skip-web`           | Whether to skip provisioning web.                                  |
+| `--skip-backend`       | Whether to skip provisioning backend.                              |
+| `--skip-perms`         | Whether to skip provisioning perms.                                |
 
 ## Components
 

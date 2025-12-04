@@ -3,16 +3,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
-WEBSITE_DIR="${REPO_ROOT}/website"
 OUTPUT_DIR_DEFAULT="${SCRIPT_DIR}/dist"
 OUTPUT_DIR="${OUTPUT_DIR_DEFAULT}"
+WEBSITE_DIR=""
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--output-dir <path>]
+Usage: $(basename "$0") --website-dir <path> [--output-dir <path>]
 
 Options:
+  --website-dir <path>  Path to the website source directory (required).
   --output-dir <path>   Destination directory for the built artifacts.
                         Defaults to ${OUTPUT_DIR_DEFAULT}.
 EOF
@@ -33,6 +33,14 @@ abspath() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --website-dir)
+      if [[ $# -lt 2 ]]; then
+        log "Error: --website-dir requires a path argument." >&2
+        exit 1
+      fi
+      WEBSITE_DIR="$(abspath "$2")"
+      shift 2
+      ;;
     --output-dir)
       if [[ $# -lt 2 ]]; then
         log "Error: --output-dir requires a path argument." >&2
@@ -53,6 +61,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validate required flag
+if [[ -z "${WEBSITE_DIR}" ]]; then
+  log "Error: --website-dir is required." >&2
+  usage
+  exit 1
+fi
+
+if [[ ! -d "${WEBSITE_DIR}" ]]; then
+  log "Error: website directory not found at ${WEBSITE_DIR}." >&2
+  exit 1
+fi
+
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     log "Error: required command '$1' not found in PATH." >&2
@@ -60,43 +80,13 @@ require_command() {
   fi
 }
 
-ensure_website_submodule() {
-  require_command git
-  if [[ -d "${WEBSITE_DIR}" ]]; then
-    return
-  fi
-
-  log "website submodule not found. Attempting to initialize it..."
-  if pushd "${REPO_ROOT}" >/dev/null; then
-    if git submodule update --init --recursive website >/dev/null 2>&1; then
-      log "website submodule initialized."
-    else
-      log "Error: failed to initialize website submodule." >&2
-      exit 1
-    fi
-    popd >/dev/null || true
-  else
-    log "Error: unable to access repo root at ${REPO_ROOT}." >&2
-    exit 1
-  fi
-
-  if [[ ! -d "${WEBSITE_DIR}" ]]; then
-    log "Error: website directory still missing at ${WEBSITE_DIR}." >&2
-    exit 1
-  fi
-}
-
-ensure_website_submodule
-
 PACKAGE_MANAGER="bun"
-
 
 build_with_bun() {
   require_command bun
   bun install
   bun run build
 }
-
 
 log "Building website using ${PACKAGE_MANAGER}..."
 pushd "${WEBSITE_DIR}" >/dev/null

@@ -29,6 +29,7 @@ SKIP_PULUMI=false
 SKIP_ANSIBLE=false
 BACKEND_IMAGE=""
 BACKEND_IMAGE_TAG=""
+WEBSITE_DIR=""
 SKIP_WEB=false
 SKIP_BACKEND=false
 SKIP_PERMS=false
@@ -50,6 +51,11 @@ while [[ $# -gt 0 ]]; do
     --backend-image-tag)
       [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
       BACKEND_IMAGE_TAG="$2"
+      shift 2
+    ;;
+    --website-dir)
+      [[ -n "${2:-}" ]] || { printf 'Missing value for %s\n' "$1" >&2; exit 1; }
+      WEBSITE_DIR="$2"
       shift 2
     ;;
     --skip-web)
@@ -217,6 +223,8 @@ if [[ "${SKIP_ANSIBLE}" == "false" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}" 
 
   if [[ "${SKIP_WEB}" == "true" ]]; then
     ansible_args+=(--skip-web)
+  else
+    ansible_args+=(--website-dir "${WEBSITE_DIR}")
   fi
   if [[ "${SKIP_BACKEND}" == "true" ]]; then
     ansible_args+=(--skip-backend)

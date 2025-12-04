@@ -38,11 +38,13 @@ Usage: $(basename "$0")
 Options:
   -h, --help                       Show this message.
   --ssh-hosts <json>               json with list of hostname and tags (e.g., --ssh-hosts {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}) (required)
+  --website-dir <path>             Path to the website source directory (required unless --skip-web)
 EOF
 }
 
 # require needed flags
 SSH_HOSTS_ARG=""
+WEBSITE_DIR=""
 SKIP_BWS=false
 SKIP_WEB=false
 SKIP_BACKEND=false
@@ -56,6 +58,11 @@ while [[ $# -gt 0 ]]; do
     --ssh-hosts)
       [[ -n "${2:-}" ]] || { log "Missing value for $1." >&2; exit 1; }
       SSH_HOSTS_ARG="$2"
+      shift 2
+      ;;
+    --website-dir)
+      [[ -n "${2:-}" ]] || { log "Missing value for $1." >&2; exit 1; }
+      WEBSITE_DIR="$2"
       shift 2
       ;;
     --skip-bws)
@@ -89,6 +96,9 @@ require_f "${WEBSITE_BUILD_SCRIPT}" "website build script not found at ${WEBSITE
 
 log "Ensuring required flags..."
 require_var "${SSH_HOSTS_ARG}" '--ssh-hosts must be provided with at least one hostname.'
+if [[ "${SKIP_WEB}" == "false" ]]; then
+  require_var "${WEBSITE_DIR}" '--website-dir is required when building website (use --skip-web to skip).'
+fi
 
 if [[ "${SKIP_BWS}" == "false" ]]; then
   log "Fetching secrets from Bitwarden..."
@@ -146,7 +156,7 @@ fi
 WEBSITE_ASSETS_DIR="${SCRIPT_DIR}/execution_environment/files/website"
 if [[ "${SKIP_WEB}" == "false" ]]; then
   log "Building website assets for Ansible execution environment..."
-  "${WEBSITE_BUILD_SCRIPT}" --output-dir "${WEBSITE_ASSETS_DIR}" >/dev/null;
+  "${WEBSITE_BUILD_SCRIPT}" --website-dir "${WEBSITE_DIR}" --output-dir "${WEBSITE_ASSETS_DIR}" >/dev/null;
 else
   log "Skipping building website assets for Ansible execution environment; creating empty directory..."
   rm -rf "${WEBSITE_ASSETS_DIR}"
