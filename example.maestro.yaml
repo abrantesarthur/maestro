@@ -1,0 +1,124 @@
+# ============================================
+# Maestro Configuration File
+# ============================================
+# This file contains all configuration for provisioning infrastructure.
+# Copy this file to maestro.yaml and customize for your deployment.
+#
+# Secrets (API tokens, SSH keys) should NOT be placed here.
+# They are fetched from Bitwarden Secrets Manager at runtime.
+# Required environment variable: BWS_ACCESS_TOKEN
+# ============================================
+
+# Domain for DNS records and nginx configuration
+# This is used by both Pulumi (for Cloudflare DNS) and Ansible (for nginx)
+domain: example.com
+
+# ============================================
+# Pulumi Configuration
+# ============================================
+# Pulumi provisions cloud infrastructure:
+# - DigitalOcean virtual servers with cloudflared and SSL/TLS certificates
+# - Cloudflare DNS records and tunnels for SSH access
+pulumi:
+  # Set to false to skip Pulumi provisioning. Useful if you've already ran
+  # pulumi provisioning before and just want to configure the server via
+  # Ansible (see below). Otherwise, set to 'true' if running for the 1st time.
+  enabled: true
+
+  # Pulumi command to run: up, refresh, cancel, or output
+  # - up: Apply infrastructure changes
+  # - refresh: Reconcile state without deploying
+  # - cancel: Cancel a running update
+  # - output: Retrieve stack outputs without changes
+  command: up
+
+  # Cloudflare account ID (from your Cloudflare dashboard)
+  # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
+  # dots next to account name
+  cloudflare_account_id: "your_account_id_here"
+
+  # SSH port for Cloudflare tunnel configuration
+  ssh_port: 22
+
+# ============================================
+# Ansible Configuration
+# ============================================
+# Ansible configures the provisioned servers:
+# - nginx for web serving
+# - Docker and backend application container
+# - System permissions and groups
+ansible:
+  # Set to false to skip Ansible provisioning. Useful if you want to manually
+  # configure your servers. You can do so by SSHing via the tunnel with hostname
+  # ssh<index>.<domain>, where 'index' is an integer from 0 to n - 1, with n being
+  # the nunber of servers provisioned by Pulumi.
+  enabled: true
+
+  # Path to the website source directory
+  # This directory will be built and deployed to the web servers
+  # Required when web.enabled is true
+  # FIXME: improve website provisioning! Maybe support pulling from some image?
+  website_dir: "/path/to/your/website"
+
+  # Web server provisioning (nginx)
+  web:
+    # Set to false to skip web provisioning
+    enabled: true
+
+  # Backend application provisioning
+  backend:
+    # Set to false to skip backend provisioning
+    enabled: true
+
+    # Full container image reference (e.g., ghcr.io/your-org/your-app)
+    # Currently only GitHub Container Registry (ghcr.io) is supported
+    image: ghcr.io/your-org/your-app
+
+    # Image tag to deploy (e.g., latest, v1.0.0, sha-abc123)
+    tag: latest
+
+    # Port the backend application listens on
+    # This is also used by Pulumi for Cloudflare tunnel configuration. The
+    # cloudflared daemon installed in the server forwards HTTP requests
+    # it receives to this port in your containerized backend application.
+    port: 3000
+
+    # Environment variables passed to the backend container
+    # Each key-value pair here becomes an environment variable in the container
+    # Note: PORT is automatically injected from 'port' above; do not set it here
+    env:
+      # Add your application-specific environment variables:
+      # DATABASE_URL: postgres://user:pass@host:5432/db
+      # REDIS_URL: redis://localhost:6379
+      # API_KEY: your_api_key_here
+
+  # System permissions provisioning
+  perms:
+    # Set to false to skip permissions provisioning
+    # FIXME: explain better what the permissions are!
+    enabled: true
+
+# ============================================
+# Secrets Configuration
+# ============================================
+# Configure how secrets are retrieved at runtime.
+# Actual secret values are NEVER stored in this file.
+secrets:
+  # Secrets provider (currently only "bws" for Bitwarden Secrets Manager is supported)
+  provider: bws
+
+  # Optional: Bitwarden Secrets Manager project ID
+  # If omitted, secrets are fetched from all projects accessible by the token
+  # project_id: "your_bws_project_id"
+
+  # List of secret names that must be present in Bitwarden before provisioning starts.
+  # These are validated after fetching from Bitwarden
+  # Built-in required secrets: GHCR_TOKEN, GHCR_USERNAME, VPS_SSH_KEY,
+  #   PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, DIGITALOCEAN_TOKEN
+  # FIXME: explain better what each built-in required secret is for
+  required_vars: []
+  # Example:
+  # required_vars:
+  #   - MY_API_KEY
+  #   - DATABASE_PASSWORD
+  #   - STRIPE_SECRET

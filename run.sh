@@ -92,6 +92,10 @@ BWS_PROJECT_ID="$(config_get "${CONFIG_FILE}" '.secrets.project_id' '')"
 # Export backend environment variables from YAML (ansible.backend.env -> BACKEND_ENV_*)
 config_export_map "${CONFIG_FILE}" '.ansible.backend.env' 'BACKEND_ENV_'
 
+# Auto-inject PORT into the container environment from backend.port
+export BACKEND_ENV_PORT="${BACKEND_PORT}"
+
+
 # ============================================
 # Validate configuration
 # ============================================

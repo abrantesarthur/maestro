@@ -9,10 +9,9 @@ This script is typically called by the parent `run.sh` which handles configurati
 ```bash
 # Configuration is passed via environment variables
 export DOMAIN="example.com"
-export BACKEND_PORT="3000"
+export BACKEND_PORT="3000"  # PORT is auto-injected into container env
 export BACKEND_IMAGE="ghcr.io/your-org/your-app"
 export BACKEND_IMAGE_TAG="latest"
-export BACKEND_ENV_PORT="3000"
 export BWS_ACCESS_TOKEN="your_bws_token"
 
 ./run.sh \
@@ -44,12 +43,11 @@ Environment variables needed by your backend containerized application can be co
 ansible:
   backend:
     env:
-      PORT: 3000
       DATABASE_URL: postgres://user:pass@host:5432/db
       API_KEY: your_api_key
 ```
 
-Each key-value pair becomes an environment variable in the container (e.g., `PORT=3000`).
+Each key-value pair becomes an environment variable in the container. Note that `PORT` is automatically injected from `ansible.backend.port` and should not be set here.
 
 ## CLI Flags
 
