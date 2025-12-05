@@ -106,12 +106,6 @@ When you run `./run.sh`, Maestro provisions each defined stack sequentially, the
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-# FIXME: explain somewhere that we currently only support DigitalOcean and add a Future Improvements section asking for more support later.
-
-# FIXME: update Future Improvements section to say that we need to figure out a way to provision the ssh keys into the servers automatically
-
-# FIXME: update future improvements to ask for a way to validate the YAML format. I used something in transcend to do this via io-ts I think.
-
 # FIXME: think better the server tag strategy within pulumi and ansible. How can we make it so that if a server has a recognized tag (role) within the pulumi section, then we must have a corresponding role for that tag in the ansible section? Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
 
 #FIXME: update the provisioning of dev and staging stacks to, for instance, serve the resources in different domains (e.g., dev.example.com, stag.example.com, etc.). Make any other changes needed...
@@ -142,3 +136,11 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 4. Aggregates hosts from all stacks
 5. Waits for servers to accept connection via SSH tunnels
 6. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)
+
+## Future Improvements
+
+- **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
+
+- **Automated SSH key provisioning**: SSH keys must be manually added to your DigitalOcean account before running Maestro. A future improvement would automate the creation and registration of SSH keys during the provisioning process.
+
+- **Configuration schema validation**: Add typed schema validation for `maestro.yaml` to catch configuration errors early and provide better error messages.
