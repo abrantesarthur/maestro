@@ -2,6 +2,15 @@
 nginx_service_name: nginx
 nginx_conf_dest: /etc/nginx/
 nginx_validate_command: nginx -t
-website_src_dir: /opt/website
 domain: "{{ lookup('env', 'DOMAIN') }}"
+
+# Web mode: 'static' (serve files) or 'docker' (reverse proxy)
+web_mode: "{{ lookup('env', 'WEB_MODE') | default('static', true) }}"
+
+# Static mode configuration
+website_src_dir: /opt/website
 website_dest_dir: "/var/www/{{ domain }}/website"
+
+# Docker mode configuration
+web_docker_port: "{{ lookup('env', 'WEB_DOCKER_PORT') | default('3000', true) }}"
+web_docker_bind_address: 127.0.0.1

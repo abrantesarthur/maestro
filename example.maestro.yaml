@@ -76,7 +76,7 @@ pulumi:
 # Ansible Configuration
 # ============================================
 # Ansible configures the provisioned servers:
-# - nginx for web serving
+# - nginx for web serving (static files or reverse proxy)
 # - Docker and backend application container
 # - System permissions and groups
 ansible:
@@ -85,15 +85,62 @@ ansible:
   # tunnel with hostname ssh<index>.<domain>, where 'index' is 0 to n-1.
   enabled: true
 
-  # [Required when web.enabled is true] Path to the website source directory
-  # This directory will be built and deployed to the web servers
-  # FIXME: improve website provisioning! Maybe support pulling from some image?
-  website_dir: "/path/to/your/website"
-
   # Web server provisioning (nginx)
+  # Choose ONE mode: static (serve files directly) or docker (reverse proxy)
   web:
     # [Optional, default: true] Set to false to skip web provisioning
     enabled: true
+
+    # MODE 1: Static site - nginx serves files directly
+    # Use this for static sites (HTML/CSS/JS), SPAs, or pre-built frontends
+    static:
+      # [Required] Source type: "local" or "image"
+      source: local
+
+      # --- For source: local ---
+      # Build from a local directory and deploy static assets
+
+      # [Required when source is local] Path to the website source directory
+      dir: "/path/to/your/website"
+
+      # [Optional] Build command to run (omit if site is pre-built)
+      # Supports any build tool: bun, npm, yarn, pnpm, make, etc.
+      build: "bun run build"
+
+      # [Optional, default: dist] Subdirectory containing built assets
+      dist: "dist"
+
+      # --- For source: image ---
+      # Pull pre-built static assets from a container image
+      # Useful for CI pipelines that package sites as OCI images
+
+      # [Required when source is image] Container image reference
+      # image: ghcr.io/your-org/site-assets
+
+      # [Required when source is image] Image tag
+      # tag: latest
+
+      # [Optional, default: /app/dist] Path inside container to extract assets from
+      # path: "/app/dist"
+
+    # MODE 2: Dockerized web app - nginx acts as reverse proxy
+    # Use this for SSR frameworks (Next.js, Nuxt), Node.js apps, or any containerized web server
+    # Uncomment to use instead of static mode (modes are mutually exclusive)
+    # docker:
+    #   # [Required] Container image reference
+    #   # Currently only GitHub Container Registry (ghcr.io) is supported
+    #   image: ghcr.io/your-org/web-app
+    #
+    #   # [Required] Image tag to deploy
+    #   tag: latest
+    #
+    #   # [Optional, default: 3000] Port the web application listens on
+    #   port: 3000
+    #
+    #   # [Optional] Environment variables passed to the web container
+    #   env:
+    #     NODE_ENV: production
+    #     # Add your application-specific environment variables
 
   # Backend application provisioning
   backend:
