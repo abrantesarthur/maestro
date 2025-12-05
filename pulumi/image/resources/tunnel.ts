@@ -40,7 +40,7 @@ export class Tunnel extends pulumi.ComponentResource {
       opts,
     );
     const resourceName = Tunnel.buildResourceName(args.name);
-    const stackConfig = new pulumi.Config("dalhe");
+    const stackConfig = new pulumi.Config("maestro");
     const accountId = stackConfig.require("cloudflareAccountId");
     const domain = stackConfig.require("domain");
     const configSrc = "cloudflare";
@@ -75,13 +75,11 @@ export class Tunnel extends pulumi.ComponentResource {
         accountId,
         tunnelId: tunnel.id,
         config: {
-          // FIXME: add comment
           ingresses: ingresses.apply((is) => [
             ...is.map((i) => ({
               hostname: i.hostname,
               service: `${i.protocol}://localhost:${i.port}`,
             })),
-            // FIXME: add comment
             {
               service: "http_status:404",
             },

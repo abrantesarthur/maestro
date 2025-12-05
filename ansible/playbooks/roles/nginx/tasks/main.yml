@@ -26,31 +26,37 @@
     path: "{{ nginx_conf_dest }}sites-enabled/default"
     state: absent
 
-- name: Ensure website destination exists
+# ============================================
+# Static mode: serve files directly
+# ============================================
+
+- name: Ensure website destination exists (static mode)
   ansible.builtin.file:
     path: "{{ website_dest_dir }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
+  when: web_mode == 'static'
 
-- name: Check website assets are available in the execution environment
+- name: Check website assets are available in the execution environment (static mode)
   ansible.builtin.stat:
     path: "{{ website_src_dir }}"
   register: website_assets_dir
   delegate_to: localhost
   become: false
   run_once: true
+  when: web_mode == 'static'
 
-- name: Fail if website assets are missing
+- name: Fail if website assets are missing (static mode)
   ansible.builtin.fail:
     msg: "Website assets were not found at {{ website_src_dir }}."
-  when: not website_assets_dir.stat.exists
+  when: web_mode == 'static' and not website_assets_dir.stat.exists
   delegate_to: localhost
   become: false
   run_once: true
 
-- name: Deploy website assets
+- name: Deploy website assets (static mode)
   ansible.builtin.copy:
     src: "{{ website_src_dir }}/"
     dest: "{{ website_dest_dir }}/"
@@ -58,8 +64,13 @@
     group: root
     mode: "0644"
     directory_mode: "0755"
+  when: web_mode == 'static'
 
-- name: Deploy nginx site configuration
+# ============================================
+# Deploy nginx configuration (mode-specific)
+# ============================================
+
+- name: Deploy nginx site configuration (static mode)
   ansible.builtin.template:
     src: site.conf.j2
     dest: "{{ nginx_conf_dest }}sites-available/{{ domain }}.conf"
@@ -68,6 +79,18 @@
     mode: "0644"
   register: nginx_conf_template
   notify: Validate nginx configuration
+  when: web_mode == 'static'
+
+- name: Deploy nginx site configuration (docker mode)
+  ansible.builtin.template:
+    src: site-proxy.conf.j2
+    dest: "{{ nginx_conf_dest }}sites-available/{{ domain }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nginx_conf_template_docker
+  notify: Validate nginx configuration
+  when: web_mode == 'docker'
 
 - name: Enable nginx site configuration
   ansible.builtin.file:
@@ -80,7 +103,7 @@
 
 - name: Flush handlers if nginx config changed
   ansible.builtin.meta: flush_handlers
-  when: nginx_conf_template.changed or nginx_site_link.changed
+  when: nginx_conf_template.changed or nginx_conf_template_docker.changed or nginx_site_link.changed
 
 - name: Ensure nginx service is enabled and running
   ansible.builtin.service:

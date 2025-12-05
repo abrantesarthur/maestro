@@ -27,7 +27,7 @@ export const installCloudflared = ({
   const localStart = JSON.stringify(path.resolve(__dirname, "start.sh"));
   const remoteStart = JSON.stringify("/tmp/start.sh");
   const localStop = JSON.stringify(path.resolve(__dirname, "stop.sh"));
-  const stackConfig = new pulumi.Config("dalhe");
+  const stackConfig = new pulumi.Config("maestro");
   const sshKeyPath = stackConfig.require("sshKeyPath");
   const apiTokenEnvVar = "CLOUDFLARE_API_TOKEN";
   const hostEnvVar = "HOST";
@@ -111,7 +111,9 @@ export const installCloudflared = ({
         .output(ipv4)
         .apply(
           (host) =>
-            `SSH_KEY_PATH=${sshKeyPath} bash ${localStop} ${JSON.stringify(host)}`,
+            `SSH_KEY_PATH=${sshKeyPath} bash ${localStop} ${JSON.stringify(
+              host,
+            )}`,
         ),
     },
     {

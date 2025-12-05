@@ -114,6 +114,8 @@ Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The foll
 
 # FIXME: think better the server tag strategy within pulumi and ansible. How can we make it so that if a server has a recognized tag (role) within the pulumi section, then we must have a corresponding role for that tag in the ansible section? Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
 
+#FIXME: update the provisioning of dev and staging stacks to, for instance, serve the resources in different domains (e.g., dev.example.com, stag.example.com, etc.). Make any other changes needed...
+
 | Secret                 | Purpose                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. |

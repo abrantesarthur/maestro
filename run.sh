@@ -89,12 +89,34 @@ PULUMI_STACKS_JSON="$(yq eval -o=json '.pulumi.stacks // {}' "${CONFIG_FILE}" 2>
 
 # Ansible configuration
 ANSIBLE_ENABLED="$(cfg_get_bool '.ansible.enabled' 'true')"
-WEBSITE_DIR="$(cfg_get '.ansible.website_dir' '')"
 
 # Ansible sub-components
 WEB_ENABLED="$(cfg_get_bool '.ansible.web.enabled' 'true')"
 BACKEND_ENABLED="$(cfg_get_bool '.ansible.backend.enabled' 'true')"
 PERMS_ENABLED="$(cfg_get_bool '.ansible.perms.enabled' 'true')"
+
+# Web configuration - determine mode (static vs docker)
+# Mode is determined by presence of static or docker block
+WEB_MODE=""
+if cfg_has '.ansible.web.static'; then
+  WEB_MODE="static"
+elif cfg_has '.ansible.web.docker'; then
+  WEB_MODE="docker"
+fi
+
+# Static mode configuration
+WEB_STATIC_SOURCE="$(cfg_get '.ansible.web.static.source' 'local')"
+WEB_STATIC_DIR="$(cfg_get '.ansible.web.static.dir' '')"
+WEB_STATIC_BUILD="$(cfg_get '.ansible.web.static.build' '')"
+WEB_STATIC_DIST="$(cfg_get '.ansible.web.static.dist' 'dist')"
+WEB_STATIC_IMAGE="$(cfg_get '.ansible.web.static.image' '')"
+WEB_STATIC_TAG="$(cfg_get '.ansible.web.static.tag' 'latest')"
+WEB_STATIC_PATH="$(cfg_get '.ansible.web.static.path' '/app/dist')"
+
+# Docker mode configuration
+WEB_DOCKER_IMAGE="$(cfg_get '.ansible.web.docker.image' '')"
+WEB_DOCKER_TAG="$(cfg_get '.ansible.web.docker.tag' 'latest')"
+WEB_DOCKER_PORT="$(cfg_get '.ansible.web.docker.port' '3000')"
 
 # Backend configuration
 BACKEND_IMAGE="$(cfg_get '.ansible.backend.image' '')"
@@ -175,7 +197,23 @@ if [[ "${PULUMI_ENABLED}" == "true" ]]; then
 fi
 
 if [[ "${ANSIBLE_ENABLED}" == "true" && "${WEB_ENABLED}" == "true" ]]; then
-  require_var "${WEBSITE_DIR}" "ansible.website_dir is required when web provisioning is enabled"
+  if [[ -z "${WEB_MODE}" ]]; then
+    log "Error: ansible.web.static or ansible.web.docker must be configured when web provisioning is enabled"
+    exit 1
+  fi
+  
+  if [[ "${WEB_MODE}" == "static" ]]; then
+    if [[ "${WEB_STATIC_SOURCE}" == "local" ]]; then
+      require_var "${WEB_STATIC_DIR}" "ansible.web.static.dir is required when source is 'local'"
+    elif [[ "${WEB_STATIC_SOURCE}" == "image" ]]; then
+      require_var "${WEB_STATIC_IMAGE}" "ansible.web.static.image is required when source is 'image'"
+    else
+      log "Error: ansible.web.static.source must be 'local' or 'image', got '${WEB_STATIC_SOURCE}'"
+      exit 1
+    fi
+  elif [[ "${WEB_MODE}" == "docker" ]]; then
+    require_var "${WEB_DOCKER_IMAGE}" "ansible.web.docker.image is required for docker mode"
+  fi
 fi
 
 if [[ "${ANSIBLE_ENABLED}" == "true" && "${BACKEND_ENABLED}" == "true" ]]; then
@@ -201,8 +239,24 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "  pulumi.ssh_port: ${SSH_PORT}"
   log "  pulumi.stacks: $(echo "${PULUMI_STACKS_JSON}" | jq -c '.')"
   log "  ansible.enabled: ${ANSIBLE_ENABLED}"
-  log "  ansible.website_dir: ${WEBSITE_DIR}"
   log "  ansible.web.enabled: ${WEB_ENABLED}"
+  log "  ansible.web.mode: ${WEB_MODE:-<not configured>}"
+  if [[ "${WEB_MODE}" == "static" ]]; then
+    log "  ansible.web.static.source: ${WEB_STATIC_SOURCE}"
+    if [[ "${WEB_STATIC_SOURCE}" == "local" ]]; then
+      log "  ansible.web.static.dir: ${WEB_STATIC_DIR}"
+      log "  ansible.web.static.build: ${WEB_STATIC_BUILD:-<none>}"
+      log "  ansible.web.static.dist: ${WEB_STATIC_DIST}"
+    else
+      log "  ansible.web.static.image: ${WEB_STATIC_IMAGE}"
+      log "  ansible.web.static.tag: ${WEB_STATIC_TAG}"
+      log "  ansible.web.static.path: ${WEB_STATIC_PATH}"
+    fi
+  elif [[ "${WEB_MODE}" == "docker" ]]; then
+    log "  ansible.web.docker.image: ${WEB_DOCKER_IMAGE}"
+    log "  ansible.web.docker.tag: ${WEB_DOCKER_TAG}"
+    log "  ansible.web.docker.port: ${WEB_DOCKER_PORT}"
+  fi
   log "  ansible.backend.enabled: ${BACKEND_ENABLED}"
   log "  ansible.backend.image: ${BACKEND_IMAGE}"
   log "  ansible.backend.tag: ${BACKEND_IMAGE_TAG}"
@@ -396,15 +450,31 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
   export BACKEND_PORT
   export BACKEND_IMAGE
   export BACKEND_IMAGE_TAG
+  
+  # Export web configuration
+  export WEB_MODE
+  export WEB_STATIC_SOURCE
+  export WEB_STATIC_DIR
+  export WEB_STATIC_BUILD
+  export WEB_STATIC_DIST
+  export WEB_STATIC_IMAGE
+  export WEB_STATIC_TAG
+  export WEB_STATIC_PATH
+  export WEB_DOCKER_IMAGE
+  export WEB_DOCKER_TAG
+  export WEB_DOCKER_PORT
+  
+  # Export web docker environment variables from YAML (ansible.web.docker.env -> WEB_DOCKER_ENV_*)
+  if [[ "${WEB_MODE}" == "docker" ]]; then
+    cfg_export_map '.ansible.web.docker.env' 'WEB_DOCKER_ENV_'
+  fi
 
   ansible_args=(
     --ssh-hosts "${PULUMI_HOSTS}"
     --skip-bws
   )
 
-  if [[ "${WEB_ENABLED}" == "true" ]]; then
-    ansible_args+=(--website-dir "${WEBSITE_DIR}")
-  else
+  if [[ "${WEB_ENABLED}" != "true" ]]; then
     ansible_args+=(--skip-web)
   fi
   if [[ "${BACKEND_ENABLED}" != "true" ]]; then

@@ -1,5 +1,22 @@
+---
 - name: Provision web servers.
   hosts: web
   become: true
-  roles:
-    - nginx
+  vars:
+    web_mode: "{{ lookup('env', 'WEB_MODE') | default('static', true) }}"
+  tasks:
+    # Docker mode: install docker and run web container
+    - name: Include docker role (docker mode)
+      ansible.builtin.include_role:
+        name: docker
+      when: web_mode == 'docker'
+
+    - name: Include web_docker role (docker mode)
+      ansible.builtin.include_role:
+        name: web_docker
+      when: web_mode == 'docker'
+
+    # Always include nginx (serves static files or proxies to docker)
+    - name: Include nginx role
+      ansible.builtin.include_role:
+        name: nginx
