@@ -94,8 +94,6 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
 
-# FIXME: allo to specify tags in the maestro.yaml configuration
-
 - One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
 
 ## Prerequisites

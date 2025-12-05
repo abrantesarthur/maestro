@@ -82,6 +82,10 @@ Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The foll
 
 # FIXME: update Future Improvements section to say that we need to figure out a way
 
+# FIXME: update future improvements to ask for a way to validate the YAML format. I
+
+used something in transcend to do this via io-ts I think.
+
 to provision the ssh keys into the servers automatically
 
 | Secret                 | Purpose                                                                                                                                          |
