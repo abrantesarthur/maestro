@@ -25,15 +25,13 @@ The script validates required inputs, ensures `ansible-builder`/`ansible-navigat
 
 Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
 
-# FIXME: add "Description" column explaining what each env var is used for.
-
-| Variable            | Source in maestro.yaml  |
-| ------------------- | ----------------------- |
-| `DOMAIN`            | `domain`                |
-| `BACKEND_PORT`      | `ansible.backend.port`  |
-| `BACKEND_IMAGE`     | `ansible.backend.image` |
-| `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   |
-| `BACKEND_ENV_*`     | `ansible.backend.env.*` |
+| Variable            | Source in maestro.yaml  | Purpose                                               |
+| ------------------- | ----------------------- | ----------------------------------------------------- |
+| `DOMAIN`            | `domain`                | Domain for cloudflare DNS provisioning                |
+| `BACKEND_PORT`      | `ansible.backend.port`  | Port mapping for Docker container                     |
+| `BACKEND_IMAGE`     | `ansible.backend.image` | Backend image to pull from GHCR and run in a server.  |
+| `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   | Tag/version of the backend image                      |
+| `BACKEND_ENV_*`     | `ansible.backend.env.*` | Environment variables passed to the backend container |
 
 ### Backend Container Environment
 
