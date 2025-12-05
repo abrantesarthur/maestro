@@ -62,7 +62,7 @@ export class VirtualServer extends pulumi.ComponentResource {
       { parent: this },
     );
 
-    const stackConfig = new pulumi.Config("dalhe");
+    const stackConfig = new pulumi.Config("maestro");
     const domain = stackConfig.require("domain");
     const backendPort = stackConfig.require("backendPort");
     const certHostnames = [`*.${domain}`, domain];

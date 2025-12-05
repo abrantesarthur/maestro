@@ -17,13 +17,15 @@ import { InstallCertificateOptions } from "./types";
  * @returns the ssh key
  * */
 const readSshKey = (): string => {
-  const stackConfig = new pulumi.Config("dalhe");
+  const stackConfig = new pulumi.Config("maestro");
   const sshKeyPath = stackConfig.require("sshKeyPath");
   try {
     return fs.readFileSync(sshKeyPath, "utf8");
   } catch (error) {
     throw new Error(
-      `Failed to read SSH identity file at ${sshKeyPath}: ${error instanceof Error ? error.message : error}`,
+      `Failed to read SSH identity file at ${sshKeyPath}: ${
+        error instanceof Error ? error.message : error
+      }`,
     );
   }
 };
