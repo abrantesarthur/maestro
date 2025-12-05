@@ -24,9 +24,7 @@ The Pulumi program provisions:
 1. DigitalOcean virtual servers that come with cloudflared and SSL/TLS certificates properly installed, so Cloudflare can provision tunnels and HTTPS connections properly.
 2. Cloudflare resources, including DNS A records pointing your domain to webservers and tunnels allowing SSH access via `ssh0.example.com`, `ssh1.example.com`, etc.
 
-# FIXME: add link to tutorial or instructions for installing cloudflared.
-
-To connect through the tunnel from your machine, install `cloudflared` locally and add entries to your `~/.ssh/config`:
+To connect through the tunnel from your machine, [install cloudflared](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) locally and add these entries to your `~/.ssh/config`:
 
 ```
 Host ssh0.example.com
