@@ -1,0 +1,163 @@
+# ============================================
+# Maestro Configuration File
+# ============================================
+# This file contains all configuration for provisioning infrastructure.
+# Copy this file to maestro.yaml and customize for your deployment.
+#
+# Secrets (API tokens, SSH keys) should NOT be placed here.
+# They are fetched from Bitwarden Secrets Manager at runtime.
+# Required environment variable: BWS_ACCESS_TOKEN
+# ============================================
+
+# [Required] Domain for DNS records and nginx configuration
+# Used by both Pulumi (for Cloudflare DNS) and Ansible (for nginx)
+domain: example.com
+
+# ============================================
+# Pulumi Configuration
+# ============================================
+# Pulumi provisions cloud infrastructure:
+# - DigitalOcean virtual servers with cloudflared and SSL/TLS certificates
+# - Cloudflare DNS records and tunnels for SSH access
+pulumi:
+  # [Optional, default: true] Set to false to skip Pulumi provisioning.
+  # Useful if you've already ran pulumi provisioning before and just want to
+  # configure the server via Ansible (see below).
+  enabled: true
+
+  # [Optional, default: up] Pulumi command to run: up, refresh, cancel, or output
+  # - up: Apply infrastructure changes
+  # - refresh: Reconcile state without deploying
+  # - cancel: Cancel a running update
+  # - output: Retrieve stack outputs without changes
+  command: up
+
+  # [Required when pulumi.enabled is true] Cloudflare account ID
+  # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
+  # dots next to account name
+  cloudflare_account_id: "your_account_id_here"
+
+  # [Optional, default: 22] SSH port for Cloudflare tunnel configuration
+  ssh_port: 22
+
+  # [Required when pulumi.enabled is true] Stack definitions
+  # Each stack (dev, staging, prod) represents an isolated environment.
+  # Maestro provisions each defined stack sequentially.
+  stacks:
+    # Production stack example
+    prod:
+      servers:
+        # Single production server (handles both backend and web)
+        - roles: [backend, web] # Required: one or more of backend, web
+          # tags: []                # Optional: custom user-defined tags
+          # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
+          # size: s-1vcpu-1gb       # Optional, default: s-1vcpu-1gb
+          # region: nyc1            # Optional, default: nyc1
+
+  # Multi-stack setup example (uncomment to use):
+  # stacks:
+  #   staging:
+  #     servers:
+  #       # Staging server for testing
+  #       - roles: [backend, web]
+  #         tags: [canary]          # Custom tag for canary deployments
+  #         region: nyc1
+  #   prod:
+  #     servers:
+  #       # Production backend server
+  #       - roles: [backend]
+  #         size: s-2vcpu-4gb       # Larger size for production
+  #         region: nyc1
+  #       # Production web server
+  #       - roles: [web]
+  #         region: nyc1
+
+# ============================================
+# Ansible Configuration
+# ============================================
+# Ansible configures the provisioned servers:
+# - nginx for web serving
+# - Docker and backend application container
+# - System permissions and groups
+ansible:
+  # [Optional, default: true] Set to false to skip Ansible provisioning.
+  # Useful if you want to manually configure your servers. You can SSH via the
+  # tunnel with hostname ssh<index>.<domain>, where 'index' is 0 to n-1.
+  enabled: true
+
+  # [Required when web.enabled is true] Path to the website source directory
+  # This directory will be built and deployed to the web servers
+  # FIXME: improve website provisioning! Maybe support pulling from some image?
+  website_dir: "/path/to/your/website"
+
+  # Web server provisioning (nginx)
+  web:
+    # [Optional, default: true] Set to false to skip web provisioning
+    enabled: true
+
+  # Backend application provisioning
+  backend:
+    # [Optional, default: true] Set to false to skip backend provisioning
+    enabled: true
+
+    # [Required when backend.enabled is true] Full container image reference
+    # Currently only GitHub Container Registry (ghcr.io) is supported
+    image: ghcr.io/your-org/your-app
+
+    # [Required when backend.enabled is true] Image tag to deploy
+    tag: latest
+
+    # [Optional, default: 3000] Port the backend application listens on
+    # Also used by Pulumi for Cloudflare tunnel configuration. The cloudflared
+    # daemon forwards HTTP requests to this port in your container.
+    port: 3000
+
+    # [Optional] Environment variables passed to the backend container
+    # Each key-value pair becomes an environment variable in the container
+    # Note: PORT is automatically injected from 'port' above; do not set it here
+    env:
+      # Add your application-specific environment variables:
+      # DATABASE_URL: postgres://user:pass@host:5432/db
+      # REDIS_URL: redis://localhost:6379
+      # API_KEY: your_api_key_here
+
+  # System permissions provisioning
+  # FIXME: allow configuring groups via maestro.yaml. Add to README.md future improvements section.
+  perms:
+    # [Optional, default: true] Set to false to skip permissions provisioning
+    # This playbook configures:
+    # - UFW firewall: denies incoming traffic by default, allows SSH, and
+    #   restricts HTTPS to Cloudflare IPs only
+    # - System groups: creates required groups (e.g., devops) and removes
+    #   unmanaged custom groups
+    enabled: true
+
+# ============================================
+# Secrets Configuration
+# ============================================
+# Configure how secrets are retrieved at runtime.
+# Actual secret values are NEVER stored in this file.
+secrets:
+  # [Optional, default: bws] Secrets provider
+  # Currently only "bws" (Bitwarden Secrets Manager) is supported
+  provider: bws
+
+  # [Optional] Bitwarden Secrets Manager project ID
+  # If omitted, secrets are fetched from all projects accessible by the token
+  # project_id: "your_bws_project_id"
+
+  # [Optional] List of additional secret names that must be present in Bitwarden
+  # before provisioning starts. These are validated after fetching from Bitwarden.
+  # Built-in required secrets:
+  #   - GHCR_TOKEN: GitHub Container Registry token for pulling Docker images
+  #   - GHCR_USERNAME: GitHub Container Registry username for authentication
+  #   - VPS_SSH_KEY: SSH private key for server provisioning and configuration
+  #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
+  #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
+  #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
+  required_vars: []
+  # Example:
+  # required_vars:
+  #   - MY_API_KEY
+  #   - DATABASE_PASSWORD
+  #   - STRIPE_SECRET

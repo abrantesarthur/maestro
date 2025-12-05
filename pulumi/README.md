@@ -1,8 +1,6 @@
 # Pulumi Infrastructure
 
-This directory contains a Dockerised Pulumi program that provisions the Cloudflare environment. The program currently targets the single `prod` stack.
-
-# FIXME: update example.maestro.yaml configuration to support more stacks
+This directory contains a Dockerised Pulumi program that provisions the Cloudflare environment. The program supports multiple stacks (`dev`, `staging`, `prod`) configured via `maestro.yaml`.
 
 ## Workflow
 
@@ -14,6 +12,8 @@ export DOMAIN="example.com"
 export CLOUDFLARE_ACCOUNT_ID="your_account_id"
 export SSH_PORT="22"
 export BACKEND_PORT="3000"
+export PULUMI_STACK="prod"
+export PULUMI_SERVERS_JSON='[{"roles":["backend","web"]}]'
 export BWS_ACCESS_TOKEN="your_bws_token"
 
 ./run.sh --command up
@@ -40,12 +40,14 @@ In the event that a server is destroyed, Pulumi correctly takes down the tunnels
 
 Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
 
-| Variable                | Source in maestro.yaml         |
-| ----------------------- | ------------------------------ |
-| `DOMAIN`                | `domain`                       |
-| `CLOUDFLARE_ACCOUNT_ID` | `pulumi.cloudflare_account_id` |
-| `SSH_PORT`              | `pulumi.ssh_port`              |
-| `BACKEND_PORT`          | `ansible.backend.port`         |
+| Variable                | Source in maestro.yaml                  |
+| ----------------------- | --------------------------------------- |
+| `DOMAIN`                | `domain`                                |
+| `CLOUDFLARE_ACCOUNT_ID` | `pulumi.cloudflare_account_id`          |
+| `SSH_PORT`              | `pulumi.ssh_port`                       |
+| `BACKEND_PORT`          | `ansible.backend.port`                  |
+| `PULUMI_STACK`          | Derived from `pulumi.stacks.<env>` keys |
+| `PULUMI_SERVERS_JSON`   | `pulumi.stacks.<env>.servers` (as JSON) |
 
 ## Required Secrets (from Bitwarden)
 
@@ -78,7 +80,3 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 ## Prerequisites
 
 - Docker installed locally (the script builds and runs a container).
-
-## Current Limitations
-
-- Only the `prod` stack is wired up; adding more stacks will require code and configuration changes.

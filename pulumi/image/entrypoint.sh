@@ -20,8 +20,10 @@ require_env_var "SSH_PORT"
 require_env_var "DOMAIN"
 require_env_var "CLOUDFLARE_ACCOUNT_ID"
 require_env_var "PULUMI_ACCESS_TOKEN" 
-require_env_var "PULUMI_COMMAND" 
-require_env_var "PULUMI_SSH_KEY_PATH" 
+require_env_var "PULUMI_COMMAND"
+require_env_var "PULUMI_STACK"
+require_env_var "PULUMI_SSH_KEY_PATH"
+require_env_var "PULUMI_SERVERS_JSON" 
 
 # Only provisioning commands need provider credentials
 if [[ "${PULUMI_COMMAND}" != "output" ]]; then
@@ -34,31 +36,32 @@ pulumi login
 
 print_stack_outputs() {
   echo "__PULUMI_OUTPUTS_BEGIN__"
-  pulumi stack output --stack prod --json
+  pulumi stack output --stack "${PULUMI_STACK}" --json
   echo "__PULUMI_OUTPUTS_END__"
 }
 
-# Inject required values in the prod configuration
+# Inject required values in the stack configuration
 case "$PULUMI_COMMAND" in
   up|refresh|cancel)
-    pulumi config set --stack prod maestro:domain "$DOMAIN" --non-interactive
-    pulumi config set --stack prod maestro:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
-    pulumi config set --stack prod maestro:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
-    pulumi config set --stack prod maestro:backendPort "$BACKEND_PORT" --non-interactive
-    pulumi config set --stack prod maestro:sshPort "$SSH_PORT" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:domain "$DOMAIN" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:backendPort "$BACKEND_PORT" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:sshPort "$SSH_PORT" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" maestro:servers "$PULUMI_SERVERS_JSON" --non-interactive
 esac
 
 # Run the requested Pulumi action
 case "$PULUMI_COMMAND" in
   up)
-    pulumi up --yes --stack prod
+    pulumi up --yes --stack "${PULUMI_STACK}"
     print_stack_outputs
     ;;
   refresh)
-    pulumi refresh --stack prod
+    pulumi refresh --stack "${PULUMI_STACK}"
     ;;
   cancel)
-    pulumi cancel --stack prod
+    pulumi cancel --stack "${PULUMI_STACK}"
     ;;
   output)
     print_stack_outputs

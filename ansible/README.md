@@ -9,10 +9,9 @@ This script is typically called by the parent `run.sh` which handles configurati
 ```bash
 # Configuration is passed via environment variables
 export DOMAIN="example.com"
-export BACKEND_PORT="3000"
+export BACKEND_PORT="3000"  # PORT is auto-injected into container env
 export BACKEND_IMAGE="ghcr.io/your-org/your-app"
 export BACKEND_IMAGE_TAG="latest"
-export BACKEND_ENV_PORT="3000"
 export BWS_ACCESS_TOKEN="your_bws_token"
 
 ./run.sh \
@@ -26,15 +25,13 @@ The script validates required inputs, ensures `ansible-builder`/`ansible-navigat
 
 Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
 
-# FIXME: add "Description" column explaining what each env var is used for.
-
-| Variable            | Source in maestro.yaml  |
-| ------------------- | ----------------------- |
-| `DOMAIN`            | `domain`                |
-| `BACKEND_PORT`      | `ansible.backend.port`  |
-| `BACKEND_IMAGE`     | `ansible.backend.image` |
-| `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   |
-| `BACKEND_ENV_*`     | `ansible.backend.env.*` |
+| Variable            | Source in maestro.yaml  | Purpose                                               |
+| ------------------- | ----------------------- | ----------------------------------------------------- |
+| `DOMAIN`            | `domain`                | Domain for cloudflare DNS provisioning                |
+| `BACKEND_PORT`      | `ansible.backend.port`  | Port mapping for Docker container                     |
+| `BACKEND_IMAGE`     | `ansible.backend.image` | Backend image to pull from GHCR and run in a server.  |
+| `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   | Tag/version of the backend image                      |
+| `BACKEND_ENV_*`     | `ansible.backend.env.*` | Environment variables passed to the backend container |
 
 ### Backend Container Environment
 
@@ -44,12 +41,11 @@ Environment variables needed by your backend containerized application can be co
 ansible:
   backend:
     env:
-      PORT: 3000
       DATABASE_URL: postgres://user:pass@host:5432/db
       API_KEY: your_api_key
 ```
 
-Each key-value pair becomes an environment variable in the container (e.g., `PORT=3000`).
+Each key-value pair becomes an environment variable in the container. Note that `PORT` is automatically injected from `ansible.backend.port` and should not be set here.
 
 ## CLI Flags
 
@@ -98,9 +94,22 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
 
-# FIXME: allo to specify tags in the maestro.yaml configuration
-
 - One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
+
+### Multi-Stack Host Targeting
+
+When multiple Pulumi stacks are defined (e.g., `staging` and `prod`), all hosts from all stacks are aggregated and passed to Ansible. Each server is tagged with its stack name in addition to its roles:
+
+```json
+{
+  "hosts": [
+    { "hostname": "ssh0.example.com", "tags": ["prod", "backend", "web"] },
+    { "hostname": "ssh1.example.com", "tags": ["staging", "backend", "web"] }
+  ]
+}
+```
+
+The built-in playbooks target servers by role (`backend`, `web`), applying identical configuration to all servers with that role regardless of which stack they belong to. This means a prod server and a staging server tagged with backend receive the same Docker and application setup.
 
 ## Prerequisites
 
