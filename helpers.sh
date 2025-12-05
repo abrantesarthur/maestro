@@ -186,7 +186,7 @@ config_get_bool() {
   value="$(config_get "${echo_fn}" "${config_file}" "${yq_path}" "${default_value}")"
 
   # Normalize to lowercase and check for truthy values
-  case "${value,,}" in
+  case "${value}" in
     true|yes|1|on)
       echo "true"
       ;;

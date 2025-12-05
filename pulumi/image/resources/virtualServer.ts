@@ -15,18 +15,20 @@ export interface VirtualServerArgs {
   region: pulumi.Input<digitalOcean.Region>;
   /** A list of SSH key IDs to enable in this virtual server */
   sshKeys: pulumi.Input<string[]>;
-  /** A list of tags to add to this droplet */
-  tags: pulumi.Input<VpsTag[]>;
+  /** A list of tags to add to this droplet (environment + roles + custom) */
+  tags: pulumi.Input<string[]>;
   /** The virtual server index */
   index: pulumi.Input<number>;
 }
 
-/** The values that can be used to tag a VirtualServer */
+/** The pre-defined tag values for a VirtualServer */
 export enum VpsTag {
-  /** The VPS runs the production environment */
-  Prod = "prod",
+  /** The VPS runs the development environment */
+  Dev = "dev",
   /** The VPS runs the staging environment */
   Staging = "staging",
+  /** The VPS runs the production environment */
+  Prod = "prod",
   /** The VPS hosts the backend application */
   Backend = "backend",
   /** The VPS hosts the web application */
@@ -115,10 +117,12 @@ export class VirtualServer extends pulumi.ComponentResource {
             port: 22,
           },
         ];
-        if (tags.includes(VpsTag.Backend)) {
-          const isStaging = tags.includes(VpsTag.Staging);
+        if (tags.includes(VpsTag.Backend as string)) {
+          const isStaging = tags.includes(VpsTag.Staging as string);
+          const isDev = tags.includes(VpsTag.Dev as string);
+          const envPrefix = isDev ? "dev-" : isStaging ? "staging-" : "";
           ingressList.push({
-            hostname: `${isStaging ? "staging-" : ""}api.${domain}`,
+            hostname: `${envPrefix}api.${domain}`,
             protocol: TunnelIngressProtocol.Http,
             port: Number(backendPort),
           });

@@ -7,3 +7,4 @@ website/dist/
 ansible/**/execution_environment/files/website/
 .env
 shared.env
+maestro.yaml

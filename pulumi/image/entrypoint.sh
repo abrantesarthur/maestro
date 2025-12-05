@@ -21,7 +21,8 @@ require_env_var "DOMAIN"
 require_env_var "CLOUDFLARE_ACCOUNT_ID"
 require_env_var "PULUMI_ACCESS_TOKEN" 
 require_env_var "PULUMI_COMMAND" 
-require_env_var "PULUMI_SSH_KEY_PATH" 
+require_env_var "PULUMI_SSH_KEY_PATH"
+require_env_var "PULUMI_SERVERS_JSON" 
 
 # Only provisioning commands need provider credentials
 if [[ "${PULUMI_COMMAND}" != "output" ]]; then
@@ -46,6 +47,7 @@ case "$PULUMI_COMMAND" in
     pulumi config set --stack prod maestro:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
     pulumi config set --stack prod maestro:backendPort "$BACKEND_PORT" --non-interactive
     pulumi config set --stack prod maestro:sshPort "$SSH_PORT" --non-interactive
+    pulumi config set --stack prod maestro:servers "$PULUMI_SERVERS_JSON" --non-interactive
 esac
 
 # Run the requested Pulumi action

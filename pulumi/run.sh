@@ -107,6 +107,7 @@ docker_env=(
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
   -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
+  -e "PULUMI_SERVERS_JSON=${PULUMI_SERVERS_JSON:-[]}"
 )
 docker_cmd=(docker run -it --rm)
 if [[ "${NEEDS_PROVIDER_CREDS}" == "true" ]]; then

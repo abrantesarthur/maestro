@@ -84,6 +84,9 @@ PULUMI_COMMAND="$(cfg_get '.pulumi.command' 'up')"
 CLOUDFLARE_ACCOUNT_ID="$(cfg_get '.pulumi.cloudflare_account_id' '')"
 SSH_PORT="$(cfg_get '.pulumi.ssh_port' '22')"
 
+# Pulumi servers configuration (read as JSON for validation and export)
+PULUMI_SERVERS_JSON="$(yq eval -o=json '.pulumi.servers // []' "${CONFIG_FILE}" 2>/dev/null)"
+
 # Ansible configuration
 ANSIBLE_ENABLED="$(cfg_get_bool '.ansible.enabled' 'true')"
 WEBSITE_DIR="$(cfg_get '.ansible.website_dir' '')"
@@ -115,6 +118,47 @@ export BACKEND_ENV_PORT="${BACKEND_PORT}"
 
 if [[ "${PULUMI_ENABLED}" == "true" ]]; then
   require_var "${CLOUDFLARE_ACCOUNT_ID}" "pulumi.cloudflare_account_id is required when pulumi is enabled"
+  
+  # Validate pulumi.servers is present and non-empty
+  server_count="$(echo "${PULUMI_SERVERS_JSON}" | jq 'length')"
+  if [[ "${server_count}" -eq 0 ]]; then
+    log "Error: pulumi.servers is required when pulumi is enabled. Define at least one server."
+    exit 1
+  fi
+  
+  # Validate each server entry
+  for i in $(seq 0 $((server_count - 1))); do
+    server="$(echo "${PULUMI_SERVERS_JSON}" | jq ".[$i]")"
+    env_tag="$(echo "${server}" | jq -r '.environment // ""')"
+    roles="$(echo "${server}" | jq -r '.roles // []')"
+    roles_count="$(echo "${server}" | jq '.roles // [] | length')"
+    
+    # Validate environment tag
+    if [[ -z "${env_tag}" ]]; then
+      log "Error: pulumi.servers[$i].environment is required (must be one of: dev, staging, prod)"
+      exit 1
+    fi
+    if [[ "${env_tag}" != "dev" && "${env_tag}" != "staging" && "${env_tag}" != "prod" ]]; then
+      log "Error: pulumi.servers[$i].environment '${env_tag}' is invalid (must be one of: dev, staging, prod)"
+      exit 1
+    fi
+    
+    # Validate roles
+    if [[ "${roles_count}" -eq 0 ]]; then
+      log "Error: pulumi.servers[$i].roles is required (must include at least one of: backend, web)"
+      exit 1
+    fi
+    
+    # Validate each role is valid
+    for j in $(seq 0 $((roles_count - 1))); do
+      role="$(echo "${server}" | jq -r ".roles[$j]")"
+      if [[ "${role}" != "backend" && "${role}" != "web" ]]; then
+        log "Error: pulumi.servers[$i].roles contains invalid role '${role}' (must be one of: backend, web)"
+        exit 1
+      fi
+    done
+  done
+  log "Validated ${server_count} server(s) in pulumi.servers"
 fi
 
 if [[ "${ANSIBLE_ENABLED}" == "true" && "${WEB_ENABLED}" == "true" ]]; then
@@ -142,6 +186,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "  pulumi.command: ${PULUMI_COMMAND}"
   log "  pulumi.cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID}"
   log "  pulumi.ssh_port: ${SSH_PORT}"
+  log "  pulumi.servers: $(echo "${PULUMI_SERVERS_JSON}" | jq -c '.')"
   log "  ansible.enabled: ${ANSIBLE_ENABLED}"
   log "  ansible.website_dir: ${WEBSITE_DIR}"
   log "  ansible.web.enabled: ${WEB_ENABLED}"
@@ -225,6 +270,7 @@ capture_pulumi_hosts() {
   export CLOUDFLARE_ACCOUNT_ID
   export SSH_PORT
   export BACKEND_PORT
+  export PULUMI_SERVERS_JSON
 
   local pulumi_args=(
     --command "${pulumi_command}"
