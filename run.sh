@@ -126,6 +126,11 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && "${BACKEND_ENABLED}" == "true" ]]; then
   require_var "${BACKEND_IMAGE_TAG}" "ansible.backend.tag is required when backend provisioning is enabled"
 fi
 
+if [[ "${SECRETS_PROVIDER}" != "bws" ]]; then
+  log "Error: secrets.provider must be 'bws'. Other providers are not supported yet."
+  exit 1
+fi
+
 # ============================================
 # Display configuration (dry-run mode)
 # ============================================
@@ -158,7 +163,6 @@ fi
 # ============================================
 # Fetch secrets from Bitwarden
 # ============================================
-# FIXME: fail if SECRETS_PROVIDER is not bws
 if [[ "${SECRETS_PROVIDER}" == "bws" ]]; then
   log "Fetching secrets from Bitwarden..."
   # Export BWS_PROJECT_ID if specified in config

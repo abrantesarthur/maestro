@@ -18,7 +18,14 @@ RUN curl -fsSL \
   && install /tmp/bws/bws /usr/local/bin/bws \
   && rm -rf /tmp/bws /tmp/bws.zip
 
-# FIXME: install yq
+###############################
+# Install yq (YAML processor)
+###############################
+ARG YQ_VERSION="4.44.1"
+RUN curl -fsSL \
+      "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
+      -o /usr/local/bin/yq \
+  && chmod +x /usr/local/bin/yq
 
 # cleanup
 RUN rm -rf /var/lib/apt/lists/*
