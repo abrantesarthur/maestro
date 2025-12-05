@@ -1,6 +1,6 @@
 ---
-- name: Provision general permissioning in all hosts (firewall policies, groups, etc.)
-  hosts: all
+- name: Provision permissions (firewall policies, groups, etc.)
+  hosts: perms
   become: true
   roles:
     - ufw

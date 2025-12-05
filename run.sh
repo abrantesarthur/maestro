@@ -90,11 +90,6 @@ PULUMI_STACKS_JSON="$(yq eval -o=json '.pulumi.stacks // {}' "${CONFIG_FILE}" 2>
 # Ansible configuration
 ANSIBLE_ENABLED="$(cfg_get_bool '.ansible.enabled' 'true')"
 
-# Ansible sub-components
-WEB_ENABLED="$(cfg_get_bool '.ansible.web.enabled' 'true')"
-BACKEND_ENABLED="$(cfg_get_bool '.ansible.backend.enabled' 'true')"
-PERMS_ENABLED="$(cfg_get_bool '.ansible.perms.enabled' 'true')"
-
 # Perms configuration - managed groups (read as JSON array)
 MANAGED_GROUPS="$(yq eval -o=json '.ansible.perms.groups // ["devops"]' "${CONFIG_FILE}" 2>/dev/null)"
 
@@ -180,15 +175,15 @@ if [[ "${PULUMI_ENABLED}" == "true" ]]; then
       
       # Validate roles
       if [[ "${roles_count}" -eq 0 ]]; then
-        log "Error: pulumi.stacks.${stack_name}.servers[$i].roles is required (must include at least one of: backend, web)"
+        log "Error: pulumi.stacks.${stack_name}.servers[$i].roles is required (must include at least one of: backend, web, perms)"
         exit 1
       fi
       
       # Validate each role is valid
       for j in $(seq 0 $((roles_count - 1))); do
         role="$(echo "${server}" | jq -r ".roles[$j]")"
-        if [[ "${role}" != "backend" && "${role}" != "web" ]]; then
-          log "Error: pulumi.stacks.${stack_name}.servers[$i].roles contains invalid role '${role}' (must be one of: backend, web)"
+        if [[ "${role}" != "backend" && "${role}" != "web" && "${role}" != "perms" ]]; then
+          log "Error: pulumi.stacks.${stack_name}.servers[$i].roles contains invalid role '${role}' (must be one of: backend, web, perms)"
           exit 1
         fi
       done
@@ -197,11 +192,19 @@ if [[ "${PULUMI_ENABLED}" == "true" ]]; then
     total_server_count=$((total_server_count + server_count))
   done
   log "Validated ${#PULUMI_STACK_NAMES[@]} stack(s) with ${total_server_count} total server(s)"
+  
+  # Collect all unique roles from all stacks for role-based Ansible provisioning
+  ALL_ROLES_JSON="$(echo "${PULUMI_STACKS_JSON}" | jq '[.[].servers[].roles[]] | unique')"
+  HAS_ROLE_WEB="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "web")')"
+  HAS_ROLE_BACKEND="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "backend")')"
+  HAS_ROLE_PERMS="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "perms")')"
+  log "Detected roles: $(echo "${ALL_ROLES_JSON}" | jq -c '.')"
 fi
 
-if [[ "${ANSIBLE_ENABLED}" == "true" && "${WEB_ENABLED}" == "true" ]]; then
+# Role-based validation: if a role is used, its config must exist
+if [[ "${ANSIBLE_ENABLED}" == "true" && "${HAS_ROLE_WEB:-false}" == "true" ]]; then
   if [[ -z "${WEB_MODE}" ]]; then
-    log "Error: ansible.web.static or ansible.web.docker must be configured when web provisioning is enabled"
+    log "Error: ansible.web.static or ansible.web.docker must be configured when servers have the 'web' role"
     exit 1
   fi
   
@@ -219,9 +222,9 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && "${WEB_ENABLED}" == "true" ]]; then
   fi
 fi
 
-if [[ "${ANSIBLE_ENABLED}" == "true" && "${BACKEND_ENABLED}" == "true" ]]; then
-  require_var "${BACKEND_IMAGE}" "ansible.backend.image is required when backend provisioning is enabled"
-  require_var "${BACKEND_IMAGE_TAG}" "ansible.backend.tag is required when backend provisioning is enabled"
+if [[ "${ANSIBLE_ENABLED}" == "true" && "${HAS_ROLE_BACKEND:-false}" == "true" ]]; then
+  require_var "${BACKEND_IMAGE}" "ansible.backend.image is required when servers have the 'backend' role"
+  require_var "${BACKEND_IMAGE_TAG}" "ansible.backend.tag is required when servers have the 'backend' role"
 fi
 
 if [[ "${SECRETS_PROVIDER}" != "bws" ]]; then
@@ -241,31 +244,32 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "  pulumi.cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID}"
   log "  pulumi.ssh_port: ${SSH_PORT}"
   log "  pulumi.stacks: $(echo "${PULUMI_STACKS_JSON}" | jq -c '.')"
+  log "  detected roles: ${ALL_ROLES_JSON:-[]}"
   log "  ansible.enabled: ${ANSIBLE_ENABLED}"
-  log "  ansible.web.enabled: ${WEB_ENABLED}"
-  log "  ansible.web.mode: ${WEB_MODE:-<not configured>}"
+  log "  ansible.web (role=${HAS_ROLE_WEB:-false}):"
+  log "    mode: ${WEB_MODE:-<not configured>}"
   if [[ "${WEB_MODE}" == "static" ]]; then
-    log "  ansible.web.static.source: ${WEB_STATIC_SOURCE}"
+    log "    static.source: ${WEB_STATIC_SOURCE}"
     if [[ "${WEB_STATIC_SOURCE}" == "local" ]]; then
-      log "  ansible.web.static.dir: ${WEB_STATIC_DIR}"
-      log "  ansible.web.static.build: ${WEB_STATIC_BUILD:-<none>}"
-      log "  ansible.web.static.dist: ${WEB_STATIC_DIST}"
+      log "    static.dir: ${WEB_STATIC_DIR}"
+      log "    static.build: ${WEB_STATIC_BUILD:-<none>}"
+      log "    static.dist: ${WEB_STATIC_DIST}"
     else
-      log "  ansible.web.static.image: ${WEB_STATIC_IMAGE}"
-      log "  ansible.web.static.tag: ${WEB_STATIC_TAG}"
-      log "  ansible.web.static.path: ${WEB_STATIC_PATH}"
+      log "    static.image: ${WEB_STATIC_IMAGE}"
+      log "    static.tag: ${WEB_STATIC_TAG}"
+      log "    static.path: ${WEB_STATIC_PATH}"
     fi
   elif [[ "${WEB_MODE}" == "docker" ]]; then
-    log "  ansible.web.docker.image: ${WEB_DOCKER_IMAGE}"
-    log "  ansible.web.docker.tag: ${WEB_DOCKER_TAG}"
-    log "  ansible.web.docker.port: ${WEB_DOCKER_PORT}"
+    log "    docker.image: ${WEB_DOCKER_IMAGE}"
+    log "    docker.tag: ${WEB_DOCKER_TAG}"
+    log "    docker.port: ${WEB_DOCKER_PORT}"
   fi
-  log "  ansible.backend.enabled: ${BACKEND_ENABLED}"
-  log "  ansible.backend.image: ${BACKEND_IMAGE}"
-  log "  ansible.backend.tag: ${BACKEND_IMAGE_TAG}"
-  log "  ansible.backend.port: ${BACKEND_PORT}"
-  log "  ansible.perms.enabled: ${PERMS_ENABLED}"
-  log "  ansible.perms.groups: ${MANAGED_GROUPS}"
+  log "  ansible.backend (role=${HAS_ROLE_BACKEND:-false}):"
+  log "    image: ${BACKEND_IMAGE}"
+  log "    tag: ${BACKEND_IMAGE_TAG}"
+  log "    port: ${BACKEND_PORT}"
+  log "  ansible.perms (role=${HAS_ROLE_PERMS:-false}):"
+  log "    groups: ${MANAGED_GROUPS}"
   log "  secrets.provider: ${SECRETS_PROVIDER}"
   log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
   # Show BACKEND_ENV_* variables
@@ -481,13 +485,14 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
     --skip-bws
   )
 
-  if [[ "${WEB_ENABLED}" != "true" ]]; then
+  # Role-based provisioning: skip playbooks if no server has that role
+  if [[ "${HAS_ROLE_WEB:-false}" != "true" ]]; then
     ansible_args+=(--skip-web)
   fi
-  if [[ "${BACKEND_ENABLED}" != "true" ]]; then
+  if [[ "${HAS_ROLE_BACKEND:-false}" != "true" ]]; then
     ansible_args+=(--skip-backend)
   fi
-  if [[ "${PERMS_ENABLED}" != "true" ]]; then
+  if [[ "${HAS_ROLE_PERMS:-false}" != "true" ]]; then
     ansible_args+=(--skip-perms)
   fi
 

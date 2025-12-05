@@ -47,8 +47,8 @@ pulumi:
     # Production stack example
     prod:
       servers:
-        # Single production server (handles both backend and web)
-        - roles: [backend, web] # Required: one or more of backend, web
+        # Single production server (handles backend, web, and perms)
+        - roles: [backend, web, perms] # Required: one or more of backend, web, perms
           # tags: []                # Optional: custom user-defined tags
           # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
           # size: s-1vcpu-1gb       # Optional, default: s-1vcpu-1gb
@@ -59,26 +59,30 @@ pulumi:
   #   staging:
   #     servers:
   #       # Staging server for testing
-  #       - roles: [backend, web]
+  #       - roles: [backend, web, perms]
   #         tags: [canary]          # Custom tag for canary deployments
   #         region: nyc1
   #   prod:
   #     servers:
   #       # Production backend server
-  #       - roles: [backend]
+  #       - roles: [backend, perms]
   #         size: s-2vcpu-4gb       # Larger size for production
   #         region: nyc1
   #       # Production web server
-  #       - roles: [web]
+  #       - roles: [web, perms]
   #         region: nyc1
 
 # ============================================
 # Ansible Configuration
 # ============================================
-# Ansible configures the provisioned servers:
-# - nginx for web serving (static files or reverse proxy)
-# - Docker and backend application container
-# - System permissions and groups
+# Ansible configures the provisioned servers based on their roles:
+# - web role: nginx for web serving (static files or reverse proxy)
+# - backend role: Docker and backend application container
+# - perms role: System permissions, firewall rules, and groups
+#
+# Provisioning is role-based: a playbook runs only on servers that have the
+# corresponding role in pulumi.stacks.*.servers[].roles. If no server has a
+# role, that playbook is skipped entirely.
 ansible:
   # [Optional, default: true] Set to false to skip Ansible provisioning.
   # Useful if you want to manually configure your servers. You can SSH via the
@@ -86,11 +90,9 @@ ansible:
   enabled: true
 
   # Web server provisioning (nginx)
+  # Required if any server has the "web" role
   # Choose ONE mode: static (serve files directly) or docker (reverse proxy)
   web:
-    # [Optional, default: true] Set to false to skip web provisioning
-    enabled: true
-
     # MODE 1: Static site - nginx serves files directly
     # Use this for static sites (HTML/CSS/JS), SPAs, or pre-built frontends
     static:
@@ -143,15 +145,13 @@ ansible:
     #     # Add your application-specific environment variables
 
   # Backend application provisioning
+  # Required if any server has the "backend" role
   backend:
-    # [Optional, default: true] Set to false to skip backend provisioning
-    enabled: true
-
-    # [Required when backend.enabled is true] Full container image reference
+    # [Required] Full container image reference
     # Currently only GitHub Container Registry (ghcr.io) is supported
     image: ghcr.io/your-org/your-app
 
-    # [Required when backend.enabled is true] Image tag to deploy
+    # [Required] Image tag to deploy
     tag: latest
 
     # [Optional, default: 3000] Port the backend application listens on
@@ -169,13 +169,12 @@ ansible:
       # API_KEY: your_api_key_here
 
   # System permissions provisioning
+  # Required if any server has the "perms" role
   perms:
-    # [Optional, default: true] Set to false to skip permissions provisioning
     # This playbook configures:
     # - UFW firewall: denies incoming traffic by default, allows SSH, and
     #   restricts HTTPS to Cloudflare IPs only
     # - System groups: creates required groups and removes unmanaged custom groups
-    enabled: true
 
     # [Optional, default: [devops]] List of system groups to create and manage
     # Groups not in this list (except system groups and exclusions) will be removed

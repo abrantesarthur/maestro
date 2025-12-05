@@ -42,34 +42,42 @@ pulumi:
   stacks: # Define one or more stacks (dev, staging, prod)
     prod:
       servers:
-        - roles: [backend, web] # Server roles
+        - roles: [backend, web, perms] # Server roles determine what gets provisioned
           # size: s-1vcpu-1gb  # Optional: DigitalOcean droplet size
           # region: nyc1       # Optional: DigitalOcean region
-    # staging:                 # Uncomment to add a staging stack
-    #   servers:
-    #     - roles: [backend, web]
 
 ansible:
-  enabled: true # Enable/disable Ansible provisioning
-  website_dir: "/path/to/site" # Path to website source
-  web:
-    enabled: true # Enable/disable web (nginx) provisioning
-  backend:
-    enabled: true # Enable/disable backend provisioning
+  enabled: true # Enable/disable all Ansible provisioning
+  web: # Required if any server has "web" role
+    static:
+      source: local
+      dir: "/path/to/site"
+  backend: # Required if any server has "backend" role
     image: ghcr.io/org/app # Container image
     tag: latest # Image tag
     port: 3000 # Backend port
     env: # Environment variables for container
-      PORT: 3000
       DATABASE_URL: postgres://...
-  perms:
-    enabled: true # Enable/disable permissions provisioning
+  perms: # Required if any server has "perms" role
+    groups: [devops] # System groups to manage
 
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
   project_id: "" # Optional BWS project ID
   required_vars: [] # Additional secrets to validate
 ```
+
+### Server Roles
+
+Provisioning is **role-based**: Ansible playbooks run only on servers that have the corresponding role. Available roles:
+
+| Role      | Ansible Playbook | Purpose                               |
+| --------- | ---------------- | ------------------------------------- |
+| `backend` | `backend.yml`    | Docker + backend container deployment |
+| `web`     | `web.yml`        | nginx (static files or reverse proxy) |
+| `perms`   | `perms.yml`      | UFW firewall rules + system groups    |
+
+If no server has a particular role, that playbook is skipped entirely.
 
 ### Multi-Stack Support
 
@@ -80,15 +88,15 @@ pulumi:
   stacks:
     staging:
       servers:
-        - roles: [backend, web]
+        - roles: [backend, web, perms]
     prod:
       servers:
-        - roles: [backend]
+        - roles: [backend, perms]
           size: s-2vcpu-4gb
-        - roles: [web]
+        - roles: [web, perms]
 ```
 
-When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
+When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`, `perms`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
 
 ### Required Environment Variable
 
@@ -106,9 +114,11 @@ When you run `./run.sh`, Maestro provisions each defined stack sequentially, the
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-# FIXME: think better the server tag strategy within pulumi and ansible. How can we make it so that if a server has a recognized tag (role) within the pulumi section, then we must have a corresponding role for that tag in the ansible section? Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
+FIXME: think better the whole perms playbook. We should be able to customize permissioning per server, not have every server with the same permissioning configuraiton.
 
-#FIXME: update the provisioning of dev and staging stacks to, for instance, serve the resources in different domains (e.g., dev.example.com, stag.example.com, etc.). Make any other changes needed...
+FIXME: Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
+
+FIXME: update the provisioning of dev and staging stacks to, for instance, serve the resources in different domains (e.g., dev.example.com, stag.example.com, etc.). Make any other changes needed...
 
 | Secret                 | Purpose                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
