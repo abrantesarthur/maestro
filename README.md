@@ -80,13 +80,11 @@ Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The foll
 
 # FIXME: explain somewhere that we currently only support DigitalOcean and add a Future Improvements section asking for more support later.
 
-# FIXME: update Future Improvements section to say that we need to figure out a way
+# FIXME: update Future Improvements section to say that we need to figure out a way to provision the ssh keys into the servers automatically
 
-# FIXME: update future improvements to ask for a way to validate the YAML format. I
+# FIXME: update future improvements to ask for a way to validate the YAML format. I used something in transcend to do this via io-ts I think.
 
-used something in transcend to do this via io-ts I think.
-
-to provision the ssh keys into the servers automatically
+# FIXME: think better the server tag strategy within pulumi and ansible. How can we make it so that if a server has a recognized tag (role) within the pulumi section, then we must have a corresponding role for that tag in the ansible section? Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
 
 | Secret                 | Purpose                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
