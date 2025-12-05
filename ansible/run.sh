@@ -47,6 +47,9 @@ Web configuration is passed via environment variables:
   WEB_DOCKER_IMAGE                 Docker web app image (when mode=docker)
   WEB_DOCKER_TAG                   Docker web app tag (when mode=docker)
   WEB_DOCKER_PORT                  Docker web app port (when mode=docker)
+
+Perms configuration is passed via environment variables:
+  MANAGED_GROUPS                   JSON array of groups to manage (default: ["devops"])
 EOF
 }
 
@@ -241,6 +244,9 @@ export WEB_MODE="${WEB_MODE:-}"
 export WEB_DOCKER_IMAGE="${WEB_DOCKER_IMAGE:-}"
 export WEB_DOCKER_TAG="${WEB_DOCKER_TAG:-latest}"
 export WEB_DOCKER_PORT="${WEB_DOCKER_PORT:-3000}"
+
+# Export perms configuration for Ansible playbooks
+export MANAGED_GROUPS="${MANAGED_GROUPS:-}"
 
 
 if [[ "${SKIP_WEB}" == "false" ]]; then

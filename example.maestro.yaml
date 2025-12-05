@@ -169,15 +169,23 @@ ansible:
       # API_KEY: your_api_key_here
 
   # System permissions provisioning
-  # FIXME: allow configuring groups via maestro.yaml. Add to README.md future improvements section.
   perms:
     # [Optional, default: true] Set to false to skip permissions provisioning
     # This playbook configures:
     # - UFW firewall: denies incoming traffic by default, allows SSH, and
     #   restricts HTTPS to Cloudflare IPs only
-    # - System groups: creates required groups (e.g., devops) and removes
-    #   unmanaged custom groups
+    # - System groups: creates required groups and removes unmanaged custom groups
     enabled: true
+
+    # [Optional, default: [devops]] List of system groups to create and manage
+    # Groups not in this list (except system groups and exclusions) will be removed
+    groups:
+      - devops
+    # Example with multiple groups:
+    # groups:
+    #   - devops
+    #   - docker
+    #   - developers
 
 # ============================================
 # Secrets Configuration

@@ -1,0 +1,11 @@
+---
+web_docker_container_name: web
+web_docker_container_port: "{{ lookup('env', 'WEB_DOCKER_PORT') | default('3000', true) }}"
+web_docker_host_port: "{{ lookup('env', 'WEB_DOCKER_PORT') | default('3000', true) }}"
+web_docker_bind_address: 127.0.0.1
+# web_docker_env is dynamically built from WEB_DOCKER_ENV_* environment variables in tasks
+# Example: WEB_DOCKER_ENV_MY_VAR=value becomes MY_VAR=value in the container
+web_docker_image: "{{ lookup('env', 'WEB_DOCKER_IMAGE') }}"
+web_docker_image_tag: "{{ lookup('env', 'WEB_DOCKER_TAG') | default('latest', true) }}"
+ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') }}"
+ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"

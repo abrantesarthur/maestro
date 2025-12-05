@@ -1,0 +1,49 @@
+---
+- name: Build web docker environment from WEB_DOCKER_ENV_* variables
+  ansible.builtin.shell: |
+    env | grep '^WEB_DOCKER_ENV_' | sed 's/^WEB_DOCKER_ENV_//' || true
+  delegate_to: localhost
+  become: false
+  register: web_docker_env_raw
+  changed_when: false
+
+- name: Parse web docker environment variables
+  ansible.builtin.set_fact:
+    web_docker_env: "{{ web_docker_env_raw.stdout_lines | map('split', '=', 1) | items2dict(key_name=0, value_name=1) }}"
+  when: web_docker_env_raw.stdout_lines | length > 0
+
+- name: Set empty web docker environment if no variables found
+  ansible.builtin.set_fact:
+    web_docker_env: {}
+  when: web_docker_env_raw.stdout_lines | length == 0
+
+- name: Ensure GHCR credentials are present
+  ansible.builtin.assert:
+    that:
+      - ghcr_token | length > 0
+      - ghcr_username | length > 0
+    fail_msg: "GHCR_TOKEN and GHCR_USERNAME must be provided to pull from GHCR."
+
+- name: Log into GHCR
+  community.docker.docker_login:
+    registry_url: ghcr.io
+    username: "{{ ghcr_username }}"
+    password: "{{ ghcr_token }}"
+  no_log: true
+
+- name: Pull web docker image
+  community.docker.docker_image:
+    name: "{{ web_docker_image }}"
+    tag: "{{ web_docker_image_tag }}"
+    source: pull
+    force_source: true
+
+- name: Run web docker container
+  community.docker.docker_container:
+    name: "{{ web_docker_container_name }}"
+    image: "{{ web_docker_image }}:{{ web_docker_image_tag }}"
+    restart_policy: unless-stopped
+    recreate: true
+    published_ports:
+      - "{{ web_docker_bind_address }}:{{ web_docker_host_port }}:{{ web_docker_container_port }}"
+    env: "{{ web_docker_env }}"
