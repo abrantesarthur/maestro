@@ -10,7 +10,6 @@ import {
 
 /** Server configuration from maestro.yaml */
 interface ServerConfig {
-  environment: string;
   roles: string[];
   tags?: string[];
   image?: string;
@@ -20,6 +19,9 @@ interface ServerConfig {
 
 const stackConfig = new pulumi.Config("maestro");
 const domain = stackConfig.require("domain");
+
+// Get the current stack name (dev, staging, or prod) to use as environment tag
+const stackName = pulumi.getStack();
 
 // Read servers configuration from maestro.yaml (passed via Pulumi config)
 const serversJson = stackConfig.require("servers");
@@ -54,12 +56,12 @@ const regionMap: Record<string, digitalOcean.Region> = {
   sgp1: digitalOcean.Region.SGP1,
 };
 
-// Build VirtualServerArgs from config, combining environment + roles + custom tags
+// Build VirtualServerArgs from config, combining stack name + roles + custom tags
 const VPS_ARGS: Omit<VirtualServerArgs, "index">[] = serversConfig.map(
   (server) => {
-    // Combine all tags: environment + roles + custom tags
+    // Combine all tags: stack name (as environment) + roles + custom tags
     const allTags: string[] = [
-      server.environment,
+      stackName,
       ...server.roles,
       ...(server.tags || []),
     ];

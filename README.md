@@ -39,6 +39,15 @@ pulumi:
   command: up # Pulumi command: up, refresh, cancel, output
   cloudflare_account_id: "" # Your Cloudflare account ID
   ssh_port: 22 # SSH port for tunnels
+  stacks: # Define one or more stacks (dev, staging, prod)
+    prod:
+      servers:
+        - roles: [backend, web] # Server roles
+          # size: s-1vcpu-1gb  # Optional: DigitalOcean droplet size
+          # region: nyc1       # Optional: DigitalOcean region
+    # staging:                 # Uncomment to add a staging stack
+    #   servers:
+    #     - roles: [backend, web]
 
 ansible:
   enabled: true # Enable/disable Ansible provisioning
@@ -61,6 +70,25 @@ secrets:
   project_id: "" # Optional BWS project ID
   required_vars: [] # Additional secrets to validate
 ```
+
+### Multi-Stack Support
+
+Maestro supports multiple isolated environments through Pulumi stacks. Each stack (`dev`, `staging`, `prod`) maintains its own infrastructure state.
+
+```yaml
+pulumi:
+  stacks:
+    staging:
+      servers:
+        - roles: [backend, web]
+    prod:
+      servers:
+        - roles: [backend]
+          size: s-2vcpu-4gb
+        - roles: [web]
+```
+
+When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration.
 
 ### Required Environment Variable
 
@@ -108,6 +136,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 1. Loads configuration from `maestro.yaml`
 2. Fetches secrets from Bitwarden Secrets Manager
-3. Runs Pulumi to provision cloud infrastructure (DNS, servers, tunnels)
-4. Waits for servers to accept connection via SSH tunnels.
-5. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)
+3. Runs Pulumi for each defined stack (dev, staging, prod) to provision cloud infrastructure (DNS, servers, tunnels)
+4. Aggregates hosts from all stacks
+5. Waits for servers to accept connection via SSH tunnels
+6. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)

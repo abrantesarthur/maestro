@@ -40,36 +40,37 @@ pulumi:
   # [Optional, default: 22] SSH port for Cloudflare tunnel configuration
   ssh_port: 22
 
-  # [Required when pulumi.enabled is true] Server definitions
-  # Each entry provisions a DigitalOcean droplet with the specified configuration.
-  # Tags are used by Ansible to target specific servers with playbooks.
-  servers:
-    # Single production server example (handles both backend and web)
-    - environment: prod           # Required: exactly one of dev, staging, prod
-      roles: [backend, web]       # Required: one or more of backend, web
-      # tags: []                  # Optional: custom user-defined tags
-      # image: ubuntu-25-04-x64   # Optional, default: ubuntu-25-04-x64
-      # size: s-1vcpu-1gb         # Optional, default: s-1vcpu-1gb
-      # region: nyc1              # Optional, default: nyc1
+  # [Required when pulumi.enabled is true] Stack definitions
+  # Each stack (dev, staging, prod) represents an isolated environment.
+  # Maestro provisions each defined stack sequentially.
+  stacks:
+    # Production stack example
+    prod:
+      servers:
+        # Single production server (handles both backend and web)
+        - roles: [backend, web] # Required: one or more of backend, web
+          # tags: []                # Optional: custom user-defined tags
+          # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
+          # size: s-1vcpu-1gb       # Optional, default: s-1vcpu-1gb
+          # region: nyc1            # Optional, default: nyc1
 
-  # Multi-server setup example (uncomment to use):
-  # servers:
-  #   # Staging server for testing
-  #   - environment: staging
-  #     roles: [backend, web]
-  #     tags: [canary]            # Custom tag for canary deployments
-  #     region: nyc1
-  #
-  #   # Production backend server
-  #   - environment: prod
-  #     roles: [backend]
-  #     size: s-2vcpu-4gb         # Larger size for production
-  #     region: nyc1
-  #
-  #   # Production web server
-  #   - environment: prod
-  #     roles: [web]
-  #     region: nyc1
+  # Multi-stack setup example (uncomment to use):
+  # stacks:
+  #   staging:
+  #     servers:
+  #       # Staging server for testing
+  #       - roles: [backend, web]
+  #         tags: [canary]          # Custom tag for canary deployments
+  #         region: nyc1
+  #   prod:
+  #     servers:
+  #       # Production backend server
+  #       - roles: [backend]
+  #         size: s-2vcpu-4gb       # Larger size for production
+  #         region: nyc1
+  #       # Production web server
+  #       - roles: [web]
+  #         region: nyc1
 
 # ============================================
 # Ansible Configuration
