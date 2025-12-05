@@ -1,5 +1,7 @@
-managed_groups:
-  - devops
+# Non-configurable defaults for group management
+# Minimum GID for groups that can be removed (protects system groups)
 managed_group_gid_min: 1000
+
+# Groups to exclude from removal (even if not in managed_groups)
 managed_group_exclusions:
   - nogroup

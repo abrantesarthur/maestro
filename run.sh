@@ -95,6 +95,9 @@ WEB_ENABLED="$(cfg_get_bool '.ansible.web.enabled' 'true')"
 BACKEND_ENABLED="$(cfg_get_bool '.ansible.backend.enabled' 'true')"
 PERMS_ENABLED="$(cfg_get_bool '.ansible.perms.enabled' 'true')"
 
+# Perms configuration - managed groups (read as JSON array)
+MANAGED_GROUPS="$(yq eval -o=json '.ansible.perms.groups // ["devops"]' "${CONFIG_FILE}" 2>/dev/null)"
+
 # Web configuration - determine mode (static vs docker)
 # Mode is determined by presence of static or docker block
 WEB_MODE=""
@@ -262,6 +265,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "  ansible.backend.tag: ${BACKEND_IMAGE_TAG}"
   log "  ansible.backend.port: ${BACKEND_PORT}"
   log "  ansible.perms.enabled: ${PERMS_ENABLED}"
+  log "  ansible.perms.groups: ${MANAGED_GROUPS}"
   log "  secrets.provider: ${SECRETS_PROVIDER}"
   log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
   # Show BACKEND_ENV_* variables
@@ -468,6 +472,9 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
   if [[ "${WEB_MODE}" == "docker" ]]; then
     cfg_export_map '.ansible.web.docker.env' 'WEB_DOCKER_ENV_'
   fi
+
+  # Export perms configuration (managed groups as JSON array)
+  export MANAGED_GROUPS
 
   ansible_args=(
     --ssh-hosts "${PULUMI_HOSTS}"

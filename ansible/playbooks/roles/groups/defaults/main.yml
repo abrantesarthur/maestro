@@ -1,0 +1,4 @@
+# Managed groups configuration
+# Read from MANAGED_GROUPS environment variable (JSON array)
+# If not set, defaults to empty list (skips group management)
+managed_groups: "{{ (lookup('env', 'MANAGED_GROUPS') | from_json) if lookup('env', 'MANAGED_GROUPS') else [] }}"
