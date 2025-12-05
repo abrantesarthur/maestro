@@ -96,6 +96,21 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 - One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
 
+### Multi-Stack Host Targeting
+
+When multiple Pulumi stacks are defined (e.g., `staging` and `prod`), all hosts from all stacks are aggregated and passed to Ansible. Each server is tagged with its stack name in addition to its roles:
+
+```json
+{
+  "hosts": [
+    { "hostname": "ssh0.example.com", "tags": ["prod", "backend", "web"] },
+    { "hostname": "ssh1.example.com", "tags": ["staging", "backend", "web"] }
+  ]
+}
+```
+
+The built-in playbooks target servers by role (`backend`, `web`), applying identical configuration to all servers with that role regardless of which stack they belong to. This means a prod server and a staging server tagged with backend receive the same Docker and application setup.
+
 ## Prerequisites
 
 - Docker installed locally (the script builds and runs a container).
