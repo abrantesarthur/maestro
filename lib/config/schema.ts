@@ -160,10 +160,6 @@ export const validateSchema = ajv.compile(maestroConfigSchema);
 // Error Formatting
 // ============================================
 
-const validStacks = Object.values(StackName)
-  .map((s) => `'${s}'`)
-  .join(", ");
-
 /**
  * Format AJV validation errors into a readable message
  */
@@ -193,7 +189,7 @@ export function formatAjvErrors(
       case "minItems":
         return `${path}: must have at least ${params["limit"]} item(s)`;
       case "propertyNames":
-        return `${path}: invalid property name '${params["propertyName"]}' (must be one of ${validStacks})`;
+        return `${path}: invalid property name '${params["propertyName"]}'.`;
       default:
         return `${path}: ${err.message}`;
     }
@@ -201,4 +197,3 @@ export function formatAjvErrors(
 
   return messages.join("\n");
 }
-
