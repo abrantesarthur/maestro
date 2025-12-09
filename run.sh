@@ -39,7 +39,7 @@ cfg_has() {
   config_has log "${CONFIG_FILE}" "$@"
 }
 
-# Parse minimal CLI arguments (only --config and --dry-run supported)
+# Parse minimal CLI arguments (--dry-run supported)
 log "Parsing arguments..."
 DRY_RUN=false
 while [[ $# -gt 0 ]]; do
@@ -130,6 +130,9 @@ cfg_export_map '.ansible.backend.env' 'BACKEND_ENV_'
 
 # Auto-inject PORT into the container environment from backend.port
 export BACKEND_ENV_PORT="${BACKEND_PORT}"
+
+# Export web docker environment variables from YAML (ansible.web.docker.env -> WEB_DOCKER_ENV_*)
+cfg_export_map '.ansible.web.docker.env' 'WEB_DOCKER_ENV_'
 
 
 # ============================================
@@ -270,11 +273,19 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "  ansible.groups: ${MANAGED_GROUPS}"
   log "  secrets.provider: ${SECRETS_PROVIDER}"
   log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
+  log "  secrets.required_vars: $(yq eval -o=json '.secrets.required_vars // []' "${CONFIG_FILE}")"
   # Show BACKEND_ENV_* variables
   log "  Backend environment variables:"
   env | grep '^BACKEND_ENV_' | while read -r line; do
     log "    ${line}"
   done || log "    (none)"
+  # Show WEB_DOCKER_ENV_* variables if docker mode
+  if [[ "${WEB_MODE}" == "docker" ]]; then
+    log "  Web docker environment variables:"
+    env | grep '^WEB_DOCKER_ENV_' | while read -r line; do
+      log "    ${line}"
+    done || log "    (none)"
+  fi
   exit 0
 fi
 
@@ -473,11 +484,6 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
   export WEB_DOCKER_IMAGE
   export WEB_DOCKER_TAG
   export WEB_DOCKER_PORT
-  
-  # Export web docker environment variables from YAML (ansible.web.docker.env -> WEB_DOCKER_ENV_*)
-  if [[ "${WEB_MODE}" == "docker" ]]; then
-    cfg_export_map '.ansible.web.docker.env' 'WEB_DOCKER_ENV_'
-  fi
 
   # Export security configuration (managed groups as JSON array)
   export MANAGED_GROUPS

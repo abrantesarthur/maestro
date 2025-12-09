@@ -53,6 +53,7 @@ pulumi:
     prod:
       servers:
         # Single production server (handles backend and web)
+        # FIXME: support multiple servers
         - roles: [backend, web] # Required: one or more of backend, web
           # groups: [devops]       # Optional: override global ansible.groups for this server
           # tags: []               # Optional: custom user-defined tags
