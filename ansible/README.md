@@ -49,6 +49,28 @@ ansible:
 
 Each key-value pair becomes an environment variable in the container. Note that `PORT` is automatically injected from `ansible.backend.port` and should not be set here.
 
+### Application Secrets
+
+Secrets listed in `secrets.required_vars` in `maestro.yaml` are automatically passed to the Ansible execution environment container. This allows playbooks to access application-specific secrets fetched from Bitwarden:
+
+```yaml
+secrets:
+  provider: bws
+  required_vars:
+    - MY_API_KEY
+    - DATABASE_PASSWORD
+```
+
+These secrets can be accessed in playbooks using:
+
+```yaml
+- name: Use secret in a task
+  debug:
+    msg: "{{ lookup('env', 'MY_API_KEY') }}"
+```
+
+This mechanism is useful for secrets that need to be injected into backend containers or used during provisioning but are specific to your application rather than core infrastructure.
+
 ## CLI Flags
 
 | Flag                   | Purpose                                                         |

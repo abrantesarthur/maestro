@@ -211,9 +211,19 @@ trap 'rm -f "${SSH_KEY_TEMP_FILE}"' EXIT
 CONTAINER_SSH_KEY_PATH="/tmp/vps_ssh_key"
 run_playbook() {
   local playbook="$1"
-    ansible-navigator run \
+  local penv_args=()
+
+  # Build --penv flags from SECRETS_REQUIRED_VARS_JSON (passed from parent run.sh)
+  if [[ -n "${SECRETS_REQUIRED_VARS_JSON:-}" ]]; then
+    while IFS= read -r var; do
+      [[ -n "${var}" ]] && penv_args+=(--penv "${var}")
+    done < <(echo "${SECRETS_REQUIRED_VARS_JSON}" | jq -r '.[]')
+  fi
+
+  ansible-navigator run \
     "playbooks/${playbook}" \
-    "--container-options=-v=${SSH_KEY_TEMP_FILE}:${CONTAINER_SSH_KEY_PATH}:ro"
+    "--container-options=-v=${SSH_KEY_TEMP_FILE}:${CONTAINER_SSH_KEY_PATH}:ro" \
+    "${penv_args[@]}"
 }
 
 # Export variables for Ansible inventory and playbooks

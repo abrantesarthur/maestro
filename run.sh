@@ -312,6 +312,10 @@ while IFS= read -r var; do
   [[ -n "${var}" ]] && require_bws_var "${var}"
 done < <(cfg_get_array '.secrets.required_vars')
 
+# Export the list of required vars so ansible/run.sh can pass them to the execution environment
+SECRETS_REQUIRED_VARS_JSON="$(yq eval -o=json '.secrets.required_vars // []' "${CONFIG_FILE}")"
+export SECRETS_REQUIRED_VARS_JSON
+
 # ============================================
 # Setup and helper functions
 # ============================================

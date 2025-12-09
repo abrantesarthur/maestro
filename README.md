@@ -64,7 +64,7 @@ ansible:
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
   project_id: "" # Optional BWS project ID
-  required_vars: [] # Additional secrets to validate
+  required_vars: [] # Secrets to validate and pass to Ansible
 ```
 
 ### Server Roles
@@ -149,7 +149,7 @@ Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The foll
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             |
 | `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           |
 
-You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`.
+You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`. These secrets are validated at startup and automatically passed to the Ansible execution environment, where they can be accessed in playbooks via `lookup('env', 'VAR_NAME')`.
 
 ## Components
 
