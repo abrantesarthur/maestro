@@ -13,7 +13,7 @@ import {
   type LoadedConfig,
   type StackName,
   ServerRole,
-} from "./lib/config.ts";
+} from "./lib/config";
 import { loadBwsSecrets } from "./lib/secrets.ts";
 import {
   log,
