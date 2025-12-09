@@ -103,6 +103,27 @@ pulumi:
 
 When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
 
+### Domain Configuration
+
+Maestro automatically creates environment-specific subdomains based on the stack name. The `domain` setting in `maestro.yaml` is the base domain, and each non-production stack gets its own subdomain prefix:
+
+| Stack     | Subdomain Prefix | Effective Domain      |
+| --------- | ---------------- | --------------------- |
+| `dev`     | `dev.`           | `dev.example.com`     |
+| `staging` | `staging.`       | `staging.example.com` |
+| `prod`    | (none)           | `example.com`         |
+
+This applies to all resources provisioned for each stack:
+
+| Resource     | Dev Example            | Staging Example            | Prod Example       |
+| ------------ | ---------------------- | -------------------------- | ------------------ |
+| SSH Tunnel   | `ssh0.dev.example.com` | `ssh0.staging.example.com` | `ssh0.example.com` |
+| API Endpoint | `api.dev.example.com`  | `api.staging.example.com`  | `api.example.com`  |
+| Web Domain   | `dev.example.com`      | `staging.example.com`      | `example.com`      |
+| WWW Domain   | `www.dev.example.com`  | `www.staging.example.com`  | `www.example.com`  |
+
+DNS records (both A records for web servers and CNAME records for tunnels) are created under the base domain's Cloudflare zone. SSL certificates are issued for each environment's effective domain.
+
 ### Required Environment Variable
 
 | Variable           | Purpose                                                                |
@@ -118,10 +139,6 @@ When you run `./run.sh`, Maestro provisions each defined stack sequentially, the
 ### Secrets
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
-
-FIXME: Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
-
-FIXME: update the provisioning of dev and staging stacks to, for instance, serve the resources in different domains (e.g., dev.example.com, stag.example.com, etc.). Make any other changes needed...
 
 | Secret                 | Purpose                                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

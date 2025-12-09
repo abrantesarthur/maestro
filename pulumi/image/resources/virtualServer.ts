@@ -7,7 +7,7 @@ import { Tunnel, TunnelIngress, TunnelIngressProtocol } from "./tunnel";
 
 /** The arguments for constructing a VirtualServer instance */
 export interface VirtualServerArgs {
-  /** The DNS domain */
+  /** The OS image for the droplet */
   image: pulumi.Input<string>;
   /** The virtual server size */
   size: pulumi.Input<digitalOcean.DropletSlug>;
@@ -19,6 +19,8 @@ export interface VirtualServerArgs {
   tags: pulumi.Input<string[]>;
   /** The virtual server index */
   index: pulumi.Input<number>;
+  /** The effective domain for this environment (e.g., dev.example.com, staging.example.com, example.com) */
+  effectiveDomain: pulumi.Input<string>;
 }
 
 /** The pre-defined tag values for a VirtualServer */
@@ -43,11 +45,12 @@ export class VirtualServer extends pulumi.ComponentResource {
   readonly index: pulumi.Output<number | undefined>;
   readonly sshHostname: pulumi.Output<string>;
   readonly httpHostname: pulumi.Output<string>;
+  readonly effectiveDomain: pulumi.Output<string>;
 
   constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
     super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);
     const name = VirtualServer.buildResourceName(args);
-    const { image, size, region, sshKeys, tags } = args;
+    const { image, size, region, sshKeys, tags, effectiveDomain } = args;
 
     const virtualServer = new digitalOcean.Droplet(
       name,
@@ -63,9 +66,10 @@ export class VirtualServer extends pulumi.ComponentResource {
     );
 
     const stackConfig = new pulumi.Config("maestro");
-    const domain = stackConfig.require("domain");
     const backendPort = stackConfig.require("backendPort");
-    const certHostnames = [`*.${domain}`, domain];
+    const certHostnames = pulumi
+      .output(effectiveDomain)
+      .apply((ed) => [`*.${ed}`, ed]);
     const privateKey = new tls.PrivateKey(
       `cert-key-${name}`,
       {
@@ -80,7 +84,7 @@ export class VirtualServer extends pulumi.ComponentResource {
         privateKeyPem: pulumi.secret(privateKey.privateKeyPem),
         dnsNames: certHostnames,
         subject: {
-          commonName: domain,
+          commonName: pulumi.output(effectiveDomain),
         },
       },
       { parent: virtualServer },
@@ -104,25 +108,22 @@ export class VirtualServer extends pulumi.ComponentResource {
       dependsOn: [virtualServer, originCaCertificate],
     });
 
-    // create one tunnel per server so we can SSH and send http requests via hostnames while hiding the IP.
-    // IMPORTANT: For now we support only one prod server. To add more, we need to consider
-    // how to load balance requests from api.dalhe.ai to 2 production servers.
+    // create one tunnel per server so we can SSH and send http requests via hostnames while hiding
+    // the IP source IP. IMPORTANT: For now we support only one server per environment.
+    // To add more, we need to consider how to load balance requests across multiple servers.
     const ingresses = pulumi
-      .all([args.index, args.tags])
-      .apply(([index, tags]) => {
+      .all([args.index, args.tags, args.effectiveDomain])
+      .apply(([index, tags, ed]) => {
         const ingressList: TunnelIngress[] = [
           {
-            hostname: `ssh${index}.${domain}`,
+            hostname: `ssh${index}.${ed}`,
             protocol: TunnelIngressProtocol.Ssh,
             port: 22,
           },
         ];
         if (tags.includes(VpsTag.Backend as string)) {
-          const isStaging = tags.includes(VpsTag.Staging as string);
-          const isDev = tags.includes(VpsTag.Dev as string);
-          const envPrefix = isDev ? "dev-" : isStaging ? "staging-" : "";
           ingressList.push({
-            hostname: `${envPrefix}api.${domain}`,
+            hostname: `api.${ed}`,
             protocol: TunnelIngressProtocol.Http,
             port: Number(backendPort),
           });
@@ -146,12 +147,14 @@ export class VirtualServer extends pulumi.ComponentResource {
     this.index = pulumi.output(args.index);
     this.sshHostname = tunnel.sshHostname;
     this.httpHostname = tunnel.httpHostname;
+    this.effectiveDomain = pulumi.output(args.effectiveDomain);
     this.registerOutputs({
       id: this.id,
       name: this.name,
       tags: this.tags,
       ipv4: this.ipv4,
       index: this.index,
+      effectiveDomain: this.effectiveDomain,
     });
   }
 

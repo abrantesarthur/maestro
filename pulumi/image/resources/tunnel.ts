@@ -91,11 +91,18 @@ export class Tunnel extends pulumi.ComponentResource {
     );
 
     // create the CNAME dns records, one for each ingress hostname
+    // For effective domains like dev.example.com, hostnames will be ssh0.dev.example.com
+    // so we need to extract the full subdomain (e.g., ssh0.dev) relative to the base domain
+    const domainSuffix = `.${domain}`;
     const hostnamesByProtocol = ingresses.apply((is) => {
       const ssh: string[] = [];
       const http: string[] = [];
       is.forEach((i) => {
-        const subdomain = i.hostname.split(".")[0];
+        // Extract subdomain by removing the base domain suffix
+        // e.g., "ssh0.dev.example.com" with domain "example.com" -> subdomain "ssh0.dev"
+        const subdomain = i.hostname.endsWith(domainSuffix)
+          ? i.hostname.slice(0, -domainSuffix.length)
+          : i.hostname.split(".")[0];
         new DnsRecord(
           {
             content: pulumi.interpolate`${tunnel.id}.cfargotunnel.com`,
@@ -106,9 +113,9 @@ export class Tunnel extends pulumi.ComponentResource {
           { parent: this },
         );
         if (i.protocol === TunnelIngressProtocol.Ssh) {
-          ssh.push(`${subdomain}.${domain}`);
+          ssh.push(i.hostname);
         } else if (i.protocol === TunnelIngressProtocol.Http) {
-          http.push(`${subdomain}.${domain}`);
+          http.push(i.hostname);
         }
       });
       return { ssh, http };
@@ -162,9 +169,9 @@ export class Tunnel extends pulumi.ComponentResource {
         }
 
         const subdomain = h.slice(0, -domainSuffix.length);
-        if (subdomain.length === 0 || subdomain.includes(".")) {
+        if (subdomain.length === 0) {
           throw new Error(
-            `Every Tunnel hostname must be in the form <subdomain>${domainSuffix}`,
+            `Every Tunnel hostname must have a subdomain before "${domainSuffix}"`,
           );
         }
       });

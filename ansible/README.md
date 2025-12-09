@@ -14,8 +14,9 @@ export BACKEND_IMAGE="ghcr.io/your-org/your-app"
 export BACKEND_IMAGE_TAG="latest"
 export BWS_ACCESS_TOKEN="your_bws_token"
 
+# SSH_HOSTS JSON includes effectiveDomain for nginx configuration
 ./run.sh \
-  --ssh-hosts '{"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod","web"]}]}' \
+  --ssh-hosts '{"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod","web"],"effectiveDomain":"example.com"}]}' \
   --website-dir "/path/to/website"
 ```
 
@@ -27,11 +28,12 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 
 | Variable            | Source in maestro.yaml  | Purpose                                               |
 | ------------------- | ----------------------- | ----------------------------------------------------- |
-| `DOMAIN`            | `domain`                | Domain for cloudflare DNS provisioning                |
 | `BACKEND_PORT`      | `ansible.backend.port`  | Port mapping for Docker container                     |
 | `BACKEND_IMAGE`     | `ansible.backend.image` | Backend image to pull from GHCR and run in a server.  |
 | `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   | Tag/version of the backend image                      |
 | `BACKEND_ENV_*`     | `ansible.backend.env.*` | Environment variables passed to the backend container |
+
+Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `stag.example.com` for staging, `example.com` for prod).
 
 ### Backend Container Environment
 
@@ -100,18 +102,37 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 ### Multi-Stack Host Targeting
 
-When multiple Pulumi stacks are defined (e.g., `staging` and `prod`), all hosts from all stacks are aggregated and passed to Ansible. Each server is tagged with its stack name in addition to its roles:
+When multiple Pulumi stacks are defined (e.g., `staging` and `prod`), all hosts from all stacks are aggregated and passed to Ansible. Each server is tagged with its stack name and includes an `effectiveDomain` for environment-specific nginx configuration:
 
 ```json
 {
   "hosts": [
-    { "hostname": "ssh0.example.com", "tags": ["prod", "backend", "web"] },
-    { "hostname": "ssh1.example.com", "tags": ["staging", "backend", "web"] }
+    {
+      "hostname": "ssh0.example.com",
+      "tags": ["prod", "backend", "web"],
+      "effectiveDomain": "example.com"
+    },
+    {
+      "hostname": "ssh0.staging.example.com",
+      "tags": ["staging", "backend", "web"],
+      "effectiveDomain": "staging.example.com"
+    },
+    {
+      "hostname": "ssh0.dev.example.com",
+      "tags": ["dev", "backend", "web"],
+      "effectiveDomain": "dev.example.com"
+    }
   ]
 }
 ```
 
-The built-in playbooks target servers by role (`backend`, `web`), applying identical configuration to all servers with that role regardless of which stack they belong to. This means a prod server and a staging server tagged with backend receive the same Docker and application setup.
+The `effectiveDomain` determines the domain used in nginx server_name directives:
+
+- **prod**: `example.com`, `www.example.com`
+- **staging**: `staging.example.com`, `www.staging.example.com`
+- **dev**: `dev.example.com`, `www.dev.example.com`
+
+The built-in playbooks target servers by role (`backend`, `web`), applying identical configuration to all servers with that role regardless of which stack they belong to. This means a prod server and a staging server tagged with backend receive the same Docker and application setup, but each gets nginx configured for its environment-specific domain.
 
 ## Prerequisites
 

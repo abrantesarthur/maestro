@@ -3,19 +3,22 @@
 """Dynamic inventory that maps SSH_HOSTS into Ansible hosts and tag-based groups.
 
 Usage:
-  Export SSH_HOSTS with a single-line JSON list of hostname, tags, and optional groups before invoking Ansible.
-  Example: {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"],"groups":["devops"]}]}
+  Export SSH_HOSTS with a single-line JSON list of hostname, tags, effectiveDomain, and optional groups before invoking Ansible.
+  Example: {"hosts":[{"hostname":"ssh0.dev.dalhe.ai","tags":["backend","dev","web"],"effectiveDomain":"dev.dalhe.ai","groups":["devops"]}]}
 
   The 'groups' field is optional and specifies per-host system groups override for the groups role.
   If not specified, the host uses the global MANAGED_GROUPS environment variable.
 
+  The 'effectiveDomain' field specifies the environment-specific domain for nginx configuration
+  (e.g., dev.example.com for dev, staging.example.com for staging, example.com for prod).
+
   Inventory output shape (for the example above):
     {
-      "all": {"hosts": ["ssh0.dalhe.ai"], "vars": {"ansible_python_interpreter": "/usr/bin/python3"}},
-      "_meta": {"hostvars": {"ssh0.dalhe.ai": {"ansible_host": "ssh0.dalhe.ai", "ansible_user": "root", "ansible_port": "22", "ansible_ssh_private_key_file": "<key>", "ansible_ssh_common_args": "<cloudflared-proxy>", "host_managed_groups": ["devops"]}}},
-      "backend": {"hosts": ["ssh0.dalhe.ai"]},
-      "prod": {"hosts": ["ssh0.dalhe.ai"]},
-      "web": {"hosts": ["ssh0.dalhe.ai"]}
+      "all": {"hosts": ["ssh0.dev.dalhe.ai"], "vars": {"ansible_python_interpreter": "/usr/bin/python3"}},
+      "_meta": {"hostvars": {"ssh0.dev.dalhe.ai": {"ansible_host": "ssh0.dev.dalhe.ai", "ansible_user": "root", "ansible_port": "22", "ansible_ssh_private_key_file": "<key>", "ansible_ssh_common_args": "<cloudflared-proxy>", "host_managed_groups": ["devops"], "effective_domain": "dev.dalhe.ai"}}},
+      "backend": {"hosts": ["ssh0.dev.dalhe.ai"]},
+      "dev": {"hosts": ["ssh0.dev.dalhe.ai"]},
+      "web": {"hosts": ["ssh0.dev.dalhe.ai"]}
     }
 """
 
@@ -30,6 +33,7 @@ from typing import Dict, List, Set, TypedDict
 class HostEntry(TypedDict, total=False):
     hostname: str
     tags: List[str]
+    effectiveDomain: str  # Environment-specific domain (e.g., dev.example.com)
     groups: List[str]  # Optional per-host groups override
 
 
@@ -97,12 +101,20 @@ def parse_hosts() -> List[HostEntry]:
                     sys.exit(1)
                 groups.append(group.strip())
 
+        # Parse effectiveDomain for nginx configuration
+        effective_domain = host_entry.get("effectiveDomain")
+        if effective_domain is not None and not isinstance(effective_domain, str):
+            sys.stderr.write(f"Host entry for {hostname} has an invalid 'effectiveDomain' (must be a string).\n")
+            sys.exit(1)
+
         host_entry_normalized: HostEntry = {
             "hostname": hostname.strip(),
             "tags": sorted(set(tags)),
         }
         if groups is not None:
             host_entry_normalized["groups"] = groups
+        if effective_domain is not None:
+            host_entry_normalized["effectiveDomain"] = effective_domain.strip()
 
         normalized_hosts.append(host_entry_normalized)
 
@@ -130,6 +142,9 @@ def build_inventory(hosts: List[HostEntry]) -> Dict[str, Dict[str, dict]]:
         # Pass per-host groups override if specified
         if "groups" in host_entry:
             host_vars["host_managed_groups"] = host_entry["groups"]
+        # Pass effective domain for nginx configuration
+        if "effectiveDomain" in host_entry:
+            host_vars["effective_domain"] = host_entry["effectiveDomain"]
         hostvars[host] = host_vars
         for tag in host_entry.get("tags", []):
             tag_groups.setdefault(tag, set()).add(host)

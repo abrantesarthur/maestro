@@ -2,7 +2,10 @@
 nginx_service_name: nginx
 nginx_conf_dest: /etc/nginx/
 nginx_validate_command: nginx -t
-domain: "{{ lookup('env', 'DOMAIN') }}"
+
+# Domain for this host - uses effective_domain from inventory (environment-specific)
+# e.g., dev.example.com for dev, staging.example.com for staging, example.com for prod
+domain: "{{ effective_domain }}"
 
 # Web mode: 'static' (serve files) or 'docker' (reverse proxy)
 web_mode: "{{ lookup('env', 'WEB_MODE') | default('static', true) }}"

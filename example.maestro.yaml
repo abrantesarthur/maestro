@@ -9,8 +9,13 @@
 # Required environment variable: BWS_ACCESS_TOKEN
 # ============================================
 
-# [Required] Domain for DNS records and nginx configuration
+# [Required] Base domain for DNS records and nginx configuration
 # Used by both Pulumi (for Cloudflare DNS) and Ansible (for nginx)
+#
+# Environment-specific subdomains are automatically created based on stack name:
+#   - dev stack:     dev.example.com, api.dev.example.com, ssh0.dev.example.com
+#   - staging stack: stag.example.com, api.stag.example.com, ssh0.stag.example.com
+#   - prod stack:    example.com, api.example.com, ssh0.example.com
 domain: example.com
 
 # ============================================

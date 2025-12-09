@@ -117,7 +117,7 @@ fi
 
 log "Ensuring required configuration from environment..."
 # Configuration is passed via environment variables from parent run.sh
-require_var "${DOMAIN-}" 'DOMAIN environment variable is required (set in maestro.yaml).'
+# Note: DOMAIN is no longer required here as nginx uses effective_domain from host variables
 require_var "${BACKEND_PORT-}" 'BACKEND_PORT environment variable is required (set in maestro.yaml).'
 
 if [[ "${SKIP_BWS}" == "false" ]]; then
@@ -221,7 +221,8 @@ run_playbook() {
 export SSH_HOSTS="${SSH_HOSTS_ARG}"
 export SSH_KEY_PATH="${CONTAINER_SSH_KEY_PATH}"
 
-# DOMAIN and BACKEND_PORT are already in environment from parent run.sh
+# BACKEND_PORT is already in environment from parent run.sh
+# Domain is now passed per-host via effective_domain in SSH_HOSTS JSON
 # BACKEND_ENV_* variables are already exported by parent run.sh
 
 # Validate backend image configuration when deploying backend

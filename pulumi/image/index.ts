@@ -24,6 +24,11 @@ const domain = stackConfig.require("domain");
 // Get the current stack name (dev, staging, or prod) to use as environment tag
 const stackName = pulumi.getStack();
 
+// Compute the effective domain based on stack name
+// dev -> dev.example.com, staging -> stag.example.com, prod -> example.com
+const envPrefix = stackName !== "prod" ? stackName : undefined;
+const effectiveDomain = envPrefix ? `${envPrefix}.${domain}` : domain;
+
 // Read servers configuration from maestro.yaml (passed via Pulumi config)
 const serversJson = stackConfig.require("servers");
 const serversConfig: ServerConfig[] = JSON.parse(serversJson);
@@ -82,6 +87,7 @@ const VPS_CONFIGS: VpsConfig[] = serversConfig.map((server) => {
       region: regionMap[region] || digitalOcean.Region.NYC1,
       sshKeys: ["51520910"], // TODO: make this configurable
       tags: allTags,
+      effectiveDomain,
     },
     groups: server.groups, // Pass through per-server groups if specified
   };
@@ -94,31 +100,45 @@ const virtualServersWithConfig = VPS_CONFIGS.map((config, index) => ({
 
 const virtualServers = virtualServersWithConfig.map((v) => v.server);
 
-// create A DNS records for each web production server
-const webProdVirualServers = virtualServers.filter((vs) =>
-  vs.tags.apply(
-    (ts) =>
-      ts.includes(VpsTag.Web as string) && ts.includes(VpsTag.Prod as string),
-  ),
+// create A DNS records for each web server in this stack
+// For dev: dev.example.com, www.dev.example.com
+// For staging: staging.example.com, www.staging.example.com
+// For prod: example.com, www.example.com
+const webVirtualServers = virtualServers.filter((vs) =>
+  vs.tags.apply((ts) => ts.includes(VpsTag.Web as string)),
 );
 
-webProdVirualServers.map((vs) =>
+webVirtualServers.map((vs) =>
   vs.ipv4.apply((ipv4) => {
-    new DnsRecord({ content: ipv4, type: "A", domain });
-    new DnsRecord({ content: ipv4, type: "A", domain, subdomain: "www" });
+    // For prod, envPrefix is empty so subdomain defaults to "@" (zone apex)
+    new DnsRecord({
+      content: ipv4,
+      type: "A",
+      domain,
+      subdomain: envPrefix,
+    });
+    new DnsRecord({
+      content: ipv4,
+      type: "A",
+      domain,
+      subdomain: envPrefix ? `www.${envPrefix}` : "www",
+    });
   }),
 );
 
 // export the outputs we care about so they can be consumed by the pulumi cli
 // includes per-server groups override for security hardening if specified
+// includes effectiveDomain for Ansible nginx configuration
 export const hosts = virtualServersWithConfig.map((v) => {
   const base: {
     hostname: pulumi.Output<string>;
     tags: pulumi.Output<string[]>;
+    effectiveDomain: pulumi.Output<string>;
     groups?: string[];
   } = {
     hostname: v.server.sshHostname,
     tags: v.server.tags,
+    effectiveDomain: v.server.effectiveDomain,
   };
   if (v.groups) {
     base.groups = v.groups;
