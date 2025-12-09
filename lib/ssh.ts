@@ -2,7 +2,7 @@
  * SSH tunnel utilities for Cloudflare tunnel connections
  */
 
-import { log } from "./helpers.js";
+import { log } from "./helpers.ts";
 
 export interface HostInfo {
   hostname: string;

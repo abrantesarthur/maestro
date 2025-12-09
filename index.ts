@@ -12,8 +12,8 @@ import {
   displayConfig,
   type LoadedConfig,
   type StackName,
-} from "./lib/config.js";
-import { loadBwsSecrets } from "./lib/secrets.js";
+} from "./lib/config.ts";
+import { loadBwsSecrets } from "./lib/secrets.ts";
 import {
   log,
   requireCmd,
@@ -21,13 +21,13 @@ import {
   createTempSecretFile,
   removeTempFile,
   runCommandWithTee,
-} from "./lib/helpers.js";
+} from "./lib/helpers.ts";
 import {
   parsePulumiHosts,
   mergeHosts,
   waitForTunnelsReady,
   type PulumiHosts,
-} from "./lib/ssh.js";
+} from "./lib/ssh.ts";
 
 // ============================================
 // Script Setup

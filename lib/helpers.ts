@@ -12,13 +12,11 @@ import { $ } from "bun";
 /**
  * Create a logger with a specific prefix
  */
-export function createLogger(prefix: string): (message: string) => void {
+function createLogger(prefix: string): (message: string) => void {
   return (message: string) => {
     console.log(`[${prefix}] ${message}`);
   };
 }
-
-/** Default logger for maestro */
 export const log = createLogger("maestro");
 
 // ============================================
