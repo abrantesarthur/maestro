@@ -45,8 +45,8 @@ const pulumiConfigSchema = {
   properties: {
     enabled: { type: "boolean" },
     command: { type: "string", enum: ["up", "refresh", "cancel", "output"] },
-    cloudflare_account_id: { type: "string" },
-    ssh_port: { type: "integer" },
+    cloudflareAccountId: { type: "string" },
+    sshPort: { type: "integer" },
     stacks: {
       type: "object",
       propertyNames: { enum: Object.values(StackName) },
@@ -55,7 +55,7 @@ const pulumiConfigSchema = {
   },
   additionalProperties: false,
   if: { properties: { enabled: { const: true } } },
-  then: { required: ["cloudflare_account_id", "stacks"] },
+  then: { required: ["cloudflareAccountId", "stacks"] },
 } as const;
 
 const webStaticConfigSchema = {
@@ -130,8 +130,8 @@ const secretsConfigSchema = {
   type: "object",
   properties: {
     provider: { type: "string", enum: ["bws"] },
-    project_id: { type: "string" },
-    required_vars: { type: "array", items: { type: "string" } },
+    projectId: { type: "string" },
+    requiredVars: { type: "array", items: { type: "string" } },
   },
   additionalProperties: false,
 } as const;

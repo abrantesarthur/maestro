@@ -40,10 +40,10 @@ pulumi:
   # [Required when pulumi.enabled is true] Cloudflare account ID
   # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
   # dots next to account name
-  cloudflare_account_id: "your_account_id_here"
+  cloudflareAccountId: "your_account_id_here"
 
   # [Optional, default: 22] SSH port for Cloudflare tunnel configuration
-  ssh_port: 22
+  sshPort: 22
 
   # [Required when pulumi.enabled is true] Stack definitions
   # Each stack (dev, staging, prod) represents an isolated environment.
@@ -202,7 +202,7 @@ secrets:
 
   # [Optional] Bitwarden Secrets Manager project ID
   # If omitted, secrets are fetched from all projects accessible by the token
-  # project_id: "your_bws_project_id"
+  # projectId: "your_bws_project_id"
 
   # [Optional] List of additional secret names that must be present in Bitwarden
   # before provisioning starts. These are validated after fetching from Bitwarden.
@@ -213,9 +213,9 @@ secrets:
   #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
   #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
   #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
-  required_vars: []
+  requiredVars: []
   # Example:
-  # required_vars:
+  # requiredVars:
   #   - MY_API_KEY
   #   - DATABASE_PASSWORD
   #   - STRIPE_SECRET

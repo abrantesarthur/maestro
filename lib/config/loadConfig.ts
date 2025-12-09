@@ -39,8 +39,8 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     pulumi: {
       enabled: raw.pulumi?.enabled ?? false,
       command: raw.pulumi?.command ?? PulumiCommand.Up,
-      cloudflareAccountId: raw.pulumi?.cloudflare_account_id ?? "",
-      sshPort: raw.pulumi?.ssh_port ?? 22,
+      cloudflareAccountId: raw.pulumi?.cloudflareAccountId ?? "",
+      sshPort: raw.pulumi?.sshPort ?? 22,
       stacks: (raw.pulumi?.stacks ?? {}) as Record<StackName, StackConfig>,
     },
     ansible: {
@@ -72,8 +72,8 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     },
     secrets: {
       provider: "bws",
-      projectId: raw.secrets?.project_id ?? "",
-      requiredVars: raw.secrets?.required_vars ?? [],
+      projectId: raw.secrets?.projectId ?? "",
+      requiredVars: raw.secrets?.requiredVars ?? [],
     },
     roles: Array.from(roles),
   };

@@ -54,8 +54,8 @@ export interface StackConfig {
 export interface PulumiConfig {
   enabled?: boolean;
   command?: PulumiCommand;
-  cloudflare_account_id: string;
-  ssh_port?: number;
+  cloudflareAccountId: string;
+  sshPort?: number;
   stacks: Partial<Record<StackName, StackConfig>>;
 }
 
@@ -97,8 +97,8 @@ export interface AnsibleConfig {
 
 export interface SecretsConfig {
   provider?: "bws";
-  project_id?: string;
-  required_vars?: string[];
+  projectId?: string;
+  requiredVars?: string[];
 }
 
 export interface MaestroConfig {
@@ -155,4 +155,3 @@ export interface LoadedConfig {
   };
   roles: ServerRole[];
 }
-
