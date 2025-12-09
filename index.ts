@@ -7,8 +7,6 @@
  *   bun . --dry-run          # Validate config and display settings
  */
 
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   loadConfig,
   displayConfig,
@@ -19,7 +17,6 @@ import { loadBwsSecrets } from "./lib/secrets.js";
 import {
   log,
   requireCmd,
-  requireVar,
   requireBwsVar,
   createTempSecretFile,
   removeTempFile,
@@ -36,12 +33,10 @@ import {
 // Script Setup
 // ============================================
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const PULUMI_RUN = resolve(__dirname, "pulumi/run.sh");
-const ANSIBLE_RUN = resolve(__dirname, "ansible/run.sh");
-const CONFIG_FILE = resolve(__dirname, "maestro.yaml");
+const SCRIPT_DIR = import.meta.dir;
+const PULUMI_RUN = `${SCRIPT_DIR}/pulumi/run.sh`;
+const ANSIBLE_RUN = `${SCRIPT_DIR}/ansible/run.sh`;
+const CONFIG_FILE = `${SCRIPT_DIR}/maestro.yaml`;
 
 // ============================================
 // CLI Parsing
@@ -73,7 +68,7 @@ async function capturePulumiHosts(
   pulumiCommand: string,
   serversJson: string,
   config: LoadedConfig,
-  sshKeyPath: string,
+  _sshKeyPath: string,
   showLogs: boolean = true,
 ): Promise<PulumiHosts> {
   const env: Record<string, string> = {

@@ -198,7 +198,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
       }
 
       for (let i = 0; i < stack.servers.length; i++) {
-        const server = stack.servers[i];
+        const server = stack.servers[i]!;
         if (!server.roles || server.roles.length === 0) {
           throw new Error(
             `pulumi.stacks.${stackName}.servers[${i}].roles is required (must include at least one of: backend, web)`,

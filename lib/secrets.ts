@@ -13,7 +13,7 @@
  * @throws Error if BWS_ACCESS_TOKEN is not set or if bws command fails
  */
 export async function loadBwsSecrets(projectId?: string): Promise<void> {
-  const accessToken = process.env.BWS_ACCESS_TOKEN;
+  const accessToken = process.env["BWS_ACCESS_TOKEN"];
 
   if (!accessToken) {
     throw new Error(
