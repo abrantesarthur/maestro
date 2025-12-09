@@ -12,6 +12,7 @@ import {
   displayConfig,
   type LoadedConfig,
   type StackName,
+  ServerRole,
 } from "./lib/config.ts";
 import { loadBwsSecrets } from "./lib/secrets.ts";
 import {
@@ -104,7 +105,11 @@ async function runAnsible(
     BACKEND_PORT: String(config.ansible.backend.port),
     BACKEND_IMAGE: config.ansible.backend.image,
     BACKEND_IMAGE_TAG: config.ansible.backend.tag,
-    WEB_MODE: config.ansible.web.mode ?? "",
+    WEB_MODE: config.ansible.web.docker
+      ? "docker"
+      : config.ansible.web.static
+      ? "static"
+      : "",
     WEB_STATIC_SOURCE: config.ansible.web.static.source,
     WEB_STATIC_DIR: config.ansible.web.static.dir,
     WEB_STATIC_BUILD: config.ansible.web.static.build,
@@ -140,10 +145,10 @@ async function runAnsible(
   ];
 
   // Role-based provisioning: skip playbooks if no server has that role
-  if (!config.roles.hasWeb) {
+  if (!config.roles.includes(ServerRole.Web)) {
     args.push("--skip-web");
   }
-  if (!config.roles.hasBackend) {
+  if (!config.roles.includes(ServerRole.Backend)) {
     args.push("--skip-backend");
   }
 
@@ -250,10 +255,11 @@ async function main(): Promise<void> {
 
     let allHosts: PulumiHosts = { hosts: [] };
 
+    const stackNames = Object.keys(config.pulumi.stacks) as StackName[];
     if (config.pulumi.enabled) {
-      log(`Provisioning ${config.pulumi.stackNames.length} stack(s)...`);
+      log(`Provisioning ${stackNames.length} stack(s)...`);
 
-      for (const stackName of config.pulumi.stackNames) {
+      for (const stackName of stackNames) {
         log(`Provisioning stack: ${stackName}`);
         const stack = config.pulumi.stacks[stackName];
         const serversJson = JSON.stringify(stack?.servers ?? []);
@@ -271,7 +277,7 @@ async function main(): Promise<void> {
     } else if (config.ansible.enabled) {
       log("Fetching existing Pulumi outputs for Ansible...");
 
-      for (const stackName of config.pulumi.stackNames) {
+      for (const stackName of stackNames) {
         const stack = config.pulumi.stacks[stackName];
         const serversJson = JSON.stringify(stack?.servers ?? []);
 

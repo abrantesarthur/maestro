@@ -106,13 +106,11 @@ export interface LoadedConfig {
     cloudflareAccountId: string;
     sshPort: number;
     stacks: Record<StackName, StackConfig>;
-    stackNames: StackName[];
   };
   ansible: {
     enabled: boolean;
     groups: string[];
     web: {
-      mode: WebMode | null;
       static: {
         source: StaticSource;
         dir: string;
@@ -141,11 +139,7 @@ export interface LoadedConfig {
     projectId: string;
     requiredVars: string[];
   };
-  roles: {
-    hasWeb: boolean;
-    hasBackend: boolean;
-    all: ServerRole[];
-  };
+  roles: ServerRole[];
 }
 
 // ============================================
@@ -239,45 +233,15 @@ const validatePulumiConfig = (raw: MaestroConfig): void => {
   }
 };
 
-export async function loadConfig(configPath: string): Promise<LoadedConfig> {
-  const file = Bun.file(configPath);
-
-  if (!(await file.exists())) {
-    throw new Error(
-      `Config file not found at ${configPath}\n` +
-        `Create a maestro.yaml file. See example.maestro.yaml for a template.`,
-    );
-  }
-
-  // FIXME: use ajv to validate the yaml schema
-  const content = await file.text();
-  const raw = Bun.YAML.parse(content) as MaestroConfig;
-
-  // Validate required fields
-  if (!raw.domain) {
-    throw new Error(`Missing 'domain' in ${configPath}`);
-  }
-
-  validatePulumiConfig(raw);
-
-  // Collect all unique roles from all stacks
-  const allRoles = new Set<ServerRole>();
-  // for (const stackName of stackNames) {
-  //   const stack = stacks[stackName];
-  //   if (stack?.servers) {
-  //     for (const server of stack.servers) {
-  //       for (const role of server.roles) {
-  //         allRoles.add(role);
-  //       }
-  //     }
-  //   }
-  // }
-
-  const hasRoleWeb = allRoles.has(ServerRole.Web);
-  const hasRoleBackend = allRoles.has(ServerRole.Backend);
-  const ansibleEnabled = raw.ansible?.enabled ?? true;
-
-  // Determine web mode
+const validateAnsibleConfig = ({
+  raw,
+  roles,
+}: {
+  raw: MaestroConfig;
+  roles: Set<ServerRole>;
+}): void => {
+  const ansibleEnabled = raw.ansible?.enabled ?? false;
+  // FIXME: validate that only one mode is specified
   let webMode: WebMode | null = raw.ansible?.web?.static
     ? "static"
     : raw.ansible?.web?.docker
@@ -285,7 +249,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     : null;
 
   // Role-based validation
-  if (ansibleEnabled && hasRoleWeb) {
+  if (ansibleEnabled && roles.has(ServerRole.Web)) {
     if (!webMode) {
       throw new Error(
         `ansible.web.static or ansible.web.docker must be configured when servers have the 'web' role`,
@@ -320,7 +284,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     }
   }
 
-  if (ansibleEnabled && hasRoleBackend) {
+  if (ansibleEnabled && roles.has(ServerRole.Backend)) {
     if (!raw.ansible?.backend?.image) {
       throw new Error(
         `ansible.backend.image is required when servers have the 'backend' role`,
@@ -332,6 +296,35 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
       );
     }
   }
+};
+
+export async function loadConfig(configPath: string): Promise<LoadedConfig> {
+  const file = Bun.file(configPath);
+
+  if (!(await file.exists())) {
+    throw new Error(
+      `Config file not found at ${configPath}\n` +
+        `Create a maestro.yaml file. See example.maestro.yaml for a template.`,
+    );
+  }
+
+  // FIXME: use ajv to validate the yaml schema
+  const content = await file.text();
+  const raw = Bun.YAML.parse(content) as MaestroConfig;
+
+  // Validate required fields
+  if (!raw.domain) {
+    throw new Error(`Missing 'domain' in ${configPath}`);
+  }
+
+  validatePulumiConfig(raw);
+
+  // Collect all unique roles from all stacks
+  const roles = Object.values(raw.pulumi?.stacks ?? {})
+    .flatMap((s) => s.servers.flatMap((s) => s.roles))
+    .reduce((prev, curr) => prev.add(curr), new Set<ServerRole>());
+
+  validateAnsibleConfig({ raw, roles });
 
   // Validate secrets provider
   const secretsProvider = raw.secrets?.provider ?? "bws";
@@ -345,19 +338,16 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
   return {
     domain: raw.domain,
     pulumi: {
-      // enabled: pulumiEnabled,
-      enabled: false,
+      enabled: raw.pulumi?.enabled ?? false,
       command: raw.pulumi?.command ?? "up",
       cloudflareAccountId: raw.pulumi?.cloudflare_account_id ?? "",
       sshPort: raw.pulumi?.ssh_port ?? 22,
-      stacks: raw.pulumi?.stacks as Record<StackName, StackConfig>,
-      stackNames: [],
+      stacks: (raw.pulumi?.stacks ?? {}) as Record<StackName, StackConfig>,
     },
     ansible: {
-      enabled: ansibleEnabled,
+      enabled: raw.ansible?.enabled ?? false,
       groups: raw.ansible?.groups ?? ["devops"],
       web: {
-        mode: webMode,
         static: {
           source: raw.ansible?.web?.static?.source ?? "local",
           dir: raw.ansible?.web?.static?.dir ?? "",
@@ -386,11 +376,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
       projectId: raw.secrets?.project_id ?? "",
       requiredVars: raw.secrets?.required_vars ?? [],
     },
-    roles: {
-      hasWeb: hasRoleWeb,
-      hasBackend: hasRoleBackend,
-      all: Array.from(allRoles),
-    },
+    roles: Array.from(roles),
   };
 }
 
@@ -408,12 +394,12 @@ export function displayConfig(config: LoadedConfig): void {
   );
   console.log("  pulumi.ssh_port:", config.pulumi.sshPort);
   console.log("  pulumi.stacks:", JSON.stringify(config.pulumi.stacks));
-  console.log("  detected roles:", JSON.stringify(config.roles.all));
+  console.log("  detected roles:", JSON.stringify(config.roles));
   console.log("  ansible.enabled:", config.ansible.enabled);
-  console.log(`  ansible.web (role=${config.roles.hasWeb}):`);
-  console.log("    mode:", config.ansible.web.mode ?? "<not configured>");
+  console.log(`  ansible.web:`);
+  console.log("    mode:", config.ansible.web.static ? "static" : "docker");
 
-  if (config.ansible.web.mode === "static") {
+  if (config.ansible.web.static) {
     console.log("    static.source:", config.ansible.web.static.source);
     if (config.ansible.web.static.source === "local") {
       console.log("    static.dir:", config.ansible.web.static.dir);
@@ -427,13 +413,13 @@ export function displayConfig(config: LoadedConfig): void {
       console.log("    static.tag:", config.ansible.web.static.tag);
       console.log("    static.path:", config.ansible.web.static.path);
     }
-  } else if (config.ansible.web.mode === "docker") {
+  } else if (config.ansible.web.docker) {
     console.log("    docker.image:", config.ansible.web.docker.image);
     console.log("    docker.tag:", config.ansible.web.docker.tag);
     console.log("    docker.port:", config.ansible.web.docker.port);
   }
 
-  console.log(`  ansible.backend (role=${config.roles.hasBackend}):`);
+  console.log(`  ansible.backend:`);
   console.log("    image:", config.ansible.backend.image);
   console.log("    tag:", config.ansible.backend.tag);
   console.log("    port:", config.ansible.backend.port);
@@ -457,7 +443,7 @@ export function displayConfig(config: LoadedConfig): void {
   }
 
   // Show web docker environment variables if docker mode
-  if (config.ansible.web.mode === "docker") {
+  if (config.ansible.web.docker) {
     console.log("  Web docker environment variables:");
     const webDockerEnvKeys = Object.keys(config.ansible.web.docker.env);
     if (webDockerEnvKeys.length > 0) {
