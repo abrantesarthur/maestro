@@ -6,6 +6,27 @@
 import { $ } from "bun";
 
 // ============================================
+// CLI Parsing
+// ============================================
+
+export function parseArgs(): { dryRun: boolean } {
+  const args = Bun.argv.slice(2);
+
+  for (const arg of args) {
+    if (arg === "--dry-run") {
+      continue;
+    }
+    console.error(`Unknown option: ${arg}`);
+    console.error(`Usage: bun . [--dry-run]`);
+    process.exit(1);
+  }
+
+  return {
+    dryRun: args.includes("--dry-run"),
+  };
+}
+
+// ============================================
 // Logging
 // ============================================
 
@@ -29,14 +50,16 @@ export const log = createLogger("maestro");
  * @param cmd - The command to check
  * @throws Error if the command is not found
  */
-export function requireCmd(cmd: string): void {
-  const result = Bun.spawnSync(["which", cmd], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+export function requireCmds(cmds: string[]): void {
+  for (const cmd of cmds) {
+    const result = Bun.spawnSync(["which", cmd], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
-  if (result.exitCode !== 0) {
-    throw new Error(`Error: required command '${cmd}' not found in PATH.`);
+    if (result.exitCode !== 0) {
+      throw new Error(`Error: required command '${cmd}' not found in PATH.`);
+    }
   }
 }
 
