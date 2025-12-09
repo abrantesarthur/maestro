@@ -7,8 +7,15 @@
 // Type Definitions
 // ============================================
 
-export type StackName = "dev" | "staging" | "prod";
-export type ServerRole = "backend" | "web";
+export enum StackName {
+  Dev = "dev",
+  Staging = "staging",
+  Prod = "prod",
+}
+export enum ServerRole {
+  Backend = "backend",
+  Web = "web",
+}
 export type PulumiCommand = "up" | "refresh" | "cancel" | "output";
 export type WebMode = "static" | "docker";
 export type StaticSource = "local" | "image";
@@ -83,6 +90,10 @@ export interface MaestroConfig {
   secrets?: SecretsConfig;
 }
 
+const validStacks = Object.values(StackName)
+  .map((s) => `'${s}'`)
+  .join(", ");
+
 // ============================================
 // Loaded Configuration (with defaults applied)
 // ============================================
@@ -141,6 +152,93 @@ export interface LoadedConfig {
 // Config Loading and Validation
 // ============================================
 
+const validatePulumiStackServers = ({
+  stackName,
+  servers,
+}: {
+  stackName: StackName;
+  servers: ServerConfig[];
+}): void => {
+  for (let i = 0; i < servers.length; i++) {
+    const server = servers[i]!;
+    if (!server.roles || server.roles.length === 0) {
+      throw new Error(
+        `pulumi.stacks.${stackName}.servers[${i}].roles is required (must include at least one of: backend, web)`,
+      );
+    }
+
+    const serverRoles = Object.values(ServerRole);
+    const invalidRole = server.roles.find((r) => !serverRoles.includes(r));
+    if (invalidRole) {
+      throw new Error(
+        `pulumi.stacks.${stackName}.servers[${i}].roles contains invalid role '${invalidRole}' (must be one of ${serverRoles.join(
+          ", ",
+        )})`,
+      );
+    }
+  }
+};
+
+const validatePulumiStack = ({
+  stackName,
+  stackConfig,
+}: {
+  stackName: StackName;
+  stackConfig: StackConfig;
+}): void => {
+  if (!stackConfig?.servers || stackConfig.servers.length === 0) {
+    throw new Error(
+      `pulumi.stacks.${stackName}.servers is required. Define at least one server.`,
+    );
+  }
+  validatePulumiStackServers({ stackName, servers: stackConfig.servers });
+};
+
+const validatePulumiStacks = (
+  stacks: Partial<Record<StackName, StackConfig>>,
+): void => {
+  const stackNames = Object.keys(stacks) as StackName[];
+
+  if (stackNames.length === 0) {
+    throw new Error(
+      `pulumi.stacks is required when pulumi is enabled. Define at least one stack (${validStacks}).`,
+    );
+  }
+
+  const invalidStackName = stackNames.find(
+    (sn) =>
+      ![StackName.Dev, StackName.Staging, StackName.Prod].includes(
+        sn as StackName,
+      ),
+  );
+  if (invalidStackName) {
+    throw new Error(
+      `pulumi.stacks constains invalid stack '${invalidStackName}'. Must be one of ${validStacks}.`,
+    );
+  }
+
+  for (const stackEntry of Object.entries(stacks)) {
+    validatePulumiStack({
+      stackName: stackEntry[0] as StackName,
+      stackConfig: stackEntry[1],
+    });
+  }
+};
+
+const validatePulumiConfig = (raw: MaestroConfig): void => {
+  if (raw.pulumi?.enabled ?? false) {
+    const pulumi = raw.pulumi!;
+
+    if (!pulumi.cloudflare_account_id) {
+      throw new Error(
+        `pulumi.cloudflare_account_id is required when pulumi is enabled`,
+      );
+    }
+
+    validatePulumiStacks(pulumi.stacks ?? {});
+  }
+};
+
 export async function loadConfig(configPath: string): Promise<LoadedConfig> {
   const file = Bun.file(configPath);
 
@@ -151,87 +249,40 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     );
   }
 
+  // FIXME: use ajv to validate the yaml schema
   const content = await file.text();
   const raw = Bun.YAML.parse(content) as MaestroConfig;
 
   // Validate required fields
   if (!raw.domain) {
-    throw new Error(`domain is required in ${configPath}`);
+    throw new Error(`Missing 'domain' in ${configPath}`);
   }
 
-  // Determine web mode
-  let webMode: WebMode | null = null;
-  if (raw.ansible?.web?.static) {
-    webMode = "static";
-  } else if (raw.ansible?.web?.docker) {
-    webMode = "docker";
-  }
-
-  // Extract stack names and validate
-  const pulumiEnabled = raw.pulumi?.enabled ?? true;
-  const stacks = raw.pulumi?.stacks ?? {};
-  const stackNames = Object.keys(stacks).filter(
-    (k): k is StackName => k === "dev" || k === "staging" || k === "prod",
-  );
-
-  // Validate stacks if pulumi is enabled
-  if (pulumiEnabled) {
-    if (!raw.pulumi?.cloudflare_account_id) {
-      throw new Error(
-        `pulumi.cloudflare_account_id is required when pulumi is enabled`,
-      );
-    }
-
-    if (stackNames.length === 0) {
-      throw new Error(
-        `pulumi.stacks is required when pulumi is enabled. Define at least one stack (dev, staging, or prod).`,
-      );
-    }
-
-    // Validate each stack
-    for (const stackName of stackNames) {
-      const stack = stacks[stackName];
-      if (!stack?.servers || stack.servers.length === 0) {
-        throw new Error(
-          `pulumi.stacks.${stackName}.servers is required. Define at least one server.`,
-        );
-      }
-
-      for (let i = 0; i < stack.servers.length; i++) {
-        const server = stack.servers[i]!;
-        if (!server.roles || server.roles.length === 0) {
-          throw new Error(
-            `pulumi.stacks.${stackName}.servers[${i}].roles is required (must include at least one of: backend, web)`,
-          );
-        }
-
-        for (const role of server.roles) {
-          if (role !== "backend" && role !== "web") {
-            throw new Error(
-              `pulumi.stacks.${stackName}.servers[${i}].roles contains invalid role '${role}' (must be one of: backend, web)`,
-            );
-          }
-        }
-      }
-    }
-  }
+  validatePulumiConfig(raw);
 
   // Collect all unique roles from all stacks
   const allRoles = new Set<ServerRole>();
-  for (const stackName of stackNames) {
-    const stack = stacks[stackName];
-    if (stack?.servers) {
-      for (const server of stack.servers) {
-        for (const role of server.roles) {
-          allRoles.add(role);
-        }
-      }
-    }
-  }
+  // for (const stackName of stackNames) {
+  //   const stack = stacks[stackName];
+  //   if (stack?.servers) {
+  //     for (const server of stack.servers) {
+  //       for (const role of server.roles) {
+  //         allRoles.add(role);
+  //       }
+  //     }
+  //   }
+  // }
 
-  const hasRoleWeb = allRoles.has("web");
-  const hasRoleBackend = allRoles.has("backend");
+  const hasRoleWeb = allRoles.has(ServerRole.Web);
+  const hasRoleBackend = allRoles.has(ServerRole.Backend);
   const ansibleEnabled = raw.ansible?.enabled ?? true;
+
+  // Determine web mode
+  let webMode: WebMode | null = raw.ansible?.web?.static
+    ? "static"
+    : raw.ansible?.web?.docker
+    ? "docker"
+    : null;
 
   // Role-based validation
   if (ansibleEnabled && hasRoleWeb) {
@@ -294,12 +345,13 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
   return {
     domain: raw.domain,
     pulumi: {
-      enabled: pulumiEnabled,
+      // enabled: pulumiEnabled,
+      enabled: false,
       command: raw.pulumi?.command ?? "up",
       cloudflareAccountId: raw.pulumi?.cloudflare_account_id ?? "",
       sshPort: raw.pulumi?.ssh_port ?? 22,
-      stacks: stacks as Record<StackName, StackConfig>,
-      stackNames,
+      stacks: raw.pulumi?.stacks as Record<StackName, StackConfig>,
+      stackNames: [],
     },
     ansible: {
       enabled: ansibleEnabled,

@@ -25,7 +25,7 @@ domain: example.com
 # - DigitalOcean virtual servers with cloudflared and SSL/TLS certificates
 # - Cloudflare DNS records and tunnels for SSH access
 pulumi:
-  # [Optional, default: true] Set to false to skip Pulumi provisioning.
+  # [Optional, default: false] Set to false to skip Pulumi provisioning.
   # Useful if you've already ran pulumi provisioning before and just want to
   # configure the server via Ansible (see below).
   enabled: true
