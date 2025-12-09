@@ -90,8 +90,8 @@ PULUMI_STACKS_JSON="$(yq eval -o=json '.pulumi.stacks // {}' "${CONFIG_FILE}" 2>
 # Ansible configuration
 ANSIBLE_ENABLED="$(cfg_get_bool '.ansible.enabled' 'true')"
 
-# Perms configuration - managed groups (read as JSON array)
-MANAGED_GROUPS="$(yq eval -o=json '.ansible.perms.groups // ["devops"]' "${CONFIG_FILE}" 2>/dev/null)"
+# Security configuration - managed groups (read as JSON array)
+MANAGED_GROUPS="$(yq eval -o=json '.ansible.groups // ["devops"]' "${CONFIG_FILE}" 2>/dev/null)"
 
 # Web configuration - determine mode (static vs docker)
 # Mode is determined by presence of static or docker block
@@ -175,15 +175,15 @@ if [[ "${PULUMI_ENABLED}" == "true" ]]; then
       
       # Validate roles
       if [[ "${roles_count}" -eq 0 ]]; then
-        log "Error: pulumi.stacks.${stack_name}.servers[$i].roles is required (must include at least one of: backend, web, perms)"
+        log "Error: pulumi.stacks.${stack_name}.servers[$i].roles is required (must include at least one of: backend, web)"
         exit 1
       fi
       
       # Validate each role is valid
       for j in $(seq 0 $((roles_count - 1))); do
         role="$(echo "${server}" | jq -r ".roles[$j]")"
-        if [[ "${role}" != "backend" && "${role}" != "web" && "${role}" != "perms" ]]; then
-          log "Error: pulumi.stacks.${stack_name}.servers[$i].roles contains invalid role '${role}' (must be one of: backend, web, perms)"
+        if [[ "${role}" != "backend" && "${role}" != "web" ]]; then
+          log "Error: pulumi.stacks.${stack_name}.servers[$i].roles contains invalid role '${role}' (must be one of: backend, web)"
           exit 1
         fi
       done
@@ -197,7 +197,6 @@ if [[ "${PULUMI_ENABLED}" == "true" ]]; then
   ALL_ROLES_JSON="$(echo "${PULUMI_STACKS_JSON}" | jq '[.[].servers[].roles[]] | unique')"
   HAS_ROLE_WEB="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "web")')"
   HAS_ROLE_BACKEND="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "backend")')"
-  HAS_ROLE_PERMS="$(echo "${ALL_ROLES_JSON}" | jq 'any(. == "perms")')"
   log "Detected roles: $(echo "${ALL_ROLES_JSON}" | jq -c '.')"
 fi
 
@@ -268,8 +267,7 @@ if [[ "${DRY_RUN}" == "true" ]]; then
   log "    image: ${BACKEND_IMAGE}"
   log "    tag: ${BACKEND_IMAGE_TAG}"
   log "    port: ${BACKEND_PORT}"
-  log "  ansible.perms (role=${HAS_ROLE_PERMS:-false}):"
-  log "    groups: ${MANAGED_GROUPS}"
+  log "  ansible.groups: ${MANAGED_GROUPS}"
   log "  secrets.provider: ${SECRETS_PROVIDER}"
   log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
   # Show BACKEND_ENV_* variables
@@ -477,7 +475,7 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
     cfg_export_map '.ansible.web.docker.env' 'WEB_DOCKER_ENV_'
   fi
 
-  # Export perms configuration (managed groups as JSON array)
+  # Export security configuration (managed groups as JSON array)
   export MANAGED_GROUPS
 
   ansible_args=(
@@ -486,14 +484,12 @@ if [[ "${ANSIBLE_ENABLED}" == "true" && -n "${PULUMI_HOSTS}" && "${PULUMI_HOSTS}
   )
 
   # Role-based provisioning: skip playbooks if no server has that role
+  # Note: security.yml always runs on all servers (not role-based)
   if [[ "${HAS_ROLE_WEB:-false}" != "true" ]]; then
     ansible_args+=(--skip-web)
   fi
   if [[ "${HAS_ROLE_BACKEND:-false}" != "true" ]]; then
     ansible_args+=(--skip-backend)
-  fi
-  if [[ "${HAS_ROLE_PERMS:-false}" != "true" ]]; then
-    ansible_args+=(--skip-perms)
   fi
 
   "${ANSIBLE_RUN}" "${ansible_args[@]}"

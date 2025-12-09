@@ -3,13 +3,16 @@
 """Dynamic inventory that maps SSH_HOSTS into Ansible hosts and tag-based groups.
 
 Usage:
-  Export SSH_HOSTS with a single-line JSON list of hostname and tags before invoking Ansible.
-  Example: {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"]}]}
+  Export SSH_HOSTS with a single-line JSON list of hostname, tags, and optional groups before invoking Ansible.
+  Example: {"hosts":[{"hostname":"ssh0.dalhe.ai","tags":["backend","prod","web"],"groups":["devops"]}]}
+
+  The 'groups' field is optional and specifies per-host system groups override for the groups role.
+  If not specified, the host uses the global MANAGED_GROUPS environment variable.
 
   Inventory output shape (for the example above):
-    {d
+    {
       "all": {"hosts": ["ssh0.dalhe.ai"], "vars": {"ansible_python_interpreter": "/usr/bin/python3"}},
-      "_meta": {"hostvars": {"ssh0.dalhe.ai": {"ansible_host": "ssh0.dalhe.ai", "ansible_user": "root", "ansible_port": "22", "ansible_ssh_private_key_file": "<key>", "ansible_ssh_common_args": "<cloudflared-proxy>"}}},
+      "_meta": {"hostvars": {"ssh0.dalhe.ai": {"ansible_host": "ssh0.dalhe.ai", "ansible_user": "root", "ansible_port": "22", "ansible_ssh_private_key_file": "<key>", "ansible_ssh_common_args": "<cloudflared-proxy>", "host_managed_groups": ["devops"]}}},
       "backend": {"hosts": ["ssh0.dalhe.ai"]},
       "prod": {"hosts": ["ssh0.dalhe.ai"]},
       "web": {"hosts": ["ssh0.dalhe.ai"]}
@@ -24,9 +27,10 @@ import sys
 from typing import Dict, List, Set, TypedDict
 
 
-class HostEntry(TypedDict):
+class HostEntry(TypedDict, total=False):
     hostname: str
     tags: List[str]
+    groups: List[str]  # Optional per-host groups override
 
 
 def parse_hosts() -> List[HostEntry]:
@@ -79,12 +83,28 @@ def parse_hosts() -> List[HostEntry]:
                 sys.exit(1)
             tags.append(tag.strip())
 
-        normalized_hosts.append(
-            {
-                "hostname": hostname.strip(),
-                "tags": sorted(set(tags)),
-            }
-        )
+        # Parse optional per-host groups override
+        raw_groups = host_entry.get("groups")
+        groups: List[str] | None = None
+        if raw_groups is not None:
+            if not isinstance(raw_groups, list):
+                sys.stderr.write(f"Host entry for {hostname} has an invalid 'groups' section.\n")
+                sys.exit(1)
+            groups = []
+            for group in raw_groups:
+                if not isinstance(group, str) or not group.strip():
+                    sys.stderr.write(f"Host entry for {hostname} has an invalid group: {group!r}\n")
+                    sys.exit(1)
+                groups.append(group.strip())
+
+        host_entry_normalized: HostEntry = {
+            "hostname": hostname.strip(),
+            "tags": sorted(set(tags)),
+        }
+        if groups is not None:
+            host_entry_normalized["groups"] = groups
+
+        normalized_hosts.append(host_entry_normalized)
 
     return normalized_hosts
 
@@ -92,7 +112,7 @@ def parse_hosts() -> List[HostEntry]:
 def build_inventory(hosts: List[HostEntry]) -> Dict[str, Dict[str, dict]]:
     ssh_key = os.environ.get("SSH_KEY_PATH", "").strip()
     hostvars: Dict[str, dict] = {}
-    groups: Dict[str, Set[str]] = {}
+    tag_groups: Dict[str, Set[str]] = {}
     for host_entry in hosts:
         host = host_entry["hostname"]
         # proxy ssh commands through the cloudflared client so we can connect to the tunnel
@@ -100,19 +120,23 @@ def build_inventory(hosts: List[HostEntry]) -> Dict[str, Dict[str, dict]]:
             f'-o ProxyCommand="/usr/local/bin/cloudflared access ssh --hostname {host}" '
             f'-o IdentityFile={ssh_key}'
         )
-        hostvars[host] = {
+        host_vars: dict = {
             "ansible_host": host,
             "ansible_user": "root",
             "ansible_port":  "22",
             "ansible_ssh_private_key_file": ssh_key,
             "ansible_ssh_common_args": ssh_common_args,
         }
+        # Pass per-host groups override if specified
+        if "groups" in host_entry:
+            host_vars["host_managed_groups"] = host_entry["groups"]
+        hostvars[host] = host_vars
         for tag in host_entry.get("tags", []):
-            groups.setdefault(tag, set()).add(host)
+            tag_groups.setdefault(tag, set()).add(host)
 
     # generate groups for each provided tag pointing to the hosts that declared it
     inventory_groups: Dict[str, Dict[str, List[str]]] = {
-        tag: {"hosts": sorted(host_list)} for tag, host_list in groups.items()
+        tag: {"hosts": sorted(host_list)} for tag, host_list in tag_groups.items()
     }
 
     inventory = {

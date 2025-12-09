@@ -1,7 +1,0 @@
----
-- name: Provision permissions (firewall policies, groups, etc.)
-  hosts: perms
-  become: true
-  roles:
-    - ufw
-    - groups

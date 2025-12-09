@@ -14,20 +14,22 @@
     direction: incoming
     policy: deny
 
-# allow ssh traffic from anywhere so pulumi can remove cloudflared.
-# otherwise, pulumi is blocked from destroying the ssh tunnels.
+# Allow SSH traffic from anywhere so Pulumi can remove cloudflared.
+# Otherwise, Pulumi is blocked from destroying the SSH tunnels.
 - name: Allow SSH traffic from anywhere
   community.general.ufw:
     rule: allow
     proto: tcp
     to_port: 22
 
+# Web role: Allow HTTPS traffic from Cloudflare IPs only
 - name: Remove any existing wide-open HTTPS rules allowing traffic from anywhere
   community.general.ufw:
     rule: allow
     proto: tcp
     to_port: 443
     delete: true
+  when: "'web' in group_names"
 
 - name: Allow HTTPS traffic from Cloudflare
   community.general.ufw:
@@ -36,6 +38,16 @@
     to_port: 443
     from_ip: "{{ item }}"
   loop: "{{ ufw_cloudflare_ipv4_cidrs }}"
+  when: "'web' in group_names"
+
+# Backend role: Allow backend port from localhost only (cloudflared handles external access)
+- name: Allow backend port from localhost
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    to_port: "{{ ufw_backend_port }}"
+    from_ip: 127.0.0.1
+  when: "'backend' in group_names"
 
 - name: Enable ufw
   community.general.ufw:

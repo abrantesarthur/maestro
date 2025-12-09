@@ -42,12 +42,14 @@ pulumi:
   stacks: # Define one or more stacks (dev, staging, prod)
     prod:
       servers:
-        - roles: [backend, web, perms] # Server roles determine what gets provisioned
+        - roles: [backend, web] # Server roles determine what gets provisioned
+          # groups: [devops]   # Optional: override global ansible.groups
           # size: s-1vcpu-1gb  # Optional: DigitalOcean droplet size
           # region: nyc1       # Optional: DigitalOcean region
 
 ansible:
   enabled: true # Enable/disable all Ansible provisioning
+  groups: [devops] # System groups (can be overridden per-server)
   web: # Required if any server has "web" role
     static:
       source: local
@@ -58,8 +60,6 @@ ansible:
     port: 3000 # Backend port
     env: # Environment variables for container
       DATABASE_URL: postgres://...
-  perms: # Required if any server has "perms" role
-    groups: [devops] # System groups to manage
 
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
@@ -75,7 +75,11 @@ Provisioning is **role-based**: Ansible playbooks run only on servers that have 
 | --------- | ---------------- | ------------------------------------- |
 | `backend` | `backend.yml`    | Docker + backend container deployment |
 | `web`     | `web.yml`        | nginx (static files or reverse proxy) |
-| `perms`   | `perms.yml`      | UFW firewall rules + system groups    |
+
+**Security hardening** (`security.yml`) is applied automatically to all servers. This includes:
+
+- UFW firewall rules (deny incoming by default, allow SSH, role-specific rules)
+- System group management (configurable via `ansible.groups`)
 
 If no server has a particular role, that playbook is skipped entirely.
 
@@ -88,15 +92,16 @@ pulumi:
   stacks:
     staging:
       servers:
-        - roles: [backend, web, perms]
+        - roles: [backend, web]
     prod:
       servers:
-        - roles: [backend, perms]
+        - roles: [backend]
+          groups: [devops, backend-team] # Per-server group override
           size: s-2vcpu-4gb
-        - roles: [web, perms]
+        - roles: [web]
 ```
 
-When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`, `perms`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
+When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
 
 ### Required Environment Variable
 
@@ -113,8 +118,6 @@ When you run `./run.sh`, Maestro provisions each defined stack sequentially, the
 ### Secrets
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
-
-FIXME: think better the whole perms playbook. We should be able to customize permissioning per server, not have every server with the same permissioning configuraiton.
 
 FIXME: Is there an easy way for users to implement they custom tagging and what should happein in ansible? Also, should we call these tags roles or playbooks within the Pulumi section? We currently call them roles but they actually map to playbooks in ansible.
 

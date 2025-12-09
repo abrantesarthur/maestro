@@ -1,4 +1,6 @@
 # Managed groups configuration
-# Read from MANAGED_GROUPS environment variable (JSON array)
-# If not set, defaults to empty list (skips group management)
-managed_groups: "{{ (lookup('env', 'MANAGED_GROUPS') | from_json) if lookup('env', 'MANAGED_GROUPS') else [] }}"
+# Priority: host_managed_groups (per-host override) > MANAGED_GROUPS env var > empty list
+# Per-host override is set via the 'groups' field in server config (maestro.yaml)
+# Global default is read from MANAGED_GROUPS environment variable (JSON array)
+_global_managed_groups: "{{ (lookup('env', 'MANAGED_GROUPS') | from_json) if lookup('env', 'MANAGED_GROUPS') else [] }}"
+managed_groups: "{{ host_managed_groups | default(_global_managed_groups) }}"

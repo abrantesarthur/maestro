@@ -1,0 +1,7 @@
+---
+- name: Security hardening (firewall policies, groups, etc.)
+  hosts: all
+  become: true
+  roles:
+    - ufw
+    - groups

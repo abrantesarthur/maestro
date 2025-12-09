@@ -47,29 +47,31 @@ pulumi:
     # Production stack example
     prod:
       servers:
-        # Single production server (handles backend, web, and perms)
-        - roles: [backend, web, perms] # Required: one or more of backend, web, perms
-          # tags: []                # Optional: custom user-defined tags
+        # Single production server (handles backend and web)
+        - roles: [backend, web] # Required: one or more of backend, web
+          # groups: [devops]       # Optional: override global ansible.groups for this server
+          # tags: []               # Optional: custom user-defined tags
           # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
-          # size: s-1vcpu-1gb       # Optional, default: s-1vcpu-1gb
-          # region: nyc1            # Optional, default: nyc1
+          # size: s-1vcpu-1gb      # Optional, default: s-1vcpu-1gb
+          # region: nyc1           # Optional, default: nyc1
 
   # Multi-stack setup example (uncomment to use):
   # stacks:
   #   staging:
   #     servers:
   #       # Staging server for testing
-  #       - roles: [backend, web, perms]
+  #       - roles: [backend, web]
   #         tags: [canary]          # Custom tag for canary deployments
   #         region: nyc1
   #   prod:
   #     servers:
   #       # Production backend server
-  #       - roles: [backend, perms]
+  #       - roles: [backend]
+  #         groups: [devops, backend-team]  # Per-server group override
   #         size: s-2vcpu-4gb       # Larger size for production
   #         region: nyc1
   #       # Production web server
-  #       - roles: [web, perms]
+  #       - roles: [web]
   #         region: nyc1
 
 # ============================================
@@ -78,7 +80,10 @@ pulumi:
 # Ansible configures the provisioned servers based on their roles:
 # - web role: nginx for web serving (static files or reverse proxy)
 # - backend role: Docker and backend application container
-# - perms role: System permissions, firewall rules, and groups
+#
+# Security hardening (UFW firewall, system groups) is applied automatically
+# to all servers. Firewall rules are role-based: web servers allow HTTPS from
+# Cloudflare, backend servers allow their port from localhost only.
 #
 # Provisioning is role-based: a playbook runs only on servers that have the
 # corresponding role in pulumi.stacks.*.servers[].roles. If no server has a
@@ -88,6 +93,17 @@ ansible:
   # Useful if you want to manually configure your servers. You can SSH via the
   # tunnel with hostname ssh<index>.<domain>, where 'index' is 0 to n-1.
   enabled: true
+
+  # [Optional, default: [devops]] System groups to create on all servers
+  # Groups not in this list (except system groups) will be removed.
+  # Can be overridden per-server via pulumi.stacks.*.servers[].groups
+  groups:
+    - devops
+  # Example with multiple groups:
+  # groups:
+  #   - devops
+  #   - docker
+  #   - developers
 
   # Web server provisioning (nginx)
   # Required if any server has the "web" role
@@ -167,24 +183,6 @@ ansible:
       # DATABASE_URL: postgres://user:pass@host:5432/db
       # REDIS_URL: redis://localhost:6379
       # API_KEY: your_api_key_here
-
-  # System permissions provisioning
-  # Required if any server has the "perms" role
-  perms:
-    # This playbook configures:
-    # - UFW firewall: denies incoming traffic by default, allows SSH, and
-    #   restricts HTTPS to Cloudflare IPs only
-    # - System groups: creates required groups and removes unmanaged custom groups
-
-    # [Optional, default: [devops]] List of system groups to create and manage
-    # Groups not in this list (except system groups and exclusions) will be removed
-    groups:
-      - devops
-    # Example with multiple groups:
-    # groups:
-    #   - devops
-    #   - docker
-    #   - developers
 
 # ============================================
 # Secrets Configuration

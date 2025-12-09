@@ -33,7 +33,6 @@ Options:
   --skip-bws                       Skip fetching secrets from Bitwarden Secrets Manager
   --skip-web                       Skip provisioning web server
   --skip-backend                   Skip provisioning backend
-  --skip-perms                     Skip provisioning permissions
 
 Web configuration is passed via environment variables:
   WEB_MODE                         Web mode: 'static' or 'docker'
@@ -48,7 +47,7 @@ Web configuration is passed via environment variables:
   WEB_DOCKER_TAG                   Docker web app tag (when mode=docker)
   WEB_DOCKER_PORT                  Docker web app port (when mode=docker)
 
-Perms configuration is passed via environment variables:
+Security configuration is passed via environment variables:
   MANAGED_GROUPS                   JSON array of groups to manage (default: ["devops"])
 EOF
 }
@@ -58,7 +57,6 @@ SSH_HOSTS_ARG=""
 SKIP_BWS=false
 SKIP_WEB=false
 SKIP_BACKEND=false
-SKIP_PERMS=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
@@ -80,10 +78,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-backend)
       SKIP_BACKEND=true
-      shift 1
-      ;;
-    --skip-perms)
-      SKIP_PERMS=true
       shift 1
       ;;
     *)
@@ -245,7 +239,7 @@ export WEB_DOCKER_IMAGE="${WEB_DOCKER_IMAGE:-}"
 export WEB_DOCKER_TAG="${WEB_DOCKER_TAG:-latest}"
 export WEB_DOCKER_PORT="${WEB_DOCKER_PORT:-3000}"
 
-# Export perms configuration for Ansible playbooks
+# Export security configuration for Ansible playbooks
 export MANAGED_GROUPS="${MANAGED_GROUPS:-}"
 
 
@@ -263,12 +257,9 @@ else
   log "Skipping provisioning backend..."
 fi
 
-if [[ "${SKIP_PERMS}" == "false" ]]; then
-  log "Provisioning permissions..."
-  run_playbook "perms.yml"
-else
-  log "Skipping provisioning permissions..."
-fi
+# Security hardening always runs on all servers
+log "Applying security hardening..."
+run_playbook "security.yml"
 
 # we recommend running this playbook last because it may block connections to the server.
 popd >/dev/null

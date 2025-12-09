@@ -56,7 +56,6 @@ Each key-value pair becomes an environment variable in the container. Note that 
 | `--skip-bws`           | Skip fetching secrets from Bitwarden                            |
 | `--skip-web`           | Skip provisioning web server                                    |
 | `--skip-backend`       | Skip provisioning backend                                       |
-| `--skip-perms`         | Skip provisioning permissions                                   |
 
 ## Required Secrets (from Bitwarden)
 
@@ -76,15 +75,18 @@ Currently only GitHub Container Registry (ghcr.io) images are supported. The pla
 
 Roles:
 
-- **roles/ufw**: Installs and configures UFW to deny inbound traffic by default while allowing SSH (22) and backend from localhost (via cloudflared) and HTTPS (443) only from Cloudflare IP ranges.
-- **roles/groups**: Manages system groups from `roles/groups/vars/main.yml`.
+- **roles/ufw**: Installs and configures UFW with role-based firewall rules:
+  - Always: Deny inbound by default, allow SSH (22) from anywhere
+  - Web role: Allow HTTPS (443) from Cloudflare IP ranges only
+  - Backend role: Allow backend port from localhost only (cloudflared handles external access)
+- **roles/groups**: Manages system groups. Uses per-host override if specified, otherwise falls back to global `MANAGED_GROUPS` env var.
 - **roles/docker**: Installs and enables the Docker engine and Python bindings.
 - **roles/nginx**: Installs and configures nginx for the web tier.
 - **roles/backend_app**: Logs into GHCR, pulls the tagged backend image, and runs the backend container.
 
 Playbooks:
 
-- **perms.yml**: Applies group/permission management.
+- **security.yml**: Security hardening (UFW firewall + system groups). Runs on all servers automatically.
 - **web.yml**: Provisions the web tier (nginx).
 - **backend.yml**: Provisions backend hosts (Docker engine + backend_app).
 

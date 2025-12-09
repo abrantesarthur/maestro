@@ -12,6 +12,7 @@ import {
 interface ServerConfig {
   roles: string[];
   tags?: string[];
+  groups?: string[]; // Optional per-server groups override for security hardening
   image?: string;
   size?: string;
   region?: string;
@@ -57,31 +58,41 @@ const regionMap: Record<string, digitalOcean.Region> = {
 };
 
 // Build VirtualServerArgs from config, combining stack name + roles + custom tags
-const VPS_ARGS: Omit<VirtualServerArgs, "index">[] = serversConfig.map(
-  (server) => {
-    // Combine all tags: stack name (as environment) + roles + custom tags
-    const allTags: string[] = [
-      stackName,
-      ...server.roles,
-      ...(server.tags || []),
-    ];
+// Also preserve per-server groups for security hardening
+interface VpsConfig {
+  args: Omit<VirtualServerArgs, "index">;
+  groups?: string[]; // Per-server groups override
+}
 
-    const size = server.size || "s-1vcpu-1gb";
-    const region = server.region || "nyc1";
+const VPS_CONFIGS: VpsConfig[] = serversConfig.map((server) => {
+  // Combine all tags: stack name (as environment) + roles + custom tags
+  const allTags: string[] = [
+    stackName,
+    ...server.roles,
+    ...(server.tags || []),
+  ];
 
-    return {
+  const size = server.size || "s-1vcpu-1gb";
+  const region = server.region || "nyc1";
+
+  return {
+    args: {
       image: server.image || "ubuntu-25-04-x64",
       size: sizeMap[size] || digitalOcean.DropletSlug.DropletS1VCPU1GB,
       region: regionMap[region] || digitalOcean.Region.NYC1,
       sshKeys: ["51520910"], // TODO: make this configurable
       tags: allTags,
-    };
-  },
-);
+    },
+    groups: server.groups, // Pass through per-server groups if specified
+  };
+});
 
-const virtualServers = VPS_ARGS.map(
-  (a, index) => new VirtualServer({ ...a, index }),
-);
+const virtualServersWithConfig = VPS_CONFIGS.map((config, index) => ({
+  server: new VirtualServer({ ...config.args, index }),
+  groups: config.groups,
+}));
+
+const virtualServers = virtualServersWithConfig.map((v) => v.server);
 
 // create A DNS records for each web production server
 const webProdVirualServers = virtualServers.filter((vs) =>
@@ -99,7 +110,18 @@ webProdVirualServers.map((vs) =>
 );
 
 // export the outputs we care about so they can be consumed by the pulumi cli
-export const hosts = virtualServers.map((vs) => ({
-  hostname: vs.sshHostname,
-  tags: vs.tags,
-}));
+// includes per-server groups override for security hardening if specified
+export const hosts = virtualServersWithConfig.map((v) => {
+  const base: {
+    hostname: pulumi.Output<string>;
+    tags: pulumi.Output<string[]>;
+    groups?: string[];
+  } = {
+    hostname: v.server.sshHostname,
+    tags: v.server.tags,
+  };
+  if (v.groups) {
+    base.groups = v.groups;
+  }
+  return base;
+});

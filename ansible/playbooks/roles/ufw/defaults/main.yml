@@ -16,3 +16,6 @@ ufw_cloudflare_ipv4_cidrs:
   - 104.24.0.0/14
   - 172.64.0.0/13
   - 131.0.72.0/22
+
+# Backend port to allow from localhost (read from BACKEND_PORT env var)
+ufw_backend_port: "{{ lookup('env', 'BACKEND_PORT') | default('3000', true) }}"
