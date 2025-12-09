@@ -18,7 +18,10 @@ export enum ServerRole {
 }
 export type PulumiCommand = "up" | "refresh" | "cancel" | "output";
 export type WebMode = "static" | "docker";
-export type StaticSource = "local" | "image";
+export enum StaticSource {
+  Local = "local",
+  Image = "image",
+}
 
 export interface ServerConfig {
   roles: ServerRole[];
@@ -112,7 +115,7 @@ export interface LoadedConfig {
     groups: string[];
     web: {
       static: {
-        source: StaticSource;
+        source?: StaticSource;
         dir: string;
         build: string;
         dist: string;
@@ -233,7 +236,7 @@ const validatePulumiConfig = (raw: MaestroConfig): void => {
   }
 };
 
-const validateAnsibleWeb = (webConfig: WebConfig): void => {
+const validateAnsibleWeb = async (webConfig: WebConfig): Promise<void> => {
   const staticConfig = webConfig.static;
   const dockerConfig = webConfig.docker;
 
@@ -258,23 +261,32 @@ const validateAnsibleWeb = (webConfig: WebConfig): void => {
   }
 
   if (webMode === "static") {
-    const source = staticConfig?.source ?? "local";
+    const { source, dir, image } = staticConfig ?? {};
 
+    if (!source) {
+      throw new Error(
+        `ansible.web.static.source is required. Must be one of ${Object.values(
+          StaticSource,
+        )
+          .map((s) => `'${s}'`)
+          .join(", ")}`,
+      );
+    }
     if (source === "local") {
-      if (!staticConfig?.dir) {
+      if (!dir) {
         throw new Error(
           `ansible.web.static.dir is required when source is 'local'`,
         );
       }
-    } else if (source === "image") {
-      if (!staticConfig?.image) {
-        throw new Error(
-          `ansible.web.static.image is required when source is 'image'`,
-        );
+      try {
+        (await Bun.file(dir).stat()).isDirectory();
+      } catch (error) {
+        throw new Error(`ansible.web.static.dir does not exist at ${dir}`);
       }
-    } else {
+    }
+    if (source === "image" && !image) {
       throw new Error(
-        `ansible.web.static.source must be 'local' or 'image', got '${source}'`,
+        `ansible.web.static.image is required when source is 'image'`,
       );
     }
   }
@@ -291,16 +303,16 @@ const validateAnsibleBackend = (
   }
 };
 
-const validateAnsibleConfig = ({
+const validateAnsibleConfig = async ({
   raw,
   roles,
 }: {
   raw: MaestroConfig;
   roles: Set<ServerRole>;
-}): void => {
+}): Promise<void> => {
   if (raw.ansible?.enabled ?? false) {
     if (roles.has(ServerRole.Web)) {
-      validateAnsibleWeb(raw.ansible?.web ?? {});
+      await validateAnsibleWeb(raw.ansible?.web ?? {});
     }
 
     if (roles.has(ServerRole.Backend)) {
@@ -335,7 +347,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     .flatMap((s) => s.servers.flatMap((s) => s.roles))
     .reduce((prev, curr) => prev.add(curr), new Set<ServerRole>());
 
-  validateAnsibleConfig({ raw, roles });
+  await validateAnsibleConfig({ raw, roles });
 
   // Validate secrets provider
   const secretsProvider = raw.secrets?.provider ?? "bws";
@@ -360,7 +372,7 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
       groups: raw.ansible?.groups ?? ["devops"],
       web: {
         static: {
-          source: raw.ansible?.web?.static?.source ?? "local",
+          source: raw.ansible?.web?.static?.source,
           dir: raw.ansible?.web?.static?.dir ?? "",
           build: raw.ansible?.web?.static?.build ?? "",
           dist: raw.ansible?.web?.static?.dist ?? "dist",

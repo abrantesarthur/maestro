@@ -110,7 +110,8 @@ async function runAnsible(
       : config.ansible.web.static
       ? "static"
       : "",
-    WEB_STATIC_SOURCE: config.ansible.web.static.source,
+    // FIXME: ensure empty value is ok
+    WEB_STATIC_SOURCE: config.ansible.web.static?.source ?? "",
     WEB_STATIC_DIR: config.ansible.web.static.dir,
     WEB_STATIC_BUILD: config.ansible.web.static.build,
     WEB_STATIC_DIST: config.ansible.web.static.dist,
