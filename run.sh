@@ -240,51 +240,51 @@ fi
 
 if [[ "${DRY_RUN}" == "true" ]]; then
   log "Dry-run mode enabled. Configuration loaded:"
-  log "  domain: ${DOMAIN}"
-  log "  pulumi.enabled: ${PULUMI_ENABLED}"
-  log "  pulumi.command: ${PULUMI_COMMAND}"
-  log "  pulumi.cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID}"
-  log "  pulumi.ssh_port: ${SSH_PORT}"
-  log "  pulumi.stacks: $(echo "${PULUMI_STACKS_JSON}" | jq -c '.')"
-  log "  detected roles: ${ALL_ROLES_JSON:-[]}"
-  log "  ansible.enabled: ${ANSIBLE_ENABLED}"
-  log "  ansible.web (role=${HAS_ROLE_WEB:-false}):"
-  log "    mode: ${WEB_MODE:-<not configured>}"
+  echo "  domain: ${DOMAIN}"
+  echo "  pulumi.enabled: ${PULUMI_ENABLED}"
+  echo "  pulumi.command: ${PULUMI_COMMAND}"
+  echo "  pulumi.cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID}"
+  echo "  pulumi.ssh_port: ${SSH_PORT}"
+  echo "  pulumi.stacks: $(echo "${PULUMI_STACKS_JSON}" | jq -c '.')"
+  echo "  detected roles: ${ALL_ROLES_JSON:-[]}"
+  echo "  ansible.enabled: ${ANSIBLE_ENABLED}"
+  echo "  ansible.web (role=${HAS_ROLE_WEB:-false}):"
+  echo "    mode: ${WEB_MODE:-<not configured>}"
   if [[ "${WEB_MODE}" == "static" ]]; then
-    log "    static.source: ${WEB_STATIC_SOURCE}"
+    echo "    static.source: ${WEB_STATIC_SOURCE}"
     if [[ "${WEB_STATIC_SOURCE}" == "local" ]]; then
-      log "    static.dir: ${WEB_STATIC_DIR}"
-      log "    static.build: ${WEB_STATIC_BUILD:-<none>}"
-      log "    static.dist: ${WEB_STATIC_DIST}"
+      echo "    static.dir: ${WEB_STATIC_DIR}"
+      echo "    static.build: ${WEB_STATIC_BUILD:-<none>}"
+      echo "    static.dist: ${WEB_STATIC_DIST}"
     else
-      log "    static.image: ${WEB_STATIC_IMAGE}"
-      log "    static.tag: ${WEB_STATIC_TAG}"
-      log "    static.path: ${WEB_STATIC_PATH}"
+      echo "    static.image: ${WEB_STATIC_IMAGE}"
+      echo "    static.tag: ${WEB_STATIC_TAG}"
+      echo "    static.path: ${WEB_STATIC_PATH}"
     fi
   elif [[ "${WEB_MODE}" == "docker" ]]; then
-    log "    docker.image: ${WEB_DOCKER_IMAGE}"
-    log "    docker.tag: ${WEB_DOCKER_TAG}"
-    log "    docker.port: ${WEB_DOCKER_PORT}"
+    echo "    docker.image: ${WEB_DOCKER_IMAGE}"
+    echo "    docker.tag: ${WEB_DOCKER_TAG}"
+    echo "    docker.port: ${WEB_DOCKER_PORT}"
   fi
-  log "  ansible.backend (role=${HAS_ROLE_BACKEND:-false}):"
-  log "    image: ${BACKEND_IMAGE}"
-  log "    tag: ${BACKEND_IMAGE_TAG}"
-  log "    port: ${BACKEND_PORT}"
-  log "  ansible.groups: ${MANAGED_GROUPS}"
-  log "  secrets.provider: ${SECRETS_PROVIDER}"
-  log "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
-  log "  secrets.required_vars: $(yq eval -o=json '.secrets.required_vars // []' "${CONFIG_FILE}")"
+  echo "  ansible.backend (role=${HAS_ROLE_BACKEND:-false}):"
+  echo "    image: ${BACKEND_IMAGE}"
+  echo "    tag: ${BACKEND_IMAGE_TAG}"
+  echo "    port: ${BACKEND_PORT}"
+  echo "  ansible.groups: ${MANAGED_GROUPS}"
+  echo "  secrets.provider: ${SECRETS_PROVIDER}"
+  echo "  secrets.project_id: ${BWS_PROJECT_ID:-<not set>}"
+  echo "  secrets.required_vars: $(yq eval -o=json '.secrets.required_vars // []' "${CONFIG_FILE}")"
   # Show BACKEND_ENV_* variables
-  log "  Backend environment variables:"
+  echo "  Backend environment variables:"
   env | grep '^BACKEND_ENV_' | while read -r line; do
-    log "    ${line}"
-  done || log "    (none)"
+    echo "    ${line}"
+  done || echo "    (none)"
   # Show WEB_DOCKER_ENV_* variables if docker mode
   if [[ "${WEB_MODE}" == "docker" ]]; then
-    log "  Web docker environment variables:"
+    echo "  Web docker environment variables:"
     env | grep '^WEB_DOCKER_ENV_' | while read -r line; do
-      log "    ${line}"
-    done || log "    (none)"
+      echo "    ${line}"
+    done || echo "    (none)"
   fi
   exit 0
 fi
