@@ -233,6 +233,64 @@ const validatePulumiConfig = (raw: MaestroConfig): void => {
   }
 };
 
+const validateAnsibleWeb = (webConfig: WebConfig): void => {
+  const staticConfig = webConfig.static;
+  const dockerConfig = webConfig.docker;
+
+  let webMode: WebMode | null = staticConfig
+    ? "static"
+    : dockerConfig
+    ? "docker"
+    : null;
+  if (!webMode) {
+    throw new Error(
+      `ansible.web.static or ansible.web.docker must be configured when servers have the 'web' role`,
+    );
+  }
+
+  if (webMode === "docker") {
+    if (!dockerConfig?.image) {
+      throw new Error(`ansible.web.docker.image is required for docker mode`);
+    }
+    if (!dockerConfig?.tag) {
+      throw new Error(`ansible.web.docker.tag is required for docker mode`);
+    }
+  }
+
+  if (webMode === "static") {
+    const source = staticConfig?.source ?? "local";
+
+    if (source === "local") {
+      if (!staticConfig?.dir) {
+        throw new Error(
+          `ansible.web.static.dir is required when source is 'local'`,
+        );
+      }
+    } else if (source === "image") {
+      if (!staticConfig?.image) {
+        throw new Error(
+          `ansible.web.static.image is required when source is 'image'`,
+        );
+      }
+    } else {
+      throw new Error(
+        `ansible.web.static.source must be 'local' or 'image', got '${source}'`,
+      );
+    }
+  }
+};
+
+const validateAnsibleBackend = (
+  backendConfig: Partial<BackendConfig>,
+): void => {
+  if (!backendConfig?.image) {
+    throw new Error(`ansible.backend.image is required`);
+  }
+  if (!backendConfig?.tag) {
+    throw new Error(`ansible.backend.tag is required`);
+  }
+};
+
 const validateAnsibleConfig = ({
   raw,
   roles,
@@ -240,60 +298,13 @@ const validateAnsibleConfig = ({
   raw: MaestroConfig;
   roles: Set<ServerRole>;
 }): void => {
-  const ansibleEnabled = raw.ansible?.enabled ?? false;
-  // FIXME: validate that only one mode is specified
-  let webMode: WebMode | null = raw.ansible?.web?.static
-    ? "static"
-    : raw.ansible?.web?.docker
-    ? "docker"
-    : null;
-
-  // Role-based validation
-  if (ansibleEnabled && roles.has(ServerRole.Web)) {
-    if (!webMode) {
-      throw new Error(
-        `ansible.web.static or ansible.web.docker must be configured when servers have the 'web' role`,
-      );
+  if (raw.ansible?.enabled ?? false) {
+    if (roles.has(ServerRole.Web)) {
+      validateAnsibleWeb(raw.ansible?.web ?? {});
     }
 
-    if (webMode === "static") {
-      const staticConfig = raw.ansible?.web?.static;
-      const source = staticConfig?.source ?? "local";
-
-      if (source === "local") {
-        if (!staticConfig?.dir) {
-          throw new Error(
-            `ansible.web.static.dir is required when source is 'local'`,
-          );
-        }
-      } else if (source === "image") {
-        if (!staticConfig?.image) {
-          throw new Error(
-            `ansible.web.static.image is required when source is 'image'`,
-          );
-        }
-      } else {
-        throw new Error(
-          `ansible.web.static.source must be 'local' or 'image', got '${source}'`,
-        );
-      }
-    } else if (webMode === "docker") {
-      if (!raw.ansible?.web?.docker?.image) {
-        throw new Error(`ansible.web.docker.image is required for docker mode`);
-      }
-    }
-  }
-
-  if (ansibleEnabled && roles.has(ServerRole.Backend)) {
-    if (!raw.ansible?.backend?.image) {
-      throw new Error(
-        `ansible.backend.image is required when servers have the 'backend' role`,
-      );
-    }
-    if (!raw.ansible?.backend?.tag) {
-      throw new Error(
-        `ansible.backend.tag is required when servers have the 'backend' role`,
-      );
+    if (roles.has(ServerRole.Backend)) {
+      validateAnsibleBackend(raw.ansible?.backend ?? {});
     }
   }
 };
