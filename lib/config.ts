@@ -261,7 +261,7 @@ const validateAnsibleWeb = async (webConfig: WebConfig): Promise<void> => {
   }
 
   if (webMode === "static") {
-    const { source, dir, image } = staticConfig ?? {};
+    const { source, dir, image, tag } = staticConfig ?? {};
 
     if (!source) {
       throw new Error(
@@ -284,10 +284,17 @@ const validateAnsibleWeb = async (webConfig: WebConfig): Promise<void> => {
         throw new Error(`ansible.web.static.dir does not exist at ${dir}`);
       }
     }
-    if (source === "image" && !image) {
-      throw new Error(
-        `ansible.web.static.image is required when source is 'image'`,
-      );
+    if (source === "image") {
+      if (!image) {
+        throw new Error(
+          `ansible.web.static.image is required when source is 'image'`,
+        );
+      }
+      if (!tag) {
+        throw new Error(
+          `ansible.web.static.tag is required when source is 'image'`,
+        );
+      }
     }
   }
 };
