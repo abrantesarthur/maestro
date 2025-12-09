@@ -3,7 +3,7 @@
  */
 
 import Ajv, { type ErrorObject } from "ajv";
-import { ServerRole, StackName, StaticSource } from "./types";
+import { ServerRole, StackName, StaticSource } from "../types";
 
 // ============================================
 // JSON Schema Definitions
@@ -136,7 +136,7 @@ const secretsConfigSchema = {
   additionalProperties: false,
 } as const;
 
-const maestroConfigSchema = {
+export const maestroConfigSchema = {
   type: "object",
   properties: {
     domain: { type: "string" },
@@ -147,53 +147,3 @@ const maestroConfigSchema = {
   required: ["domain"],
   additionalProperties: false,
 } as const;
-
-// ============================================
-// AJV Validator
-// ============================================
-
-const ajv = new Ajv({ allErrors: true, verbose: true });
-
-export const validateSchema = ajv.compile(maestroConfigSchema);
-
-// ============================================
-// Error Formatting
-// ============================================
-
-/**
- * Format AJV validation errors into a readable message
- */
-export function formatAjvErrors(
-  errors: ErrorObject[] | null | undefined,
-): string {
-  if (!errors || errors.length === 0) {
-    return "Unknown validation error";
-  }
-
-  const messages = errors.map((err) => {
-    const path = err.instancePath || "(root)";
-    const keyword = err.keyword;
-    const params = err.params as Record<string, unknown>;
-
-    switch (keyword) {
-      case "required":
-        return `${path}: missing required property '${params["missingProperty"]}'`;
-      case "enum":
-        return `${path}: must be one of ${JSON.stringify(
-          params["allowedValues"],
-        )}`;
-      case "type":
-        return `${path}: must be ${params["type"]}`;
-      case "additionalProperties":
-        return `${path}: unknown property '${params["additionalProperty"]}'`;
-      case "minItems":
-        return `${path}: must have at least ${params["limit"]} item(s)`;
-      case "propertyNames":
-        return `${path}: invalid property name '${params["propertyName"]}'.`;
-      default:
-        return `${path}: ${err.message}`;
-    }
-  });
-
-  return messages.join("\n");
-}

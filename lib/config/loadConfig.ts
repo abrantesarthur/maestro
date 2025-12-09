@@ -1,13 +1,11 @@
 // ============================================
 // Config Loading
 // ============================================
-
-import { formatAjvErrors, validateSchema } from "./schema";
+import { validateSchema } from "./schema";
 import {
   PulumiCommand,
   StackName,
   type LoadedConfig,
-  type MaestroConfig,
   type ServerRole,
   type StackConfig,
 } from "./types";
@@ -23,20 +21,9 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
     );
   }
 
+  // validate the Maestro configuration according to the yaml schema
   const content = await file.text();
-  const parsed = Bun.YAML.parse(content);
-
-  // Validate schema using AJV
-  if (!validateSchema(parsed)) {
-    throw new Error(
-      `Invalid configuration in ${configPath}:\n${formatAjvErrors(
-        validateSchema.errors,
-      )}`,
-    );
-  }
-
-  // After validation, we can safely cast to MaestroConfig
-  const raw = parsed as MaestroConfig;
+  const raw = validateSchema(content);
 
   // Collect all unique roles from all stacks
   const roles = Object.values(raw.pulumi?.stacks ?? {})
