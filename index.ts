@@ -10,9 +10,9 @@
 import {
   loadConfig,
   displayConfig,
-  type LoadedConfig,
   type StackName,
   ServerRole,
+  type MaestroConfig,
 } from "./lib/config";
 import { loadBwsSecrets } from "./lib/secrets.ts";
 import {
@@ -48,15 +48,16 @@ async function capturePulumiHosts(
   stackName: StackName,
   pulumiCommand: string,
   serversJson: string,
-  config: LoadedConfig,
+  config: MaestroConfig,
   _sshKeyPath: string,
   showLogs: boolean = true,
 ): Promise<PulumiHosts> {
+  const { pulumi } = config;
   const env: Record<string, string> = {
     DOMAIN: config.domain,
-    CLOUDFLARE_ACCOUNT_ID: config.pulumi.cloudflareAccountId,
-    SSH_PORT: String(config.pulumi.sshPort),
-    BACKEND_PORT: String(config.ansible.backend.port),
+    CLOUDFLARE_ACCOUNT_ID: pulumi?.cloudflareAccountId ?? "",
+    SSH_PORT: String(pulumi?.sshPort ?? ""),
+    BACKEND_PORT: String(config?.ansible?.backend?.port ?? ""),
     PULUMI_STACK: stackName,
     PULUMI_SERVERS_JSON: serversJson,
   };
@@ -97,44 +98,49 @@ async function capturePulumiHosts(
 
 async function runAnsible(
   pulumiHosts: PulumiHosts,
-  config: LoadedConfig,
+  config: MaestroConfig,
   secretsRequiredVarsJson: string,
 ): Promise<void> {
+  const { ansible } = config;
   const env: Record<string, string> = {
     DOMAIN: config.domain,
-    BACKEND_PORT: String(config.ansible.backend.port),
-    BACKEND_IMAGE: config.ansible.backend.image,
-    BACKEND_IMAGE_TAG: config.ansible.backend.tag,
-    WEB_MODE: config.ansible.web.docker
+    BACKEND_PORT: String(ansible?.backend?.port),
+    BACKEND_IMAGE: ansible?.backend?.image ?? "",
+    BACKEND_IMAGE_TAG: ansible?.backend?.tag ?? "",
+    WEB_MODE: ansible?.web?.docker
       ? "docker"
-      : config.ansible.web.static
+      : ansible?.web?.static
       ? "static"
       : "",
     // FIXME: ensure empty value is ok
-    WEB_STATIC_SOURCE: config.ansible.web.static?.source ?? "",
-    WEB_STATIC_DIR: config.ansible.web.static.dir,
-    WEB_STATIC_BUILD: config.ansible.web.static.build,
-    WEB_STATIC_DIST: config.ansible.web.static.dist,
-    WEB_STATIC_IMAGE: config.ansible.web.static.image,
-    WEB_STATIC_TAG: config.ansible.web.static.tag,
-    WEB_STATIC_PATH: config.ansible.web.static.path,
-    WEB_DOCKER_IMAGE: config.ansible.web.docker.image,
-    WEB_DOCKER_TAG: config.ansible.web.docker.tag,
-    WEB_DOCKER_PORT: String(config.ansible.web.docker.port),
-    MANAGED_GROUPS: JSON.stringify(config.ansible.groups),
+    WEB_STATIC_SOURCE: ansible?.web?.static?.source ?? "",
+    WEB_STATIC_DIR: ansible?.web?.static?.dir ?? "",
+    WEB_STATIC_BUILD: ansible?.web?.static?.build ?? "",
+    WEB_STATIC_DIST: ansible?.web?.static?.dist ?? "",
+    WEB_STATIC_IMAGE: ansible?.web?.static?.image ?? "",
+    WEB_STATIC_TAG: ansible?.web?.static?.tag ?? "",
+    WEB_STATIC_PATH: ansible?.web?.static?.path ?? "",
+    WEB_DOCKER_IMAGE: ansible?.web?.docker?.image ?? "",
+    WEB_DOCKER_TAG: ansible?.web?.docker?.tag ?? "",
+    WEB_DOCKER_PORT: String(ansible?.web?.docker?.port),
+    MANAGED_GROUPS: JSON.stringify(ansible?.groups ?? []),
     SECRETS_REQUIRED_VARS_JSON: secretsRequiredVarsJson,
   };
 
   // Export backend environment variables (BACKEND_ENV_*)
-  for (const [key, value] of Object.entries(config.ansible.backend.env)) {
+  for (const [key, value] of Object.entries(
+    config.ansible?.backend?.env ?? {},
+  )) {
     env[`BACKEND_ENV_${key}`] = value;
   }
 
   // Auto-inject PORT into the container environment from backend.port
-  env["BACKEND_ENV_PORT"] = String(config.ansible.backend.port);
+  env["BACKEND_ENV_PORT"] = String(config.ansible?.backend?.port ?? "");
 
   // Export web docker environment variables (WEB_DOCKER_ENV_*)
-  for (const [key, value] of Object.entries(config.ansible.web.docker.env)) {
+  for (const [key, value] of Object.entries(
+    config?.ansible?.web?.docker?.env ?? {},
+  )) {
     env[`WEB_DOCKER_ENV_${key}`] = value;
   }
 
@@ -146,10 +152,13 @@ async function runAnsible(
   ];
 
   // Role-based provisioning: skip playbooks if no server has that role
-  if (!config.roles.includes(ServerRole.Web)) {
+  let roles = Object.values(config?.pulumi?.stacks ?? {})
+    .flatMap((s) => s.servers.flatMap((srv) => srv.roles))
+    .reduce((prev, curr) => prev.add(curr), new Set<ServerRole>());
+  if (!Array.from(roles).includes(ServerRole.Web)) {
     args.push("--skip-web");
   }
-  if (!config.roles.includes(ServerRole.Backend)) {
+  if (!Array.from(roles).includes(ServerRole.Backend)) {
     args.push("--skip-backend");
   }
 

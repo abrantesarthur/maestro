@@ -10,6 +10,7 @@
     "@types/bun": "latest"
   },
   "dependencies": {
-    "ajv": "^8.17.1"
+    "ajv": "^8.17.1",
+    "json-schema-to-ts": "^3.1.1"
   }
 }

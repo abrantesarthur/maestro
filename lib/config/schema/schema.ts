@@ -1,14 +1,13 @@
 /**
  * JSON Schema definitions and AJV validation for Maestro config
  */
-
-import Ajv, { type ErrorObject } from "ajv";
 import { ServerRole, StackName, StaticSource } from "../types";
 
 // ============================================
 // JSON Schema Definitions
 // ============================================
 
+// FIXME: think these thoroughly through
 const serverConfigSchema = {
   type: "object",
   properties: {
