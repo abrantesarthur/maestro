@@ -181,9 +181,8 @@ async function runAnsible(
 // ============================================
 
 async function main(): Promise<void> {
-  const { dryRun } = parseArgs();
-
   log("Parsing arguments...");
+  const { dryRun } = parseArgs();
 
   log("Ensuring required commands exist...");
   requireCmds(["bws", "cloudflared"]);

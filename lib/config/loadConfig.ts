@@ -2,13 +2,13 @@
 // Config Loading
 // ============================================
 import {
-  validateSchema,
   PulumiCommand,
   StackName,
   type ServerRole,
   type MaestroConfig,
   type StackConfig,
 } from "./schema";
+import { validateSchema } from "./validateSchema";
 import { validateSemanticConfig } from "./validateSchemaConfig";
 
 export async function loadConfig(configPath: string): Promise<MaestroConfig> {

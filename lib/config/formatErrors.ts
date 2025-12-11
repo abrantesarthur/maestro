@@ -1,8 +1,5 @@
 import type { Errors } from "io-ts";
 
-/**
- * Format io-ts validation errors into a readable message
- */
 export function formatErrors(errors: Errors): string {
   if (errors.length === 0) {
     return "Unknown validation error";
