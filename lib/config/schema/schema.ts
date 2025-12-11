@@ -26,7 +26,7 @@ const serverConfigSchema = {
   additionalProperties: false,
 } as const;
 
-const stackConfigSchema = {
+export const stackConfigSchema = {
   type: "object",
   properties: {
     servers: {

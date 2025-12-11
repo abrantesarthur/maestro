@@ -3,7 +3,7 @@
  */
 
 import type { FromSchema } from "json-schema-to-ts";
-import type { maestroConfigSchema } from "./schema";
+import type { maestroConfigSchema, stackConfigSchema } from "./schema";
 
 // ============================================
 // Enums
@@ -36,4 +36,5 @@ export enum StaticSource {
   Local = "local",
   Image = "image",
 }
+export type StackConfig = FromSchema<typeof stackConfigSchema>;
 export type MaestroConfig = FromSchema<typeof maestroConfigSchema>;

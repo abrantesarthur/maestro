@@ -5,13 +5,13 @@ import { validateSchema } from "./schema";
 import {
   PulumiCommand,
   StackName,
-  type LoadedConfig,
   type ServerRole,
+  type MaestroConfig,
   type StackConfig,
 } from "./types";
 import { validateSemanticConfig } from "./validateSchemaConfig";
 
-export async function loadConfig(configPath: string): Promise<LoadedConfig> {
+export async function loadConfig(configPath: string): Promise<MaestroConfig> {
   const file = Bun.file(configPath);
 
   if (!(await file.exists())) {
@@ -75,6 +75,5 @@ export async function loadConfig(configPath: string): Promise<LoadedConfig> {
       projectId: raw.secrets?.projectId ?? "",
       requiredVars: raw.secrets?.requiredVars ?? [],
     },
-    roles: Array.from(roles),
   };
 }
