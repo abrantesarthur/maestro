@@ -1,19 +1,15 @@
-import Ajv from "ajv";
+import { isRight } from "fp-ts/Either";
 import type { MaestroConfig } from "../types";
-import { maestroConfigSchema } from "./schema";
+import { MaestroConfigCodec } from "./schema";
 import { formatErrors } from "./formatErrors";
 
 export const validateSchema = (content: string): MaestroConfig => {
-  const validator = new Ajv({ allErrors: true, verbose: true }).compile(
-    maestroConfigSchema,
-  );
   const parsed = Bun.YAML.parse(content);
+  const result = MaestroConfigCodec.decode(parsed);
 
-  if (!validator(parsed)) {
-    throw new Error(
-      `Invalid configuration:\n${formatErrors(validator.errors)}`,
-    );
+  if (!isRight(result)) {
+    throw new Error(`Invalid configuration:\n${formatErrors(result.left)}`);
   }
 
-  return parsed as MaestroConfig;
+  return result.right;
 };

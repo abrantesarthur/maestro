@@ -1,148 +1,181 @@
 /**
- * JSON Schema definitions and AJV validation for Maestro config
+ * io-ts codec definitions for Maestro config validation
  */
-import { ServerRole, StackName, StaticSource } from "../types";
+import * as t from "io-ts";
 
 // ============================================
-// JSON Schema Definitions
+// Enum Codecs
 // ============================================
 
-// FIXME: think these thoroughly through
-const serverConfigSchema = {
-  type: "object",
-  properties: {
-    roles: {
-      type: "array",
-      items: { type: "string", enum: Object.values(ServerRole) },
-      minItems: 1,
-    },
-    groups: { type: "array", items: { type: "string" } },
-    tags: { type: "array", items: { type: "string" } },
-    image: { type: "string" },
-    size: { type: "string" },
-    region: { type: "string" },
-  },
-  required: ["roles"],
-  additionalProperties: false,
-} as const;
+export const StackNameCodec = t.keyof({
+  dev: null,
+  staging: null,
+  prod: null,
+});
 
-export const stackConfigSchema = {
-  type: "object",
-  properties: {
-    servers: {
-      type: "array",
-      items: serverConfigSchema,
-      minItems: 1,
-    },
-  },
-  required: ["servers"],
-  additionalProperties: false,
-} as const;
+export const ServerRoleCodec = t.keyof({
+  backend: null,
+  web: null,
+});
 
-const pulumiConfigSchema = {
-  type: "object",
-  properties: {
-    enabled: { type: "boolean" },
-    command: { type: "string", enum: ["up", "refresh", "cancel", "output"] },
-    cloudflareAccountId: { type: "string" },
-    sshPort: { type: "integer" },
-    stacks: {
-      type: "object",
-      propertyNames: { enum: Object.values(StackName) },
-      additionalProperties: stackConfigSchema,
-    },
-  },
-  additionalProperties: false,
-  if: { properties: { enabled: { const: true } } },
-  then: { required: ["cloudflareAccountId", "stacks"] },
-} as const;
+export const PulumiCommandCodec = t.keyof({
+  up: null,
+  refresh: null,
+  cancel: null,
+  output: null,
+});
 
-const webStaticConfigSchema = {
-  type: "object",
-  properties: {
-    source: { type: "string", enum: Object.values(StaticSource) },
-    dir: { type: "string" },
-    build: { type: "string" },
-    dist: { type: "string" },
-    image: { type: "string" },
-    tag: { type: "string" },
-    path: { type: "string" },
-  },
-  additionalProperties: false,
-  allOf: [
-    {
-      if: { properties: { source: { const: "local" } }, required: ["source"] },
-      then: { required: ["dir"] },
-    },
-    {
-      if: { properties: { source: { const: "image" } }, required: ["source"] },
-      then: { required: ["image", "tag"] },
-    },
-  ],
-} as const;
+export const StaticSourceCodec = t.keyof({
+  local: null,
+  image: null,
+});
 
-const webDockerConfigSchema = {
-  type: "object",
-  properties: {
-    image: { type: "string" },
-    tag: { type: "string" },
-    port: { type: "integer" },
-    env: { type: "object", additionalProperties: { type: "string" } },
-  },
-  required: ["image", "tag"],
-  additionalProperties: false,
-} as const;
+export const SecretsProviderCodec = t.keyof({
+  bws: null,
+});
 
-const webConfigSchema = {
-  type: "object",
-  properties: {
-    static: webStaticConfigSchema,
-    docker: webDockerConfigSchema,
-  },
-  additionalProperties: false,
-} as const;
+// ============================================
+// Server Config Codec
+// ============================================
 
-const backendConfigSchema = {
-  type: "object",
-  properties: {
-    image: { type: "string" },
-    tag: { type: "string" },
-    port: { type: "integer" },
-    env: { type: "object", additionalProperties: { type: "string" } },
-  },
-  required: ["image", "tag"],
-  additionalProperties: false,
-} as const;
+const ServerConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      roles: t.array(ServerRoleCodec),
+    }),
+    t.partial({
+      groups: t.array(t.string),
+      tags: t.array(t.string),
+      image: t.string,
+      size: t.string,
+      region: t.string,
+    }),
+  ]),
+);
 
-const ansibleConfigSchema = {
-  type: "object",
-  properties: {
-    enabled: { type: "boolean" },
-    groups: { type: "array", items: { type: "string" } },
-    web: webConfigSchema,
-    backend: backendConfigSchema,
-  },
-  additionalProperties: false,
-} as const;
+// ============================================
+// Stack Config Codec
+// ============================================
 
-const secretsConfigSchema = {
-  type: "object",
-  properties: {
-    provider: { type: "string", enum: ["bws"] },
-    projectId: { type: "string" },
-    requiredVars: { type: "array", items: { type: "string" } },
-  },
-  additionalProperties: false,
-} as const;
+export const StackConfigCodec = t.exact(
+  t.type({
+    servers: t.array(ServerConfigCodec),
+  }),
+);
 
-export const maestroConfigSchema = {
-  type: "object",
-  properties: {
-    domain: { type: "string" },
-    pulumi: pulumiConfigSchema,
-    ansible: ansibleConfigSchema,
-    secrets: secretsConfigSchema,
-  },
-  required: ["domain"],
-  additionalProperties: false,
-} as const;
+// ============================================
+// Pulumi Config Codec
+// ============================================
+
+const PulumiConfigCodec = t.exact(
+  t.partial({
+    enabled: t.boolean,
+    command: PulumiCommandCodec,
+    cloudflareAccountId: t.string,
+    sshPort: t.number,
+    stacks: t.record(StackNameCodec, StackConfigCodec),
+  }),
+);
+
+// ============================================
+// Web Static Config Codec
+// ============================================
+
+const WebStaticConfigCodec = t.exact(
+  t.partial({
+    source: StaticSourceCodec,
+    dir: t.string,
+    build: t.string,
+    dist: t.string,
+    image: t.string,
+    tag: t.string,
+    path: t.string,
+  }),
+);
+
+// ============================================
+// Web Docker Config Codec
+// ============================================
+
+const WebDockerConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      image: t.string,
+      tag: t.string,
+    }),
+    t.partial({
+      port: t.number,
+      env: t.record(t.string, t.string),
+    }),
+  ]),
+);
+
+// ============================================
+// Web Config Codec
+// ============================================
+
+const WebConfigCodec = t.exact(
+  t.partial({
+    static: WebStaticConfigCodec,
+    docker: WebDockerConfigCodec,
+  }),
+);
+
+// ============================================
+// Backend Config Codec
+// ============================================
+
+const BackendConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      image: t.string,
+      tag: t.string,
+    }),
+    t.partial({
+      port: t.number,
+      env: t.record(t.string, t.string),
+    }),
+  ]),
+);
+
+// ============================================
+// Ansible Config Codec
+// ============================================
+
+const AnsibleConfigCodec = t.exact(
+  t.partial({
+    enabled: t.boolean,
+    groups: t.array(t.string),
+    web: WebConfigCodec,
+    backend: BackendConfigCodec,
+  }),
+);
+
+// ============================================
+// Secrets Config Codec
+// ============================================
+
+const SecretsConfigCodec = t.exact(
+  t.partial({
+    provider: SecretsProviderCodec,
+    projectId: t.string,
+    requiredVars: t.array(t.string),
+  }),
+);
+
+// ============================================
+// Main Maestro Config Codec
+// ============================================
+
+export const MaestroConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      domain: t.string,
+    }),
+    t.partial({
+      pulumi: PulumiConfigCodec,
+      ansible: AnsibleConfigCodec,
+      secrets: SecretsConfigCodec,
+    }),
+  ]),
+);

@@ -1,36 +1,30 @@
-import type { ErrorObject } from "ajv";
+import type { Errors } from "io-ts";
 
 /**
- * Format AJV validation errors into a readable message
+ * Format io-ts validation errors into a readable message
  */
-export function formatErrors(errors: ErrorObject[] | null | undefined): string {
-  if (!errors || errors.length === 0) {
+export function formatErrors(errors: Errors): string {
+  if (errors.length === 0) {
     return "Unknown validation error";
   }
 
-  const messages = errors.map((err) => {
-    const path = err.instancePath || "(root)";
-    const keyword = err.keyword;
-    const params = err.params as Record<string, unknown>;
+  const messages = errors.map((error) => {
+    const path = error.context
+      .map((c) => c.key)
+      .filter((key) => key !== "")
+      .join(".");
 
-    switch (keyword) {
-      case "required":
-        return `${path}: missing required property '${params["missingProperty"]}'`;
-      case "enum":
-        return `${path}: must be one of ${JSON.stringify(
-          params["allowedValues"],
-        )}`;
-      case "type":
-        return `${path}: must be ${params["type"]}`;
-      case "additionalProperties":
-        return `${path}: unknown property '${params["additionalProperty"]}'`;
-      case "minItems":
-        return `${path}: must have at least ${params["limit"]} item(s)`;
-      case "propertyNames":
-        return `${path}: invalid property name '${params["propertyName"]}'.`;
-      default:
-        return `${path}: ${err.message}`;
-    }
+    const lastContext = error.context[error.context.length - 1];
+    const expectedType = lastContext?.type.name ?? "unknown";
+    const actualValue = error.value;
+
+    const location = path || "(root)";
+    const valueStr =
+      actualValue === undefined
+        ? "undefined"
+        : JSON.stringify(actualValue, null, 0);
+
+    return `${location}: expected ${expectedType}, got ${valueStr}`;
   });
 
   return messages.join("\n");

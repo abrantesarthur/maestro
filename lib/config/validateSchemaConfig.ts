@@ -1,8 +1,8 @@
 import { ServerRole, type MaestroConfig } from "./types";
 
 /**
- * Validates semantic constraints that cannot be expressed in JSON Schema
- * (e.g., filesystem existence checks, cross-field business logic)
+ * Validates semantic constraints that cannot be expressed in io-ts codecs
+ * (e.g., filesystem existence checks, cross-field business logic, conditional requirements)
  */
 export const validateSemanticConfig = async ({
   raw,
@@ -11,6 +11,36 @@ export const validateSemanticConfig = async ({
   raw: MaestroConfig;
   roles: Set<ServerRole>;
 }): Promise<void> => {
+  // Conditional validation: pulumi.enabled requires cloudflareAccountId and stacks
+  if (raw.pulumi?.enabled) {
+    if (!raw.pulumi.cloudflareAccountId) {
+      throw new Error(
+        `pulumi.cloudflareAccountId is required when pulumi.enabled is true`,
+      );
+    }
+    if (!raw.pulumi.stacks || Object.keys(raw.pulumi.stacks).length === 0) {
+      throw new Error(`pulumi.stacks is required when pulumi.enabled is true`);
+    }
+  }
+
+  // Conditional validation: web.static with source "local" requires dir
+  if (raw.ansible?.web?.static?.source === "local") {
+    if (!raw.ansible.web.static.dir) {
+      throw new Error(
+        `ansible.web.static.dir is required when source is "local"`,
+      );
+    }
+  }
+
+  // Conditional validation: web.static with source "image" requires image and tag
+  if (raw.ansible?.web?.static?.source === "image") {
+    if (!raw.ansible.web.static.image || !raw.ansible.web.static.tag) {
+      throw new Error(
+        `ansible.web.static.image and ansible.web.static.tag are required when source is "image"`,
+      );
+    }
+  }
+
   // Validate ansible.web configuration when web role is present
   if ((raw.ansible?.enabled ?? false) && roles.has(ServerRole.Web)) {
     const webConfig = raw.ansible?.web ?? {};

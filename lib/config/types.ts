@@ -2,8 +2,8 @@
  * Configuration type definitions for Maestro
  */
 
-import type { FromSchema } from "json-schema-to-ts";
-import type { maestroConfigSchema, stackConfigSchema } from "./schema";
+import * as t from "io-ts";
+import { MaestroConfigCodec, StackConfigCodec } from "./schema";
 
 // ============================================
 // Enums
@@ -36,5 +36,10 @@ export enum StaticSource {
   Local = "local",
   Image = "image",
 }
-export type StackConfig = FromSchema<typeof stackConfigSchema>;
-export type MaestroConfig = FromSchema<typeof maestroConfigSchema>;
+
+// ============================================
+// Types derived from io-ts codecs
+// ============================================
+
+export type StackConfig = t.TypeOf<typeof StackConfigCodec>;
+export type MaestroConfig = t.TypeOf<typeof MaestroConfigCodec>;
