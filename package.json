@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "maestro": "bun index.ts",
-    "maestro:dry-run": "bun index.ts --dry-run"
+    "maestro:dry-run": "bun index.ts --dry-run",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest"
