@@ -1,4 +1,4 @@
-import { ServerRole, type MaestroConfig } from "./types";
+import { ServerRole, type MaestroConfig } from "./schema";
 
 /**
  * Validates semantic constraints that cannot be expressed in io-ts codecs

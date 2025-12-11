@@ -1,3 +1,3 @@
-export * from "./types";
+export * from "./schema";
 export * from "./displayConfig";
 export * from "./loadConfig";

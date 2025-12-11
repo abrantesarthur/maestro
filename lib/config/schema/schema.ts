@@ -4,35 +4,95 @@
 import * as t from "io-ts";
 
 // ============================================
-// Enum Codecs
+// Enum Values (Single Source of Truth)
+// ============================================
+
+export const StackNameValues = {
+  Dev: "dev",
+  Staging: "staging",
+  Prod: "prod",
+} as const;
+
+export const ServerRoleValues = {
+  Backend: "backend",
+  Web: "web",
+} as const;
+
+export const PulumiCommandValues = {
+  Up: "up",
+  Refresh: "refresh",
+  Cancel: "cancel",
+  Output: "output",
+} as const;
+
+export const StaticSourceValues = {
+  Local: "local",
+  Image: "image",
+} as const;
+
+export const SecretsProviderValues = {
+  Bws: "bws",
+} as const;
+
+export const WebModeValues = {
+  Static: "static",
+  Docker: "docker",
+} as const;
+
+// ============================================
+// Enum Codecs (Derived from Values)
 // ============================================
 
 export const StackNameCodec = t.keyof({
-  dev: null,
-  staging: null,
-  prod: null,
+  [StackNameValues.Dev]: null,
+  [StackNameValues.Staging]: null,
+  [StackNameValues.Prod]: null,
 });
 
 export const ServerRoleCodec = t.keyof({
-  backend: null,
-  web: null,
+  [ServerRoleValues.Backend]: null,
+  [ServerRoleValues.Web]: null,
 });
 
 export const PulumiCommandCodec = t.keyof({
-  up: null,
-  refresh: null,
-  cancel: null,
-  output: null,
+  [PulumiCommandValues.Up]: null,
+  [PulumiCommandValues.Refresh]: null,
+  [PulumiCommandValues.Cancel]: null,
+  [PulumiCommandValues.Output]: null,
 });
 
 export const StaticSourceCodec = t.keyof({
-  local: null,
-  image: null,
+  [StaticSourceValues.Local]: null,
+  [StaticSourceValues.Image]: null,
 });
 
 export const SecretsProviderCodec = t.keyof({
-  bws: null,
+  [SecretsProviderValues.Bws]: null,
 });
+
+export const WebModeCodec = t.keyof({
+  [WebModeValues.Static]: null,
+  [WebModeValues.Docker]: null,
+});
+
+// ============================================
+// Enum Types (Derived from Codecs)
+// ============================================
+
+export type StackName = t.TypeOf<typeof StackNameCodec>;
+export const StackName = StackNameValues;
+
+export type ServerRole = t.TypeOf<typeof ServerRoleCodec>;
+export const ServerRole = ServerRoleValues;
+
+export type PulumiCommand = t.TypeOf<typeof PulumiCommandCodec>;
+export const PulumiCommand = PulumiCommandValues;
+
+export type WebMode = t.TypeOf<typeof WebModeCodec>;
+export const WebMode = WebModeValues;
+
+export type StaticSource = t.TypeOf<typeof StaticSourceCodec>;
+export const StaticSource = StaticSourceValues;
 
 // ============================================
 // Server Config Codec
@@ -68,13 +128,17 @@ export const StackConfigCodec = t.exact(
 // ============================================
 
 const PulumiConfigCodec = t.exact(
-  t.partial({
-    enabled: t.boolean,
-    command: PulumiCommandCodec,
-    cloudflareAccountId: t.string,
-    sshPort: t.number,
-    stacks: t.record(StackNameCodec, StackConfigCodec),
-  }),
+  t.intersection([
+    t.type({
+      enabled: t.boolean,
+    }),
+    t.partial({
+      command: PulumiCommandCodec,
+      cloudflareAccountId: t.string,
+      sshPort: t.number,
+      stacks: t.record(StackNameCodec, StackConfigCodec),
+    }),
+  ]),
 );
 
 // ============================================
@@ -82,15 +146,19 @@ const PulumiConfigCodec = t.exact(
 // ============================================
 
 const WebStaticConfigCodec = t.exact(
-  t.partial({
-    source: StaticSourceCodec,
-    dir: t.string,
-    build: t.string,
-    dist: t.string,
-    image: t.string,
-    tag: t.string,
-    path: t.string,
-  }),
+  t.intersection([
+    t.type({
+      source: StaticSourceCodec,
+    }),
+    t.partial({
+      dir: t.string,
+      build: t.string,
+      dist: t.string,
+      image: t.string,
+      tag: t.string,
+      path: t.string,
+    }),
+  ]),
 );
 
 // ============================================
@@ -125,6 +193,7 @@ const WebConfigCodec = t.exact(
 // Backend Config Codec
 // ============================================
 
+// FIXME: do we prefix backend env vars with BACKEND_ENV_ ?
 const BackendConfigCodec = t.exact(
   t.intersection([
     t.type({
@@ -141,14 +210,17 @@ const BackendConfigCodec = t.exact(
 // ============================================
 // Ansible Config Codec
 // ============================================
-
 const AnsibleConfigCodec = t.exact(
-  t.partial({
-    enabled: t.boolean,
-    groups: t.array(t.string),
-    web: WebConfigCodec,
-    backend: BackendConfigCodec,
-  }),
+  t.intersection([
+    t.type({
+      enabled: t.boolean,
+    }),
+    t.partial({
+      groups: t.array(t.string),
+      web: WebConfigCodec,
+      backend: BackendConfigCodec,
+    }),
+  ]),
 );
 
 // ============================================
@@ -156,11 +228,15 @@ const AnsibleConfigCodec = t.exact(
 // ============================================
 
 const SecretsConfigCodec = t.exact(
-  t.partial({
-    provider: SecretsProviderCodec,
-    projectId: t.string,
-    requiredVars: t.array(t.string),
-  }),
+  t.intersection([
+    t.type({
+      provider: SecretsProviderCodec,
+    }),
+    t.partial({
+      projectId: t.string,
+      requiredVars: t.array(t.string),
+    }),
+  ]),
 );
 
 // ============================================
@@ -179,3 +255,10 @@ export const MaestroConfigCodec = t.exact(
     }),
   ]),
 );
+
+// ============================================
+// Config Types (Derived from Codecs)
+// ============================================
+
+export type StackConfig = t.TypeOf<typeof StackConfigCodec>;
+export type MaestroConfig = t.TypeOf<typeof MaestroConfigCodec>;

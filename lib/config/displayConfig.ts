@@ -1,4 +1,4 @@
-import type { MaestroConfig } from "./types";
+import type { MaestroConfig } from "./schema";
 
 // FIXME: do better here
 export function displayConfig(config: MaestroConfig): void {

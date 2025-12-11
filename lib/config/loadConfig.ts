@@ -1,14 +1,14 @@
 // ============================================
 // Config Loading
 // ============================================
-import { validateSchema } from "./schema";
 import {
+  validateSchema,
   PulumiCommand,
   StackName,
   type ServerRole,
   type MaestroConfig,
   type StackConfig,
-} from "./types";
+} from "./schema";
 import { validateSemanticConfig } from "./validateSchemaConfig";
 
 export async function loadConfig(configPath: string): Promise<MaestroConfig> {
@@ -43,37 +43,57 @@ export async function loadConfig(configPath: string): Promise<MaestroConfig> {
       sshPort: raw.pulumi?.sshPort ?? 22,
       stacks: (raw.pulumi?.stacks ?? {}) as Record<StackName, StackConfig>,
     },
-    ansible: {
-      enabled: raw.ansible?.enabled ?? false,
-      groups: raw.ansible?.groups ?? ["devops"],
-      web: {
-        static: {
-          source: raw.ansible?.web?.static?.source,
-          dir: raw.ansible?.web?.static?.dir ?? "",
-          build: raw.ansible?.web?.static?.build ?? "",
-          dist: raw.ansible?.web?.static?.dist ?? "dist",
-          image: raw.ansible?.web?.static?.image ?? "",
-          tag: raw.ansible?.web?.static?.tag ?? "latest",
-          path: raw.ansible?.web?.static?.path ?? "/app/dist",
-        },
-        docker: {
-          image: raw.ansible?.web?.docker?.image ?? "",
-          tag: raw.ansible?.web?.docker?.tag ?? "latest",
-          port: raw.ansible?.web?.docker?.port ?? 3000,
-          env: raw.ansible?.web?.docker?.env ?? {},
-        },
-      },
-      backend: {
-        image: raw.ansible?.backend?.image ?? "",
-        tag: raw.ansible?.backend?.tag ?? "",
-        port: raw.ansible?.backend?.port ?? 3000,
-        env: raw.ansible?.backend?.env ?? {},
-      },
-    },
-    secrets: {
-      provider: "bws",
-      projectId: raw.secrets?.projectId ?? "",
-      requiredVars: raw.secrets?.requiredVars ?? [],
-    },
+    ...(raw.ansible
+      ? {
+          ansible: {
+            enabled: raw.ansible?.enabled,
+            groups: raw.ansible?.groups ?? [],
+            web: {
+              ...(raw.ansible?.web?.static
+                ? {
+                    static: {
+                      source: raw.ansible?.web?.static?.source,
+                      dir: raw.ansible?.web?.static?.dir ?? "",
+                      build: raw.ansible?.web?.static?.build ?? "",
+                      dist: raw.ansible?.web?.static?.dist ?? "dist",
+                      image: raw.ansible?.web?.static?.image ?? "",
+                      tag: raw.ansible?.web?.static?.tag ?? "latest",
+                      path: raw.ansible?.web?.static?.path ?? "/app/dist",
+                    },
+                  }
+                : {}),
+              ...(raw.ansible?.web?.docker
+                ? {
+                    docker: {
+                      image: raw.ansible?.web?.docker?.image,
+                      tag: raw.ansible?.web?.docker?.tag ?? "latest",
+                      port: raw.ansible?.web?.docker?.port ?? 4000,
+                      env: raw.ansible?.web?.docker?.env ?? {},
+                    },
+                  }
+                : {}),
+            },
+            ...(raw.ansible?.backend
+              ? {
+                  backend: {
+                    image: raw.ansible?.backend?.image,
+                    tag: raw.ansible?.backend?.tag,
+                    port: raw.ansible?.backend?.port ?? 3000,
+                    env: raw.ansible?.backend?.env,
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
+    ...(raw.secrets
+      ? {
+          secrets: {
+            provider: raw.secrets?.provider,
+            projectId: raw.secrets?.projectId ?? "",
+            requiredVars: raw.secrets?.requiredVars ?? [],
+          },
+        }
+      : {}),
   };
 }

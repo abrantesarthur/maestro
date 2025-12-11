@@ -201,7 +201,7 @@ async function main(): Promise<void> {
   // Fetch secrets from Bitwarden
   // ============================================
 
-  if (config.secrets.provider === "bws") {
+  if (config.secrets?.provider === "bws") {
     log("Fetching secrets from Bitwarden...");
     await loadBwsSecrets(config.secrets.projectId || undefined);
   }
@@ -210,26 +210,28 @@ async function main(): Promise<void> {
   requireBwsVar("GHCR_TOKEN");
   requireBwsVar("VPS_SSH_KEY");
 
-  if (config.pulumi.enabled || config.ansible.enabled) {
+  if (config.pulumi?.enabled || config.ansible?.enabled) {
     requireBwsVar("PULUMI_ACCESS_TOKEN");
   }
 
-  if (config.pulumi.enabled) {
+  if (config.pulumi?.enabled) {
     requireBwsVar("CLOUDFLARE_API_TOKEN");
     requireBwsVar("DIGITALOCEAN_TOKEN");
   }
 
-  if (config.ansible.enabled) {
+  if (config.ansible?.enabled) {
     requireBwsVar("GHCR_USERNAME");
   }
 
   // Validate user-specified BWS secrets from config
-  for (const varName of config.secrets.requiredVars) {
+  for (const varName of config.secrets?.requiredVars ?? []) {
     requireBwsVar(varName);
   }
 
   // Prepare secrets required vars JSON for passing to ansible
-  const secretsRequiredVarsJson = JSON.stringify(config.secrets.requiredVars);
+  const secretsRequiredVarsJson = JSON.stringify(
+    config.secrets?.requiredVars ?? [],
+  );
 
   // ============================================
   // Setup SSH key temp file
@@ -265,18 +267,18 @@ async function main(): Promise<void> {
 
     let allHosts: PulumiHosts = { hosts: [] };
 
-    const stackNames = Object.keys(config.pulumi.stacks) as StackName[];
-    if (config.pulumi.enabled) {
+    const stackNames = Object.keys(config.pulumi?.stacks ?? {}) as StackName[];
+    if (config.pulumi?.enabled) {
       log(`Provisioning ${stackNames.length} stack(s)...`);
 
       for (const stackName of stackNames) {
         log(`Provisioning stack: ${stackName}`);
-        const stack = config.pulumi.stacks[stackName];
+        const stack = config.pulumi?.stacks?.[stackName];
         const serversJson = JSON.stringify(stack?.servers ?? []);
 
         const stackHosts = await capturePulumiHosts(
           stackName,
-          config.pulumi.command,
+          config.pulumi?.command!,
           serversJson,
           config,
           sshKeyTempFile,
@@ -284,11 +286,11 @@ async function main(): Promise<void> {
 
         allHosts = mergeHosts(allHosts, stackHosts);
       }
-    } else if (config.ansible.enabled) {
+    } else if (config.ansible?.enabled) {
       log("Fetching existing Pulumi outputs for Ansible...");
 
       for (const stackName of stackNames) {
-        const stack = config.pulumi.stacks[stackName];
+        const stack = config.pulumi?.stacks?.[stackName];
         const serversJson = JSON.stringify(stack?.servers ?? []);
 
         const stackHosts = await capturePulumiHosts(
@@ -312,7 +314,7 @@ async function main(): Promise<void> {
 
     const hasValidHosts = allHosts.hosts.length > 0;
 
-    if (config.ansible.enabled && hasValidHosts) {
+    if (config.ansible?.enabled && hasValidHosts) {
       log("Checking tunnel readiness before running Ansible...");
       await waitForTunnelsReady(allHosts, sshKeyTempFile);
 
