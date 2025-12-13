@@ -50,6 +50,13 @@ export const validateSemanticConfig = async ({
     );
   }
 
+  // Require at least one of static or docker when web is specified
+  if (raw.ansible?.web && !raw.ansible.web.static && !raw.ansible.web.docker) {
+    throw new Error(
+      `ansible.web.static or ansible.web.docker must be specified when ansible.web is configured`,
+    );
+  }
+
   // Validate ansible.web configuration when web role is present
   if ((raw.ansible?.enabled ?? false) && roles.has(ServerRole.Web)) {
     const webConfig = raw.ansible?.web ?? {};

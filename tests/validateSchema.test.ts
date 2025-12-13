@@ -821,5 +821,17 @@ ansible:
         "ansible.backend.image and ansible.backend.tag are required when servers have the 'backend' role",
       );
     });
+
+    test("rejects config with ansible.web but no static or docker", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  web: {}
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.web.static or ansible.web.docker must be specified when ansible.web is configured",
+      );
+    });
   });
 });
