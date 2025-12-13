@@ -14,7 +14,15 @@ domain: example.com
 pulumi:
   enabled: false
   command: up
+  cloudflareAccountId: abc123
   sshPort: 22
+  stacks:
+    dev:
+      servers: []
+    staging:
+      servers: []
+    prod:
+      servers: []
 `;
       const result = await validateSchema(yaml);
       expect(result.domain).toBe("example.com");
@@ -28,7 +36,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -136,6 +146,15 @@ domain: example.com
 pulumi:
   enabled: false
   command: ${command}
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks:
+    dev:
+      servers: []
+    staging:
+      servers: []
+    prod:
+      servers: []
 `;
         const result = await validateSchema(yaml);
         expect(result.pulumi?.command).toBe(command);
@@ -147,7 +166,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers: []
@@ -167,7 +188,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -326,6 +349,9 @@ ansible:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -341,6 +367,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev: {}
 `;
@@ -374,6 +403,10 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: "yes"
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks: {}
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -385,7 +418,10 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
   sshPort: "22"
+  stacks: {}
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -397,6 +433,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -413,6 +452,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -462,6 +504,9 @@ domain: example.com
 pulumi:
   enabled: true
   command: deploy
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks: {}
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -473,6 +518,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     development:
       servers: []
@@ -487,6 +535,9 @@ pulumi:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -544,6 +595,16 @@ unknownField: value
 domain: example.com
 pulumi:
   enabled: false
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks:
+    dev:
+      servers: []
+    staging:
+      servers: []
+    prod:
+      servers: []
   extraField: value
 `;
       const result = await validateSchema(yaml);
@@ -572,7 +633,9 @@ ansible:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -633,6 +696,10 @@ ansible:
 domain: example.com
 pulumi:
   enabled: "not-a-boolean"
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks: {}
 `;
       try {
         await validateSchema(yaml);
@@ -649,6 +716,23 @@ pulumi:
   // ============================================
 
   describe("semantic validation", () => {
+    test("rejects enabled pulumi without prod stack", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  sshPort: 22
+  stacks:
+    dev:
+      servers: []
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "pulumi.stacks.prod is required when pulumi.enabled is true",
+      );
+    });
+
     test("rejects config with both ansible.web.static and ansible.web.docker", async () => {
       const yaml = `
 domain: example.com
@@ -672,7 +756,9 @@ ansible:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:
@@ -695,7 +781,9 @@ ansible:
 domain: example.com
 pulumi:
   enabled: true
+  command: up
   cloudflareAccountId: abc123
+  sshPort: 22
   stacks:
     dev:
       servers:

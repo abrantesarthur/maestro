@@ -1,12 +1,7 @@
 // ============================================
 // Config Loading
 // ============================================
-import {
-  PulumiCommand,
-  StackName,
-  type MaestroConfig,
-  type StackConfig,
-} from "./schema";
+import { type MaestroConfig } from "./schema";
 import { validateSchema } from "./validateSchema";
 
 export async function loadConfig(configPath: string): Promise<MaestroConfig> {
@@ -30,40 +25,40 @@ export async function loadConfig(configPath: string): Promise<MaestroConfig> {
     ...(raw.ansible
       ? {
           ansible: {
-            enabled: raw.ansible?.enabled,
-            groups: raw.ansible?.groups ?? [],
+            enabled: raw.ansible.enabled,
+            groups: raw.ansible.groups ?? [],
             web: {
-              ...(raw.ansible?.web?.static
+              ...(raw.ansible.web?.static
                 ? {
                     static: {
-                      source: raw.ansible?.web?.static?.source,
-                      dir: raw.ansible?.web?.static?.dir ?? "",
-                      build: raw.ansible?.web?.static?.build ?? "",
-                      dist: raw.ansible?.web?.static?.dist ?? "dist",
-                      image: raw.ansible?.web?.static?.image ?? "",
-                      tag: raw.ansible?.web?.static?.tag ?? "latest",
-                      path: raw.ansible?.web?.static?.path ?? "/app/dist",
+                      source: raw.ansible.web.static.source,
+                      dir: raw.ansible.web.static.dir ?? "",
+                      build: raw.ansible.web.static.build ?? "",
+                      dist: raw.ansible.web.static.dist ?? "dist",
+                      image: raw.ansible.web.static.image ?? "",
+                      tag: raw.ansible.web.static.tag ?? "latest",
+                      path: raw.ansible.web.static.path ?? "/app/dist",
                     },
                   }
                 : {}),
-              ...(raw.ansible?.web?.docker
+              ...(raw.ansible.web?.docker
                 ? {
                     docker: {
-                      image: raw.ansible?.web?.docker?.image,
-                      tag: raw.ansible?.web?.docker?.tag ?? "latest",
-                      port: raw.ansible?.web?.docker?.port ?? 4000,
-                      env: raw.ansible?.web?.docker?.env ?? {},
+                      image: raw.ansible.web.docker.image,
+                      tag: raw.ansible.web.docker.tag ?? "latest",
+                      port: raw.ansible.web.docker.port ?? 4000,
+                      env: raw.ansible.web.docker.env ?? {},
                     },
                   }
                 : {}),
             },
-            ...(raw.ansible?.backend
+            ...(raw.ansible.backend
               ? {
                   backend: {
-                    image: raw.ansible?.backend?.image,
-                    tag: raw.ansible?.backend?.tag,
-                    port: raw.ansible?.backend?.port ?? 3000,
-                    env: raw.ansible?.backend?.env,
+                    image: raw.ansible.backend.image,
+                    tag: raw.ansible.backend.tag,
+                    port: raw.ansible.backend.port ?? 3000,
+                    env: raw.ansible.backend.env,
                   },
                 }
               : {}),

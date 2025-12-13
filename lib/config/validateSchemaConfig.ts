@@ -11,15 +11,17 @@ export const validateSemanticConfig = async ({
   raw: MaestroConfig;
   roles: Set<ServerRole>;
 }): Promise<void> => {
-  // Conditional validation: pulumi.enabled requires cloudflareAccountId and stacks
+  // Conditional validation: pulumi.enabled requires cloudflareAccountId and at least the prod stack
   if (raw.pulumi?.enabled) {
     if (!raw.pulumi.cloudflareAccountId) {
       throw new Error(
         `pulumi.cloudflareAccountId is required when pulumi.enabled is true`,
       );
     }
-    if (!raw.pulumi.stacks || Object.keys(raw.pulumi.stacks).length === 0) {
-      throw new Error(`pulumi.stacks is required when pulumi.enabled is true`);
+    if (!raw.pulumi.stacks?.prod) {
+      throw new Error(
+        `pulumi.stacks.prod is required when pulumi.enabled is true`,
+      );
     }
   }
 

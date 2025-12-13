@@ -127,14 +127,28 @@ export const StackConfigCodec = t.exact(
 // Pulumi Config Codec
 // ============================================
 
-const PulumiConfigCodec = t.exact(
-  t.type({
-    enabled: t.boolean,
-    command: PulumiCommandCodec,
-    cloudflareAccountId: t.string,
-    sshPort: t.number,
-    stacks: t.record(StackNameCodec, StackConfigCodec),
+const PulumiStacksCodec = t.refinement(
+  t.partial({
+    dev: StackConfigCodec,
+    staging: StackConfigCodec,
+    prod: StackConfigCodec,
   }),
+  (stacks) => Object.keys(stacks).every((k) => StackNameCodec.is(k)),
+  "PulumiStacks",
+);
+
+const PulumiConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      enabled: t.boolean,
+      command: PulumiCommandCodec,
+      cloudflareAccountId: t.string,
+      sshPort: t.number,
+    }),
+    t.partial({
+      stacks: PulumiStacksCodec,
+    }),
+  ]),
 );
 
 // ============================================
