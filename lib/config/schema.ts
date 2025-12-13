@@ -180,9 +180,9 @@ const WebDockerConfigCodec = t.exact(
     t.type({
       image: t.string,
       tag: t.string,
+      port: t.number,
     }),
     t.partial({
-      port: t.number,
       env: t.record(t.string, t.string),
     }),
   ]),
@@ -209,9 +209,9 @@ const BackendConfigCodec = t.exact(
     t.type({
       image: t.string,
       tag: t.string,
+      port: t.number,
     }),
     t.partial({
-      port: t.number,
       env: t.record(t.string, t.string),
     }),
   ]),

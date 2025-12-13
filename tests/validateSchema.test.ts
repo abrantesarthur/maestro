@@ -128,6 +128,7 @@ ansible:
   backend:
     image: myapp
     tag: latest
+    port: 8080
 secrets:
   provider: bws
 `;
@@ -207,9 +208,11 @@ ansible:
     docker:
       image: nginx
       tag: latest
+      port: 80
   backend:
     image: myapp
     tag: latest
+    port: 8080
 `;
       const result = await validateSchema(yaml);
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("backend");
@@ -310,6 +313,21 @@ ansible:
   enabled: true
   backend:
     image: myapp
+    port: 8080
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
+    test("rejects backend without port field", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -651,6 +669,7 @@ ansible:
   backend:
     image: myapp
     tag: latest
+    port: 8080
 `;
       const result = await validateSchema(yaml);
       const server = result.pulumi?.stacks?.dev?.servers[0];
@@ -666,6 +685,7 @@ ansible:
   backend:
     image: myapp
     tag: latest
+    port: 8080
     memory: 512
 `;
       const result = await validateSchema(yaml);
@@ -745,6 +765,7 @@ ansible:
     docker:
       image: nginx
       tag: latest
+      port: 80
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "ansible.web.static and ansible.web.docker cannot both be specified",
