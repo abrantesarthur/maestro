@@ -26,13 +26,7 @@ export async function loadConfig(configPath: string): Promise<MaestroConfig> {
   // Build the loaded config with defaults
   return {
     domain: raw.domain,
-    pulumi: {
-      enabled: raw.pulumi?.enabled ?? false,
-      command: raw.pulumi?.command ?? PulumiCommand.Up,
-      cloudflareAccountId: raw.pulumi?.cloudflareAccountId ?? "",
-      sshPort: raw.pulumi?.sshPort ?? 22,
-      stacks: (raw.pulumi?.stacks ?? {}) as Record<StackName, StackConfig>,
-    },
+    pulumi: raw.pulumi,
     ...(raw.ansible
       ? {
           ansible: {

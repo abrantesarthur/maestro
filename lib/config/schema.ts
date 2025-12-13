@@ -128,17 +128,13 @@ export const StackConfigCodec = t.exact(
 // ============================================
 
 const PulumiConfigCodec = t.exact(
-  t.intersection([
-    t.type({
-      enabled: t.boolean,
-    }),
-    t.partial({
-      command: PulumiCommandCodec,
-      cloudflareAccountId: t.string,
-      sshPort: t.number,
-      stacks: t.record(StackNameCodec, StackConfigCodec),
-    }),
-  ]),
+  t.type({
+    enabled: t.boolean,
+    command: PulumiCommandCodec,
+    cloudflareAccountId: t.string,
+    sshPort: t.number,
+    stacks: t.record(StackNameCodec, StackConfigCodec),
+  }),
 );
 
 // ============================================

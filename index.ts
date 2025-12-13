@@ -13,7 +13,7 @@ import {
   type StackName,
   ServerRole,
   type MaestroConfig,
-} from "./lib/config";
+} from "./lib/config/index.ts";
 import { loadBwsSecrets } from "./lib/secrets.ts";
 import {
   log,

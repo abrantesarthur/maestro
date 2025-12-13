@@ -27,6 +27,6 @@
     "noPropertyAccessFromIndexSignature": true,
     "types": ["bun"]
   },
-  "include": ["index.ts", "lib/**/*.ts"],
+  "include": ["lib/index.ts", "lib/**/*.ts"],
   "exclude": ["node_modules", "pulumi", "ansible"]
 }
