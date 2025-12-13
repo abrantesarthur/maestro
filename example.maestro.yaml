@@ -30,19 +30,19 @@ pulumi:
   # configure the server via Ansible (see below).
   enabled: true
 
-  # [Required when pulumi.enabled is true] Pulumi command to run: up, refresh, cancel, or output
+  # [Required] Pulumi command to run: up, refresh, cancel, or output
   # - up: Apply infrastructure changes
   # - refresh: Reconcile state without deploying
   # - cancel: Cancel a running update
   # - output: Retrieve stack outputs without changes
   command: up
 
-  # [Required when pulumi.enabled is true] Cloudflare account ID
+  # [Required] Cloudflare account ID
   # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
   # dots next to account name
   cloudflareAccountId: "your_account_id_here"
 
-  # [Required when pulumi.enabled is true] SSH port for Cloudflare tunnel configuration
+  # [Required] SSH port for Cloudflare tunnel configuration
   sshPort: 22
 
   # [Required when pulumi.enabled is true] Stack definitions
@@ -53,7 +53,6 @@ pulumi:
     prod:
       servers:
         # Single production server (handles backend and web)
-        # FIXME: support multiple servers
         - roles: [backend, web] # Required: one or more of backend, web
           # groups: [devops]       # Optional: override global ansible.groups for this server
           # tags: []               # Optional: custom user-defined tags

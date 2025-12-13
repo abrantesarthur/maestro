@@ -174,3 +174,5 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 - **Automated SSH key provisioning**: SSH keys must be manually added to your DigitalOcean account before running Maestro. A future improvement would automate the creation and registration of SSH keys during the provisioning process.
 
 - **Configuration schema validation**: Add typed schema validation for `maestro.yaml` to catch configuration errors early and provide better error messages.
+
+- **Multiple server supporrt**: Right now we can only specify one server per environment.
