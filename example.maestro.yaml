@@ -25,12 +25,12 @@ domain: example.com
 # - DigitalOcean virtual servers with cloudflared and SSL/TLS certificates
 # - Cloudflare DNS records and tunnels for SSH access
 pulumi:
-  # [Optional, default: false] Set to false to skip Pulumi provisioning.
+  # [required] Set to false to skip Pulumi provisioning.
   # Useful if you've already ran pulumi provisioning before and just want to
   # configure the server via Ansible (see below).
   enabled: true
 
-  # [Optional, default: up] Pulumi command to run: up, refresh, cancel, or output
+  # [Required when pulumi.enabled is true] Pulumi command to run: up, refresh, cancel, or output
   # - up: Apply infrastructure changes
   # - refresh: Reconcile state without deploying
   # - cancel: Cancel a running update
@@ -42,7 +42,7 @@ pulumi:
   # dots next to account name
   cloudflareAccountId: "your_account_id_here"
 
-  # [Optional, default: 22] SSH port for Cloudflare tunnel configuration
+  # [Required when pulumi.enabled is true] SSH port for Cloudflare tunnel configuration
   sshPort: 22
 
   # [Required when pulumi.enabled is true] Stack definitions
