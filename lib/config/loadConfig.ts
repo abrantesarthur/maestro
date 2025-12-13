@@ -4,12 +4,10 @@
 import {
   PulumiCommand,
   StackName,
-  type ServerRole,
   type MaestroConfig,
   type StackConfig,
 } from "./schema";
 import { validateSchema } from "./validateSchema";
-import { validateSemanticConfig } from "./validateSchemaConfig";
 
 export async function loadConfig(configPath: string): Promise<MaestroConfig> {
   const file = Bun.file(configPath);
@@ -23,15 +21,7 @@ export async function loadConfig(configPath: string): Promise<MaestroConfig> {
 
   // validate the Maestro configuration according to the yaml schema
   const content = await file.text();
-  const raw = validateSchema(content);
-
-  // Collect all unique roles from all stacks
-  const roles = Object.values(raw.pulumi?.stacks ?? {})
-    .flatMap((s) => s.servers.flatMap((srv) => srv.roles))
-    .reduce((prev, curr) => prev.add(curr), new Set<ServerRole>());
-
-  // Semantic validations (filesystem checks that AJV cannot handle)
-  await validateSemanticConfig({ raw, roles });
+  const raw = await validateSchema(content);
 
   // Build the loaded config with defaults
   return {

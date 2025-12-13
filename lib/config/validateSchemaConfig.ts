@@ -41,6 +41,13 @@ export const validateSemanticConfig = async ({
     }
   }
 
+  // Mutual exclusion: cannot have both ansible.web.static and ansible.web.docker
+  if (raw.ansible?.web?.static && raw.ansible?.web?.docker) {
+    throw new Error(
+      `ansible.web.static and ansible.web.docker cannot both be specified`,
+    );
+  }
+
   // Validate ansible.web configuration when web role is present
   if ((raw.ansible?.enabled ?? false) && roles.has(ServerRole.Web)) {
     const webConfig = raw.ansible?.web ?? {};

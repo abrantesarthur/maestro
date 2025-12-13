@@ -2,36 +2,33 @@ import { describe, expect, test } from "bun:test";
 import { validateSchema } from "../lib/config/validateSchema";
 
 describe("validateSchema", () => {
-  // ============================================
-  // Valid Configurations
-  // ============================================
-
   describe("valid configurations", () => {
-    test("accepts minimal config with only domain", () => {
+    test("accepts minimal config with only domain", async () => {
       const yaml = `domain: example.com`;
-      expect(validateSchema(yaml)).toEqual({ domain: "example.com" });
+      expect(await validateSchema(yaml)).toEqual({ domain: "example.com" });
     });
 
-    test("accepts config with pulumi section", () => {
+    test("accepts config with pulumi section", async () => {
       const yaml = `
 domain: example.com
 pulumi:
-  enabled: true
+  enabled: false
   command: up
   sshPort: 22
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.domain).toBe("example.com");
-      expect(result.pulumi?.enabled).toBe(true);
+      expect(result.pulumi?.enabled).toBe(false);
       expect(result.pulumi?.command).toBe("up");
       expect(result.pulumi?.sshPort).toBe(22);
     });
 
-    test("accepts config with pulumi stacks", () => {
+    test("accepts config with pulumi stacks", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
+  cloudflareAccountId: abc123
   stacks:
     dev:
       servers:
@@ -51,13 +48,13 @@ pulumi:
           tags:
             - critical
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.pulumi?.stacks?.dev?.servers).toHaveLength(1);
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("backend");
       expect(result.pulumi?.stacks?.prod?.servers[0].roles).toContain("web");
     });
 
-    test("accepts config with ansible section", () => {
+    test("accepts config with ansible section", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -70,10 +67,6 @@ ansible:
       dir: ./web
       build: npm run build
       dist: ./dist
-    docker:
-      image: nginx
-      tag: latest
-      port: 80
   backend:
     image: myapp
     tag: v1.0.0
@@ -81,14 +74,13 @@ ansible:
     env:
       NODE_ENV: production
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.ansible?.enabled).toBe(true);
       expect(result.ansible?.web?.static?.source).toBe("local");
-      expect(result.ansible?.web?.docker?.image).toBe("nginx");
       expect(result.ansible?.backend?.image).toBe("myapp");
     });
 
-    test("accepts config with secrets section", () => {
+    test("accepts config with secrets section", async () => {
       const yaml = `
 domain: example.com
 secrets:
@@ -98,13 +90,13 @@ secrets:
     - API_KEY
     - DB_PASSWORD
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.secrets?.provider).toBe("bws");
       expect(result.secrets?.projectId).toBe("my-project");
       expect(result.secrets?.requiredVars).toContain("API_KEY");
     });
 
-    test("accepts full config with all sections", () => {
+    test("accepts full config with all sections", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -129,32 +121,33 @@ ansible:
 secrets:
   provider: bws
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.domain).toBe("example.com");
       expect(result.pulumi?.enabled).toBe(true);
       expect(result.ansible?.enabled).toBe(true);
       expect(result.secrets?.provider).toBe("bws");
     });
 
-    test("accepts all valid pulumi commands", () => {
-      const commands = ["up", "refresh", "cancel", "output"];
+    test("accepts all valid pulumi commands", async () => {
+      const commands = ["up", "refresh", "cancel", "output"] as const;
       for (const command of commands) {
         const yaml = `
 domain: example.com
 pulumi:
-  enabled: true
+  enabled: false
   command: ${command}
 `;
-        const result = validateSchema(yaml);
+        const result = await validateSchema(yaml);
         expect(result.pulumi?.command).toBe(command);
       }
     });
 
-    test("accepts all valid stack names", () => {
+    test("accepts all valid stack names", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
+  cloudflareAccountId: abc123
   stacks:
     dev:
       servers: []
@@ -163,17 +156,18 @@ pulumi:
     prod:
       servers: []
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.pulumi?.stacks?.dev).toBeDefined();
       expect(result.pulumi?.stacks?.staging).toBeDefined();
       expect(result.pulumi?.stacks?.prod).toBeDefined();
     });
 
-    test("accepts all valid server roles", () => {
+    test("accepts all valid server roles", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
+  cloudflareAccountId: abc123
   stacks:
     dev:
       servers:
@@ -184,13 +178,22 @@ pulumi:
       servers: []
     prod:
       servers: []
+ansible:
+  enabled: true
+  web:
+    docker:
+      image: nginx
+      tag: latest
+  backend:
+    image: myapp
+    tag: latest
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("backend");
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("web");
     });
 
-    test("accepts web static with image source", () => {
+    test("accepts web static with image source", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -202,7 +205,7 @@ ansible:
       tag: v1
       path: /app/dist
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.ansible?.web?.static?.source).toBe("image");
       expect(result.ansible?.web?.static?.image).toBe("my-static-image");
     });
@@ -213,48 +216,58 @@ ansible:
   // ============================================
 
   describe("missing required fields", () => {
-    test("rejects empty config", () => {
+    test("rejects empty config", async () => {
       const yaml = ``;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects config without domain", () => {
+    test("rejects config without domain", async () => {
       const yaml = `
 pulumi:
   enabled: true
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects pulumi without enabled field", () => {
+    test("rejects pulumi without enabled field", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   command: up
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects ansible without enabled field", () => {
+    test("rejects ansible without enabled field", async () => {
       const yaml = `
 domain: example.com
 ansible:
   groups:
     - webservers
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects secrets without provider field", () => {
+    test("rejects secrets without provider field", async () => {
       const yaml = `
 domain: example.com
 secrets:
   projectId: my-project
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects backend without image field", () => {
+    test("rejects backend without image field", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -262,10 +275,12 @@ ansible:
   backend:
     tag: latest
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects backend without tag field", () => {
+    test("rejects backend without tag field", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -273,10 +288,12 @@ ansible:
   backend:
     image: myapp
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects web docker without image field", () => {
+    test("rejects web docker without image field", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -285,10 +302,12 @@ ansible:
     docker:
       tag: latest
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects web static without source field", () => {
+    test("rejects web static without source field", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -297,10 +316,12 @@ ansible:
     static:
       dir: ./web
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects server without roles field", () => {
+    test("rejects server without roles field", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -310,10 +331,12 @@ pulumi:
       servers:
         - size: small
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects stack without servers field", () => {
+    test("rejects stack without servers field", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -321,7 +344,9 @@ pulumi:
   stacks:
     dev: {}
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
   });
 
@@ -330,36 +355,44 @@ pulumi:
   // ============================================
 
   describe("wrong types", () => {
-    test("rejects domain as number", () => {
+    test("rejects domain as number", async () => {
       const yaml = `domain: 12345`;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects domain as boolean", () => {
+    test("rejects domain as boolean", async () => {
       const yaml = `domain: true`;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects pulumi.enabled as string", () => {
+    test("rejects pulumi.enabled as string", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: "yes"
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects pulumi.sshPort as string", () => {
+    test("rejects pulumi.sshPort as string", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
   sshPort: "22"
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects servers as object instead of array", () => {
+    test("rejects servers as object instead of array", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -370,10 +403,12 @@ pulumi:
         backend:
           size: small
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects roles as string instead of array", () => {
+    test("rejects roles as string instead of array", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -383,10 +418,12 @@ pulumi:
       servers:
         - roles: backend
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects backend.port as string", () => {
+    test("rejects backend.port as string", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -396,17 +433,21 @@ ansible:
     tag: latest
     port: "8080"
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects requiredVars as string instead of array", () => {
+    test("rejects requiredVars as string instead of array", async () => {
       const yaml = `
 domain: example.com
 secrets:
   provider: bws
   requiredVars: API_KEY
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
   });
 
@@ -415,17 +456,19 @@ secrets:
   // ============================================
 
   describe("invalid enum values", () => {
-    test("rejects invalid pulumi command", () => {
+    test("rejects invalid pulumi command", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
   command: deploy
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects invalid stack name", () => {
+    test("rejects invalid stack name", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -434,10 +477,12 @@ pulumi:
     development:
       servers: []
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects invalid server role", () => {
+    test("rejects invalid server role", async () => {
       const yaml = `
 domain: example.com
 pulumi:
@@ -448,19 +493,23 @@ pulumi:
         - roles:
             - database
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects invalid secrets provider", () => {
+    test("rejects invalid secrets provider", async () => {
       const yaml = `
 domain: example.com
 secrets:
   provider: vault
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
 
-    test("rejects invalid static source", () => {
+    test("rejects invalid static source", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -469,7 +518,9 @@ ansible:
     static:
       source: remote
 `;
-      expect(() => validateSchema(yaml)).toThrow("Invalid configuration");
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
     });
   });
 
@@ -478,49 +529,50 @@ ansible:
   // ============================================
 
   describe("extra fields (t.exact strips them)", () => {
-    test("strips extra field at root level", () => {
+    test("strips extra field at root level", async () => {
       const yaml = `
 domain: example.com
 unknownField: value
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result).toEqual({ domain: "example.com" });
       expect((result as Record<string, unknown>).unknownField).toBeUndefined();
     });
 
-    test("strips extra field in pulumi section", () => {
+    test("strips extra field in pulumi section", async () => {
       const yaml = `
 domain: example.com
 pulumi:
-  enabled: true
+  enabled: false
   extraField: value
 `;
-      const result = validateSchema(yaml);
-      expect(result.pulumi?.enabled).toBe(true);
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.enabled).toBe(false);
       expect(
         (result.pulumi as Record<string, unknown>).extraField,
       ).toBeUndefined();
     });
 
-    test("strips extra field in ansible section", () => {
+    test("strips extra field in ansible section", async () => {
       const yaml = `
 domain: example.com
 ansible:
   enabled: true
   customOption: true
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.ansible?.enabled).toBe(true);
       expect(
         (result.ansible as Record<string, unknown>).customOption,
       ).toBeUndefined();
     });
 
-    test("strips extra field in server config", () => {
+    test("strips extra field in server config", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
+  cloudflareAccountId: abc123
   stacks:
     dev:
       servers:
@@ -531,14 +583,19 @@ pulumi:
       servers: []
     prod:
       servers: []
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       const server = result.pulumi?.stacks?.dev?.servers[0];
       expect(server?.roles).toContain("backend");
       expect((server as Record<string, unknown>).customField).toBeUndefined();
     });
 
-    test("strips extra field in backend config", () => {
+    test("strips extra field in backend config", async () => {
       const yaml = `
 domain: example.com
 ansible:
@@ -548,7 +605,7 @@ ansible:
     tag: latest
     memory: 512
 `;
-      const result = validateSchema(yaml);
+      const result = await validateSchema(yaml);
       expect(result.ansible?.backend?.image).toBe("myapp");
       expect(
         (result.ansible?.backend as Record<string, unknown>).memory,
@@ -561,29 +618,99 @@ ansible:
   // ============================================
 
   describe("error messages", () => {
-    test("error message contains field path for missing domain", () => {
+    test("error message contains field path for missing domain", async () => {
       const yaml = `pulumi:\n  enabled: true`;
       try {
-        validateSchema(yaml);
+        await validateSchema(yaml);
         expect.unreachable("Should have thrown");
       } catch (error) {
         expect((error as Error).message).toContain("domain");
       }
     });
 
-    test("error message contains field path for nested error", () => {
+    test("error message contains field path for nested error", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: "not-a-boolean"
 `;
       try {
-        validateSchema(yaml);
+        await validateSchema(yaml);
         expect.unreachable("Should have thrown");
       } catch (error) {
         expect((error as Error).message).toContain("pulumi");
         expect((error as Error).message).toContain("enabled");
       }
+    });
+  });
+
+  // ============================================
+  // Semantic Validation
+  // ============================================
+
+  describe("semantic validation", () => {
+    test("rejects config with both ansible.web.static and ansible.web.docker", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  web:
+    static:
+      source: local
+      dir: ./dist
+    docker:
+      image: nginx
+      tag: latest
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.web.static and ansible.web.docker cannot both be specified",
+      );
+    });
+
+    test("rejects config with web role but no ansible.web config", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  cloudflareAccountId: abc123
+  stacks:
+    dev:
+      servers:
+        - roles:
+            - web
+    staging:
+      servers: []
+    prod:
+      servers: []
+ansible:
+  enabled: true
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.web.static or ansible.web.docker must be configured when servers have the 'web' role",
+      );
+    });
+
+    test("rejects config with backend role but no ansible.backend config", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  cloudflareAccountId: abc123
+  stacks:
+    dev:
+      servers:
+        - roles:
+            - backend
+    staging:
+      servers: []
+    prod:
+      servers: []
+ansible:
+  enabled: true
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.backend.image and ansible.backend.tag are required when servers have the 'backend' role",
+      );
     });
   });
 });
