@@ -176,3 +176,5 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 - **Configuration schema validation**: Add typed schema validation for `maestro.yaml` to catch configuration errors early and provide better error messages.
 
 - **Multiple server supporrt**: Right now we can only specify one server per environment.
+
+- **Security considerations**: Never write the ssh key to the host filesystem

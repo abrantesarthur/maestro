@@ -83,9 +83,25 @@ export function requireVar(
 // Temp File Management
 // ============================================
 
+/** Prefix used for all maestro temp files */
+const TEMP_FILE_PREFIX = "maestro_";
+
+/**
+ * Get the secure temp directory for the current platform
+ * Uses $TMPDIR (per-user on macOS) with fallback to /tmp
+ */
+function getSecureTempDir(): string {
+  return process.env["TMPDIR"] ?? "/tmp";
+}
+
 /**
  * Create a temporary file with a secret value from an environment variable
  * Normalizes escaped newlines and ensures proper permissions
+ *
+ * Security features:
+ * - Uses umask to create file with 600 permissions atomically
+ * - Uses cryptographically random filename
+ * - Uses per-user temp directory when available
  *
  * @param varName - The environment variable containing the secret
  * @returns The path to the temporary file
@@ -98,16 +114,22 @@ export async function createTempSecretFile(varName: string): Promise<string> {
     throw new Error(`Missing ${varName} in the environment.`);
   }
 
-  const tmpPath = `/tmp/maestro_${varName.toLowerCase()}_${Date.now()}`;
+  // Generate cryptographically random filename
+  const randomSuffix = crypto.randomUUID();
+  const tmpPath = `${getSecureTempDir()}/${TEMP_FILE_PREFIX}${randomSuffix}`;
 
   // Normalize escaped newlines, strip CRs, and ensure a trailing newline for OpenSSH
   const normalizedValue =
     secretValue.replace(/\\n/g, "\n").replace(/\r/g, "") + "\n";
 
-  await Bun.write(tmpPath, normalizedValue);
-
-  // Set restrictive permissions (chmod 600)
-  Bun.spawnSync(["chmod", "600", tmpPath]);
+  // Set restrictive umask before writing to avoid race condition
+  // 0o077 means new files are created with 600 permissions (owner read/write only)
+  const oldUmask = process.umask(0o077);
+  try {
+    await Bun.write(tmpPath, normalizedValue);
+  } finally {
+    process.umask(oldUmask);
+  }
 
   return tmpPath;
 }
@@ -122,6 +144,23 @@ export async function removeTempFile(path: string): Promise<void> {
     await $`rm -f ${path}`.quiet();
   } catch {
     // Ignore errors when removing temp files
+  }
+}
+
+/**
+ * Cleanup stale maestro temp files from previous runs
+ * Removes any files matching the maestro_ prefix in the temp directory
+ */
+export async function cleanupStaleTempFiles(): Promise<void> {
+  const tempDir = getSecureTempDir();
+  try {
+    const result =
+      await $`find ${tempDir} -maxdepth 1 -name "${TEMP_FILE_PREFIX}*" -type f -delete`.quiet();
+    if (result.exitCode !== 0) {
+      // Silently ignore errors - stale files are not critical
+    }
+  } catch {
+    // Ignore errors when cleaning up stale files
   }
 }
 

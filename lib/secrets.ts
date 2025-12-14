@@ -1,3 +1,41 @@
+import { log, createTempSecretFile, removeTempFile } from "./helpers.ts";
+
+/**
+ * Setup SSH key temp file with automatic cleanup on process exit
+ *
+ * @returns The path to the temporary SSH key file
+ * @throws Error if VPS_SSH_KEY is not set in environment
+ */
+export async function setupSshKeyTempFile(): Promise<string> {
+  log("Setting up SSH key...");
+  const sshKeyTempFile = await createTempSecretFile("VPS_SSH_KEY");
+
+  const cleanup = async () => {
+    await removeTempFile(sshKeyTempFile);
+  };
+
+  process.on("exit", () => {
+    Bun.spawnSync(["rm", "-f", sshKeyTempFile]);
+  });
+
+  process.on("SIGINT", async () => {
+    await cleanup();
+    process.exit(130);
+  });
+
+  process.on("SIGTERM", async () => {
+    await cleanup();
+    process.exit(143);
+  });
+
+  process.on("SIGHUP", async () => {
+    await cleanup();
+    process.exit(129);
+  });
+
+  return sshKeyTempFile;
+}
+
 /**
  * Load secrets from Bitwarden Secrets Manager and inject them into process.env
  *
