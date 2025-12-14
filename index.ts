@@ -94,7 +94,8 @@ async function main(): Promise<void> {
   const allHosts = await runPulumi(config, sshKeyTempFile);
 
   const hasValidHosts = allHosts.hosts.length > 0;
-  if (config.ansible?.enabled && hasValidHosts) {
+  const isDestroy = config.pulumi?.command === "destroy";
+  if (config.ansible?.enabled && hasValidHosts && !isDestroy) {
     log("Checking tunnel readiness before running Ansible...");
     await waitForTunnelsReady(allHosts, sshKeyTempFile);
 

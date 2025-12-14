@@ -58,10 +58,10 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 
 ## Optional CLI Flags
 
-| Flag         | Purpose                                                                   |
-| ------------ | ------------------------------------------------------------------------- |
-| `--command`  | Pulumi action: `up`, `refresh`, `cancel`, or `output` (default: `up`)     |
-| `--skip-bws` | Skip fetching secrets from Bitwarden (use when called from parent script) |
+| Flag         | Purpose                                                                          |
+| ------------ | -------------------------------------------------------------------------------- |
+| `--command`  | Pulumi action: `up`, `refresh`, `cancel`, `output`, or `destroy` (default: `up`) |
+| `--skip-bws` | Skip fetching secrets from Bitwarden (use when called from parent script)        |
 
 ## Ports
 

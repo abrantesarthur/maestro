@@ -48,12 +48,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-# ensure --command is either up, refresh, cancel, or output
+# ensure --command is either up, refresh, cancel, output, or destroy
 case "$PULUMI_COMMAND" in
-  up|refresh|cancel|output)
+  up|refresh|cancel|output|destroy)
     ;;
   *)
-    log "Invalid value for --command: '${PULUMI_COMMAND}'. Expected 'up', 'refresh', 'cancel', or 'output'.\n" >&2
+    log "Invalid value for --command: '${PULUMI_COMMAND}'. Expected 'up', 'refresh', 'cancel', 'output', or 'destroy'.\n" >&2
     exit 1
     ;;
 esac

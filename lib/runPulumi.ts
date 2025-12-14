@@ -34,6 +34,11 @@ async function capturePulumiHosts(
       throw new Error(`Pulumi command failed with exit code ${exitCode}`);
     }
 
+    // destroy command has no hosts to parse
+    if (pulumiCommand === "destroy") {
+      return { hosts: [] };
+    }
+
     return parsePulumiHosts(stdout);
   } else {
     // Run silently, capture output
@@ -48,6 +53,11 @@ async function capturePulumiHosts(
 
     if (exitCode !== 0) {
       throw new Error(`Pulumi command failed with exit code ${exitCode}`);
+    }
+
+    // destroy command has no hosts to parse
+    if (pulumiCommand === "destroy") {
+      return { hosts: [] };
     }
 
     return parsePulumiHosts(stdout);

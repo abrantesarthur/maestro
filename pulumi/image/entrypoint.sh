@@ -56,7 +56,7 @@ print_stack_outputs() {
 
 # Inject required values in the stack configuration
 case "$PULUMI_COMMAND" in
-  up|refresh|cancel)
+  up|refresh|cancel|destroy)
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:domain" "$DOMAIN" --non-interactive
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:cloudflareAccountId" "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:sshKeyPath" "$PULUMI_SSH_KEY_PATH" --non-interactive
@@ -77,11 +77,15 @@ case "$PULUMI_COMMAND" in
   cancel)
     pulumi cancel --stack "${PULUMI_STACK}"
     ;;
+  destroy)
+    pulumi refresh --yes --stack "${PULUMI_STACK}"
+    pulumi destroy --yes --stack "${PULUMI_STACK}"
+    ;;
   output)
     print_stack_outputs
     ;;
   *)
-    printf 'Unsupported PULUMI_COMMAND env var: %s (expected "up", "refresh", "cancel", or "output")\n' "$PULUMI_COMMAND" >&2
+    printf 'Unsupported PULUMI_COMMAND env var: %s (expected "up", "refresh", "cancel", "output", or "destroy")\n' "$PULUMI_COMMAND" >&2
     exit 1
     ;;
 esac

@@ -23,6 +23,7 @@ export const PulumiCommandValues = {
   Refresh: "refresh",
   Cancel: "cancel",
   Output: "output",
+  Destroy: "destroy",
 } as const;
 
 export const StaticSourceValues = {
@@ -59,6 +60,7 @@ export const PulumiCommandCodec = t.keyof({
   [PulumiCommandValues.Refresh]: null,
   [PulumiCommandValues.Cancel]: null,
   [PulumiCommandValues.Output]: null,
+  [PulumiCommandValues.Destroy]: null,
 });
 
 export const StaticSourceCodec = t.keyof({
