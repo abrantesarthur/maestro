@@ -74,6 +74,7 @@ log "Ensuring required configuration from environment..."
 # Configuration is passed via environment variables from parent run.sh
 require_var "${DOMAIN-}" 'DOMAIN environment variable is required (set in maestro.yaml).'
 require_var "${CLOUDFLARE_ACCOUNT_ID-}" 'CLOUDFLARE_ACCOUNT_ID environment variable is required (set in maestro.yaml).'
+require_var "${PULUMI_PROJECT_NAME-}" 'PULUMI_PROJECT_NAME environment variable is required (set in maestro.yaml).'
 require_var "${SSH_PORT-}" 'SSH_PORT environment variable is required (set in maestro.yaml).'
 require_var "${BACKEND_PORT-}" 'BACKEND_PORT environment variable is required (set in maestro.yaml).'
 require_var "${PULUMI_STACK-}" 'PULUMI_STACK environment variable is required (derived from maestro.yaml stacks).'
@@ -107,6 +108,7 @@ docker_env=(
   -e "CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}"
   -e "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}"
   -e "PULUMI_COMMAND=${PULUMI_COMMAND}"
+  -e "PULUMI_PROJECT_NAME=${PULUMI_PROJECT_NAME}"
   -e "PULUMI_STACK=${PULUMI_STACK}"
   -e "PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}"
   -e "PULUMI_SERVERS_JSON=${PULUMI_SERVERS_JSON:-[]}"

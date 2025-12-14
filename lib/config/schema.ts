@@ -143,6 +143,7 @@ const PulumiConfigCodec = t.exact(
       enabled: t.boolean,
       command: PulumiCommandCodec,
       cloudflareAccountId: t.string,
+      projectName: t.string,
       sshPort: t.number,
     }),
     t.partial({

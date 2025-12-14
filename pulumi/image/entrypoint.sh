@@ -21,6 +21,7 @@ require_env_var "DOMAIN"
 require_env_var "CLOUDFLARE_ACCOUNT_ID"
 require_env_var "PULUMI_ACCESS_TOKEN" 
 require_env_var "PULUMI_COMMAND"
+require_env_var "PULUMI_PROJECT_NAME"
 require_env_var "PULUMI_STACK"
 require_env_var "PULUMI_SSH_KEY_PATH"
 require_env_var "PULUMI_SERVERS_JSON" 
@@ -30,6 +31,16 @@ if [[ "${PULUMI_COMMAND}" != "output" ]]; then
   require_env_var "CLOUDFLARE_API_TOKEN"
   require_env_var "DIGITALOCEAN_TOKEN"
 fi
+
+# Generate Pulumi.yaml dynamically
+cat > /workspace/Pulumi.yaml <<EOF
+name: ${PULUMI_PROJECT_NAME}
+description: Infrastructure provisioning with Pulumi
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+EOF
 
 # Use PULUMI_ACCESS_TOKEN to log into Pulumi Cloud at api.pulumi.com without prompting.
 pulumi login 
@@ -46,12 +57,12 @@ print_stack_outputs() {
 # Inject required values in the stack configuration
 case "$PULUMI_COMMAND" in
   up|refresh|cancel)
-    pulumi config set --stack "${PULUMI_STACK}" maestro:domain "$DOMAIN" --non-interactive
-    pulumi config set --stack "${PULUMI_STACK}" maestro:cloudflareAccountId "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
-    pulumi config set --stack "${PULUMI_STACK}" maestro:sshKeyPath "$PULUMI_SSH_KEY_PATH" --non-interactive
-    pulumi config set --stack "${PULUMI_STACK}" maestro:backendPort "$BACKEND_PORT" --non-interactive
-    pulumi config set --stack "${PULUMI_STACK}" maestro:sshPort "$SSH_PORT" --non-interactive
-    pulumi config set --stack "${PULUMI_STACK}" maestro:servers "$PULUMI_SERVERS_JSON" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:domain" "$DOMAIN" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:cloudflareAccountId" "$CLOUDFLARE_ACCOUNT_ID" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:sshKeyPath" "$PULUMI_SSH_KEY_PATH" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:backendPort" "$BACKEND_PORT" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:sshPort" "$SSH_PORT" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:servers" "$PULUMI_SERVERS_JSON" --non-interactive
 esac
 
 # Run the requested Pulumi action

@@ -19,6 +19,7 @@ async function capturePulumiHosts(
     CLOUDFLARE_ACCOUNT_ID: pulumi?.cloudflareAccountId ?? "",
     SSH_PORT: String(pulumi?.sshPort ?? ""),
     BACKEND_PORT: String(config?.ansible?.backend?.port ?? ""),
+    PULUMI_PROJECT_NAME: pulumi?.projectName ?? "",
     PULUMI_STACK: stackName,
     PULUMI_SERVERS_JSON: serversJson,
   };
