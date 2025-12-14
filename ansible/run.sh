@@ -242,6 +242,8 @@ run_playbook() {
     "--container-options=-v=${SSH_KEY_TEMP_FILE}:${CONTAINER_SSH_KEY_PATH}:ro" \
     --penv SSH_HOSTS \
     --penv SSH_KEY_PATH \
+    --penv GHCR_TOKEN \
+    --penv GHCR_USERNAME \
     "${penv_args[@]}"
 }
 
