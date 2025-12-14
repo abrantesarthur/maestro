@@ -177,4 +177,6 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 - **Multiple server supporrt**: Right now we can only specify one server per environment.
 
-- **Security considerations**: Never write the ssh key to the host filesystem
+- **Security considerations**:
+  -- Never write the ssh key to the host filesystem
+  -- Run the whole maestro in docker containers

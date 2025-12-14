@@ -1,4 +1,4 @@
-import { log, createTempSecretFile, removeTempFile } from "./helpers.ts";
+import { createTempSecretFile, removeTempFile } from "./helpers.ts";
 
 /**
  * Setup SSH key temp file with automatic cleanup on process exit
@@ -7,7 +7,6 @@ import { log, createTempSecretFile, removeTempFile } from "./helpers.ts";
  * @throws Error if VPS_SSH_KEY is not set in environment
  */
 export async function setupSshKeyTempFile(): Promise<string> {
-  log("Setting up SSH key...");
   const sshKeyTempFile = await createTempSecretFile("VPS_SSH_KEY");
 
   const cleanup = async () => {
