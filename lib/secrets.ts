@@ -35,6 +35,17 @@ export async function setupSshKeyTempFile(): Promise<string> {
   return sshKeyTempFile;
 }
 
+/** Shape of a secret from BWS JSON output */
+interface BwsSecret {
+  id: string;
+  key: string;
+  value: string;
+  organizationId: string;
+  projectId: string | null;
+  creationDate: string;
+  revisionDate: string;
+}
+
 /**
  * Load secrets from Bitwarden Secrets Manager and inject them into process.env
  *
@@ -50,8 +61,8 @@ export async function loadBwsSecrets(projectId?: string): Promise<void> {
     );
   }
 
-  // Build the command arguments
-  const args = ["bws", "secret", "list", "-o", "env"];
+  // Build the command arguments - use JSON output for reliable parsing of multi-line values
+  const args = ["bws", "secret", "list", "-o", "json"];
   if (projectId) {
     args.push(projectId);
   }
@@ -73,40 +84,11 @@ export async function loadBwsSecrets(projectId?: string): Promise<void> {
     throw new Error(`bws secret list failed: ${stderr || "unknown error"}`);
   }
 
-  // Parse the env output format (KEY=value lines)
-  // The bws CLI with -o env outputs in shell-compatible format
-  const lines = stdout.trim().split("\n");
+  // Parse JSON output - handles multi-line values correctly
+  const secrets: BwsSecret[] = JSON.parse(stdout);
 
-  for (const line of lines) {
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    const eqIndex = line.indexOf("=");
-    if (eqIndex === -1) {
-      continue;
-    }
-
-    const key = line.slice(0, eqIndex);
-    let value = line.slice(eqIndex + 1);
-
-    // Remove surrounding quotes if present (bws outputs quoted values)
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    // Handle escaped characters in the value
-    value = value
-      .replace(/\\n/g, "\n")
-      .replace(/\\t/g, "\t")
-      .replace(/\\r/g, "\r")
-      .replace(/\\\\/g, "\\")
-      .replace(/\\"/g, '"');
-
-    process.env[key] = value;
+  for (const secret of secrets) {
+    process.env[secret.key] = secret.value;
   }
 }
 
