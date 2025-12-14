@@ -1,12 +1,4 @@
 /**
- * Bitwarden Secrets Manager integration
- *
- * Uses the bws CLI to fetch secrets and inject them into process.env.
- * This approach matches the original bash behavior and works with
- * project-scoped access tokens.
- */
-
-/**
  * Load secrets from Bitwarden Secrets Manager and inject them into process.env
  *
  * @param projectId - Optional project ID to filter secrets
@@ -90,6 +82,6 @@ export async function loadBwsSecrets(projectId?: string): Promise<void> {
 export function requireBwsSecret(varName: string): void {
   const value = process.env[varName];
   if (!value) {
-    throw new Error(`Missing ${varName} from the bws response.`);
+    throw new Error(`Missing ${varName} from the Bitwarden Secrets Manager.`);
   }
 }

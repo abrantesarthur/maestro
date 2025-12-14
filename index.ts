@@ -14,11 +14,10 @@ import {
   ServerRole,
   type MaestroConfig,
 } from "./lib/config/index.ts";
-import { loadBwsSecrets } from "./lib/secrets.ts";
+import { loadBwsSecrets, requireBwsSecret } from "./lib/secrets.ts";
 import {
   log,
   requireCmds,
-  requireBwsVar,
   createTempSecretFile,
   removeTempFile,
   runCommandWithTee,
@@ -199,134 +198,133 @@ async function main(): Promise<void> {
   // ============================================
   // Fetch secrets from Bitwarden
   // ============================================
-
   if (config.secrets?.provider === "bws") {
     log("Fetching secrets from Bitwarden...");
-    await loadBwsSecrets(config.secrets.projectId || undefined);
+    await loadBwsSecrets(config.secrets.projectId);
   }
 
   log("Ensuring required secrets and variables exist in the environment...");
-  requireBwsVar("GHCR_TOKEN");
-  requireBwsVar("VPS_SSH_KEY");
 
   if (config.pulumi?.enabled || config.ansible?.enabled) {
-    requireBwsVar("PULUMI_ACCESS_TOKEN");
+    requireBwsSecret("VPS_SSH_KEY");
   }
 
   if (config.pulumi?.enabled) {
-    requireBwsVar("CLOUDFLARE_API_TOKEN");
-    requireBwsVar("DIGITALOCEAN_TOKEN");
+    requireBwsSecret("PULUMI_ACCESS_TOKEN");
+    requireBwsSecret("CLOUDFLARE_API_TOKEN");
+    requireBwsSecret("DIGITALOCEAN_TOKEN");
   }
 
   if (config.ansible?.enabled) {
-    requireBwsVar("GHCR_USERNAME");
+    requireBwsSecret("GHCR_TOKEN");
+    requireBwsSecret("GHCR_USERNAME");
   }
 
   // Validate user-specified BWS secrets from config
   for (const varName of config.secrets?.requiredVars ?? []) {
-    requireBwsVar(varName);
+    requireBwsSecret(varName);
   }
 
-  // Prepare secrets required vars JSON for passing to ansible
-  const secretsRequiredVarsJson = JSON.stringify(
-    config.secrets?.requiredVars ?? [],
-  );
+  // // Prepare secrets required vars JSON for passing to ansible
+  // const secretsRequiredVarsJson = JSON.stringify(
+  //   config.secrets?.requiredVars ?? [],
+  // );
 
-  // ============================================
-  // Setup SSH key temp file
-  // ============================================
+  // // ============================================
+  // // Setup SSH key temp file
+  // // ============================================
 
-  log("Setting up SSH key...");
-  const sshKeyTempFile = await createTempSecretFile("VPS_SSH_KEY");
+  // log("Setting up SSH key...");
+  // const sshKeyTempFile = await createTempSecretFile("VPS_SSH_KEY");
 
-  // Ensure cleanup on exit
-  const cleanup = async () => {
-    await removeTempFile(sshKeyTempFile);
-  };
+  // // Ensure cleanup on exit
+  // const cleanup = async () => {
+  //   await removeTempFile(sshKeyTempFile);
+  // };
 
-  process.on("exit", () => {
-    // Sync cleanup for exit event
-    Bun.spawnSync(["rm", "-f", sshKeyTempFile]);
-  });
+  // process.on("exit", () => {
+  //   // Sync cleanup for exit event
+  //   Bun.spawnSync(["rm", "-f", sshKeyTempFile]);
+  // });
 
-  process.on("SIGINT", async () => {
-    await cleanup();
-    process.exit(130);
-  });
+  // process.on("SIGINT", async () => {
+  //   await cleanup();
+  //   process.exit(130);
+  // });
 
-  process.on("SIGTERM", async () => {
-    await cleanup();
-    process.exit(143);
-  });
+  // process.on("SIGTERM", async () => {
+  //   await cleanup();
+  //   process.exit(143);
+  // });
 
-  try {
-    // ============================================
-    // Run Pulumi provisioning
-    // ============================================
+  // try {
+  //   // ============================================
+  //   // Run Pulumi provisioning
+  //   // ============================================
 
-    let allHosts: PulumiHosts = { hosts: [] };
+  //   let allHosts: PulumiHosts = { hosts: [] };
 
-    const stackNames = Object.keys(config.pulumi?.stacks ?? {}) as StackName[];
-    if (config.pulumi?.enabled) {
-      log(`Provisioning ${stackNames.length} stack(s)...`);
+  //   const stackNames = Object.keys(config.pulumi?.stacks ?? {}) as StackName[];
+  //   if (config.pulumi?.enabled) {
+  //     log(`Provisioning ${stackNames.length} stack(s)...`);
 
-      for (const stackName of stackNames) {
-        log(`Provisioning stack: ${stackName}`);
-        const stack = config.pulumi?.stacks?.[stackName];
-        const serversJson = JSON.stringify(stack?.servers ?? []);
+  //     for (const stackName of stackNames) {
+  //       log(`Provisioning stack: ${stackName}`);
+  //       const stack = config.pulumi?.stacks?.[stackName];
+  //       const serversJson = JSON.stringify(stack?.servers ?? []);
 
-        const stackHosts = await capturePulumiHosts(
-          stackName,
-          config.pulumi?.command!,
-          serversJson,
-          config,
-          sshKeyTempFile,
-        );
+  //       const stackHosts = await capturePulumiHosts(
+  //         stackName,
+  //         config.pulumi?.command!,
+  //         serversJson,
+  //         config,
+  //         sshKeyTempFile,
+  //       );
 
-        allHosts = mergeHosts(allHosts, stackHosts);
-      }
-    } else if (config.ansible?.enabled) {
-      log("Fetching existing Pulumi outputs for Ansible...");
+  //       allHosts = mergeHosts(allHosts, stackHosts);
+  //     }
+  //   } else if (config.ansible?.enabled) {
+  //     log("Fetching existing Pulumi outputs for Ansible...");
 
-      for (const stackName of stackNames) {
-        const stack = config.pulumi?.stacks?.[stackName];
-        const serversJson = JSON.stringify(stack?.servers ?? []);
+  //     for (const stackName of stackNames) {
+  //       const stack = config.pulumi?.stacks?.[stackName];
+  //       const serversJson = JSON.stringify(stack?.servers ?? []);
 
-        const stackHosts = await capturePulumiHosts(
-          stackName,
-          "output",
-          serversJson,
-          config,
-          sshKeyTempFile,
-          false, // don't show logs for output-only
-        );
+  //       const stackHosts = await capturePulumiHosts(
+  //         stackName,
+  //         "output",
+  //         serversJson,
+  //         config,
+  //         sshKeyTempFile,
+  //         false, // don't show logs for output-only
+  //       );
 
-        allHosts = mergeHosts(allHosts, stackHosts);
-      }
-    } else {
-      log("Skipping pulumi provisioning");
-    }
+  //       allHosts = mergeHosts(allHosts, stackHosts);
+  //     }
+  //   } else {
+  //     log("Skipping pulumi provisioning");
+  //   }
 
-    // ============================================
-    // Run Ansible provisioning
-    // ============================================
+  //   // ============================================
+  //   // Run Ansible provisioning
+  //   // ============================================
 
-    const hasValidHosts = allHosts.hosts.length > 0;
+  //   const hasValidHosts = allHosts.hosts.length > 0;
 
-    if (config.ansible?.enabled && hasValidHosts) {
-      log("Checking tunnel readiness before running Ansible...");
-      await waitForTunnelsReady(allHosts, sshKeyTempFile);
+  //   if (config.ansible?.enabled && hasValidHosts) {
+  //     log("Checking tunnel readiness before running Ansible...");
+  //     await waitForTunnelsReady(allHosts, sshKeyTempFile);
 
-      log("Provisioning ansible...");
-      await runAnsible(allHosts, config, secretsRequiredVarsJson);
-    } else {
-      log("Skipping ansible provisioning");
-    }
+  //     log("Provisioning ansible...");
+  //     await runAnsible(allHosts, config, secretsRequiredVarsJson);
+  //   } else {
+  //     log("Skipping ansible provisioning");
+  //   }
 
-    log("Done.");
-  } finally {
-    await cleanup();
-  }
+  //   log("Done.");
+  // } finally {
+  //   await cleanup();
+  // }
 }
 
 // Run main

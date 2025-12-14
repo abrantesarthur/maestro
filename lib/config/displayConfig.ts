@@ -1,6 +1,5 @@
 import type { MaestroConfig } from "./schema";
 
-// FIXME: do better here
 export function displayConfig(config: MaestroConfig): void {
   console.log("  domain:", config.domain);
   console.log("  pulumi.enabled:", config?.pulumi?.enabled);

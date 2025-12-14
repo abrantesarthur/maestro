@@ -79,19 +79,6 @@ export function requireVar(
   }
 }
 
-/**
- * Require that an environment variable exists (loaded from BWS)
- *
- * @param varName - The environment variable name to check
- * @throws Error if the variable is not set
- */
-export function requireBwsVar(varName: string): void {
-  const value = process.env[varName];
-  if (!value) {
-    throw new Error(`Missing ${varName} from the bws response.`);
-  }
-}
-
 // ============================================
 // Temp File Management
 // ============================================
