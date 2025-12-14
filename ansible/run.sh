@@ -244,6 +244,9 @@ run_playbook() {
     --penv SSH_KEY_PATH \
     --penv GHCR_TOKEN \
     --penv GHCR_USERNAME \
+    --penv BACKEND_IMAGE \
+    --penv BACKEND_IMAGE_TAG \
+    --penv BACKEND_PORT \
     "${penv_args[@]}"
 }
 
