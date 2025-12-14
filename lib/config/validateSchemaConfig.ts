@@ -25,20 +25,29 @@ export const validateSemanticConfig = async ({
     }
   }
 
-  // Conditional validation: web.static with source "local" requires dir
+  // Conditional validation: web.static with source "local" requires dir and dist
   if (raw.ansible?.web?.static?.source === "local") {
     if (!raw.ansible.web.static.dir) {
       throw new Error(
         `ansible.web.static.dir is required when source is "local"`,
       );
     }
+    if (!raw.ansible.web.static.dist) {
+      throw new Error(
+        `ansible.web.static.dist is required when source is "local"`,
+      );
+    }
   }
 
-  // Conditional validation: web.static with source "image" requires image and tag
+  // Conditional validation: web.static with source "image" requires image, tag, and path
   if (raw.ansible?.web?.static?.source === "image") {
-    if (!raw.ansible.web.static.image || !raw.ansible.web.static.tag) {
+    if (
+      !raw.ansible.web.static.image ||
+      !raw.ansible.web.static.tag ||
+      !raw.ansible.web.static.path
+    ) {
       throw new Error(
-        `ansible.web.static.image and ansible.web.static.tag are required when source is "image"`,
+        `ansible.web.static image, tag, and path are required when source is "image"`,
       );
     }
   }

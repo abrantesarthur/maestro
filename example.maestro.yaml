@@ -94,12 +94,12 @@ pulumi:
 # corresponding role in pulumi.stacks.*.servers[].roles. If no server has a
 # role, that playbook is skipped entirely.
 ansible:
-  # [Optional, default: true] Set to false to skip Ansible provisioning.
+  # [Required] Set to false to skip Ansible provisioning.
   # Useful if you want to manually configure your servers. You can SSH via the
   # tunnel with hostname ssh<index>.<domain>, where 'index' is 0 to n-1.
   enabled: true
 
-  # [Optional, default: [devops]] System groups to create on all servers
+  # [Optional] System groups to create on all servers
   # Groups not in this list (except system groups) will be removed.
   # Can be overridden per-server via pulumi.stacks.*.servers[].groups
   groups:
@@ -130,7 +130,7 @@ ansible:
       # Supports any build tool: bun, npm, yarn, pnpm, make, etc.
       build: "bun run build"
 
-      # [Optional, default: dist] Subdirectory containing built assets
+      # [Required when source is local] Subdirectory containing built assets
       dist: "dist"
 
       # --- For source: image ---
@@ -143,7 +143,7 @@ ansible:
       # [Required when source is image] Image tag
       # tag: latest
 
-      # [Optional, default: /app/dist] Path inside container to extract assets from
+      # [Required when source is image] Path inside container to extract assets from
       # path: "/app/dist"
 
     # MODE 2: Dockerized web app - nginx acts as reverse proxy
@@ -157,7 +157,7 @@ ansible:
     #   # [Required] Image tag to deploy
     #   tag: latest
     #
-    #   # [Optional, default: 3000] Port the web application listens on
+    #   # [Required] Port the web application listens on
     #   port: 3000
     #
     #   # [Optional] Environment variables passed to the web container
@@ -175,7 +175,7 @@ ansible:
     # [Required] Image tag to deploy
     tag: latest
 
-    # [Optional, default: 3000] Port the backend application listens on
+    # [Required] Port the backend application listens on
     # Also used by Pulumi for Cloudflare tunnel configuration. The cloudflared
     # daemon forwards HTTP requests to this port in your container.
     port: 3000

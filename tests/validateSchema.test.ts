@@ -762,6 +762,7 @@ ansible:
     static:
       source: local
       dir: ./dist
+      dist: ./dist
     docker:
       image: nginx
       tag: latest
@@ -831,6 +832,21 @@ ansible:
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "ansible.web.static or ansible.web.docker must be specified when ansible.web is configured",
+      );
+    });
+
+    test("rejects config with source local but missing dist", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  web:
+    static:
+      source: local
+      dir: ./web
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        'ansible.web.static.dist is required when source is "local"',
       );
     });
   });
