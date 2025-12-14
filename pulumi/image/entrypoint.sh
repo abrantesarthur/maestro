@@ -34,6 +34,9 @@ fi
 # Use PULUMI_ACCESS_TOKEN to log into Pulumi Cloud at api.pulumi.com without prompting.
 pulumi login 
 
+# Select the stack, creating it if it doesn't exist
+pulumi stack select "${PULUMI_STACK}" --create
+
 print_stack_outputs() {
   echo "__PULUMI_OUTPUTS_BEGIN__"
   pulumi stack output --stack "${PULUMI_STACK}" --json
