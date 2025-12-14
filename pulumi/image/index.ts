@@ -110,12 +110,11 @@ const webVirtualServers = virtualServers.filter((vs) =>
 
 webVirtualServers.map((vs) =>
   vs.ipv4.apply((ipv4) => {
-    // For prod, envPrefix is empty so subdomain defaults to "@" (zone apex)
     new DnsRecord({
       content: ipv4,
       type: "A",
       domain,
-      subdomain: envPrefix,
+      subdomain: envPrefix ?? "@",
     });
     new DnsRecord({
       content: ipv4,

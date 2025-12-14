@@ -182,3 +182,4 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 - **Security considerations**:
   -- Never write the ssh key to the host filesystem
   -- Run the whole maestro in docker containers
+  -- Hide servers' IP address from pulumi output.
