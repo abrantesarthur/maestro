@@ -18,7 +18,7 @@ interface ServerConfig {
   region?: string;
 }
 
-const stackConfig = new pulumi.Config("maestro");
+const stackConfig = new pulumi.Config(pulumi.getProject());
 const domain = stackConfig.require("domain");
 
 // Get the current stack name (dev, staging, or prod) to use as environment tag
