@@ -1,0 +1,17 @@
+{
+  "name": "maestro",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "maestro": "bun index.ts",
+    "maestro:dry-run": "bun index.ts --dry-run",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "fp-ts": "^2.16.11",
+    "io-ts": "^2.2.22"
+  }
+}

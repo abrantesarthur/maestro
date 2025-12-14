@@ -40,7 +40,7 @@ export class Tunnel extends pulumi.ComponentResource {
       opts,
     );
     const resourceName = Tunnel.buildResourceName(args.name);
-    const stackConfig = new pulumi.Config("maestro");
+    const stackConfig = new pulumi.Config(pulumi.getProject());
     const accountId = stackConfig.require("cloudflareAccountId");
     const domain = stackConfig.require("domain");
     const configSrc = "cloudflare";

@@ -17,7 +17,7 @@ import { InstallCertificateOptions } from "./types";
  * @returns the ssh key
  * */
 const readSshKey = (): string => {
-  const stackConfig = new pulumi.Config("maestro");
+  const stackConfig = new pulumi.Config(pulumi.getProject());
   const sshKeyPath = stackConfig.require("sshKeyPath");
   try {
     return fs.readFileSync(sshKeyPath, "utf8");

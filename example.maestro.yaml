@@ -25,25 +25,25 @@ domain: example.com
 # - DigitalOcean virtual servers with cloudflared and SSL/TLS certificates
 # - Cloudflare DNS records and tunnels for SSH access
 pulumi:
-  # [Optional, default: true] Set to false to skip Pulumi provisioning.
+  # [required] Set to false to skip Pulumi provisioning.
   # Useful if you've already ran pulumi provisioning before and just want to
   # configure the server via Ansible (see below).
   enabled: true
 
-  # [Optional, default: up] Pulumi command to run: up, refresh, cancel, or output
+  # [Required] Pulumi command to run: up, refresh, cancel, or output
   # - up: Apply infrastructure changes
   # - refresh: Reconcile state without deploying
   # - cancel: Cancel a running update
   # - output: Retrieve stack outputs without changes
   command: up
 
-  # [Required when pulumi.enabled is true] Cloudflare account ID
+  # [Required] Cloudflare account ID
   # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
   # dots next to account name
-  cloudflare_account_id: "your_account_id_here"
+  cloudflareAccountId: "your_account_id_here"
 
-  # [Optional, default: 22] SSH port for Cloudflare tunnel configuration
-  ssh_port: 22
+  # [Required] SSH port for Cloudflare tunnel configuration
+  sshPort: 22
 
   # [Required when pulumi.enabled is true] Stack definitions
   # Each stack (dev, staging, prod) represents an isolated environment.
@@ -53,7 +53,6 @@ pulumi:
     prod:
       servers:
         # Single production server (handles backend and web)
-        # FIXME: support multiple servers
         - roles: [backend, web] # Required: one or more of backend, web
           # groups: [devops]       # Optional: override global ansible.groups for this server
           # tags: []               # Optional: custom user-defined tags
@@ -95,12 +94,12 @@ pulumi:
 # corresponding role in pulumi.stacks.*.servers[].roles. If no server has a
 # role, that playbook is skipped entirely.
 ansible:
-  # [Optional, default: true] Set to false to skip Ansible provisioning.
+  # [Required] Set to false to skip Ansible provisioning.
   # Useful if you want to manually configure your servers. You can SSH via the
   # tunnel with hostname ssh<index>.<domain>, where 'index' is 0 to n-1.
   enabled: true
 
-  # [Optional, default: [devops]] System groups to create on all servers
+  # [Optional] System groups to create on all servers
   # Groups not in this list (except system groups) will be removed.
   # Can be overridden per-server via pulumi.stacks.*.servers[].groups
   groups:
@@ -131,7 +130,7 @@ ansible:
       # Supports any build tool: bun, npm, yarn, pnpm, make, etc.
       build: "bun run build"
 
-      # [Optional, default: dist] Subdirectory containing built assets
+      # [Required when source is local] Subdirectory containing built assets
       dist: "dist"
 
       # --- For source: image ---
@@ -144,7 +143,7 @@ ansible:
       # [Required when source is image] Image tag
       # tag: latest
 
-      # [Optional, default: /app/dist] Path inside container to extract assets from
+      # [Required when source is image] Path inside container to extract assets from
       # path: "/app/dist"
 
     # MODE 2: Dockerized web app - nginx acts as reverse proxy
@@ -158,7 +157,7 @@ ansible:
     #   # [Required] Image tag to deploy
     #   tag: latest
     #
-    #   # [Optional, default: 3000] Port the web application listens on
+    #   # [Required] Port the web application listens on
     #   port: 3000
     #
     #   # [Optional] Environment variables passed to the web container
@@ -176,7 +175,7 @@ ansible:
     # [Required] Image tag to deploy
     tag: latest
 
-    # [Optional, default: 3000] Port the backend application listens on
+    # [Required] Port the backend application listens on
     # Also used by Pulumi for Cloudflare tunnel configuration. The cloudflared
     # daemon forwards HTTP requests to this port in your container.
     port: 3000
@@ -202,7 +201,7 @@ secrets:
 
   # [Optional] Bitwarden Secrets Manager project ID
   # If omitted, secrets are fetched from all projects accessible by the token
-  # project_id: "your_bws_project_id"
+  # projectId: "your_bws_project_id"
 
   # [Optional] List of additional secret names that must be present in Bitwarden
   # before provisioning starts. These are validated after fetching from Bitwarden.
@@ -213,9 +212,9 @@ secrets:
   #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
   #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
   #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
-  required_vars: []
+  requiredVars: []
   # Example:
-  # required_vars:
+  # requiredVars:
   #   - MY_API_KEY
   #   - DATABASE_PASSWORD
   #   - STRIPE_SECRET

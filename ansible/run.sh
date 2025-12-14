@@ -93,8 +93,25 @@ WEBSITE_BUILD_SCRIPT="${SCRIPT_DIR}/scripts/build_website.sh"
 require_f "${EE_DEFINITION_FILE}" "execution environment definition not found at ${EE_DEFINITION_FILE}."
 require_f "${WEBSITE_BUILD_SCRIPT}" "website build script not found at ${WEBSITE_BUILD_SCRIPT}."
 
+log "Ensuring required commands exist..."
+require_cmd docker
+require_cmd jq
+
 log "Ensuring required flags..."
 require_var "${SSH_HOSTS_ARG}" '--ssh-hosts must be provided with at least one hostname.'
+
+# Normalize and validate SSH_HOSTS JSON for the dynamic inventory.
+# - Must be valid JSON (object or array)
+# - Must be compact/single-line (inventory script requirement)
+if ! SSH_HOSTS_ARG_COMPACT="$(echo "${SSH_HOSTS_ARG}" | jq -c '.' 2>/dev/null)"; then
+  log "Error: --ssh-hosts must be valid JSON (object or array)." >&2
+  exit 1
+fi
+if [[ "${SSH_HOSTS_ARG_COMPACT}" == "null" ]]; then
+  log "Error: --ssh-hosts must not be null." >&2
+  exit 1
+fi
+SSH_HOSTS_ARG="${SSH_HOSTS_ARG_COMPACT}"
 
 # Validate web configuration from environment variables
 if [[ "${SKIP_WEB}" == "false" ]]; then
@@ -223,6 +240,13 @@ run_playbook() {
   ansible-navigator run \
     "playbooks/${playbook}" \
     "--container-options=-v=${SSH_KEY_TEMP_FILE}:${CONTAINER_SSH_KEY_PATH}:ro" \
+    --penv SSH_HOSTS \
+    --penv SSH_KEY_PATH \
+    --penv GHCR_TOKEN \
+    --penv GHCR_USERNAME \
+    --penv BACKEND_IMAGE \
+    --penv BACKEND_IMAGE_TAG \
+    --penv BACKEND_PORT \
     "${penv_args[@]}"
 }
 

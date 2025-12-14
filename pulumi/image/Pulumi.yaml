@@ -1,6 +1,0 @@
-name: maestro
-description: Infrastructure provisioning with Pulumi
-runtime:
-  name: nodejs
-  options:
-    packagemanager: npm
