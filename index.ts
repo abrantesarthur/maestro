@@ -91,17 +91,9 @@ async function main(): Promise<void> {
   log("Setting up SSH key...");
   const sshKeyTempFile = await setupSshKeyTempFile();
 
-  // ============================================
-  // Run Pulumi provisioning
-  // ============================================
   const allHosts = await runPulumi(config, sshKeyTempFile);
 
-  // ============================================
-  // Run Ansible provisioning
-  // ============================================
-
   const hasValidHosts = allHosts.hosts.length > 0;
-
   if (config.ansible?.enabled && hasValidHosts) {
     log("Checking tunnel readiness before running Ansible...");
     await waitForTunnelsReady(allHosts, sshKeyTempFile);

@@ -169,6 +169,8 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Future Improvements
 
+- **style**: replace run.sh files by ts files and use pulumi and ansible packages instead of cli commands.
+
 - **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
 
 - **Automated SSH key provisioning**: SSH keys must be manually added to your DigitalOcean account before running Maestro. A future improvement would automate the creation and registration of SSH keys during the provisioning process.
