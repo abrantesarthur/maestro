@@ -20,7 +20,7 @@ Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible
 
 4. Run the orchestration:
    ```bash
-   ./run.sh
+   bun .
    ```
 
 ## Configuration
@@ -101,7 +101,7 @@ pulumi:
         - roles: [web]
 ```
 
-When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
+When you run `bun .`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
 
 ### Domain Configuration
 
@@ -158,7 +158,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Workflow
 
-`run.sh` orchestrates the entire provisioning process:
+`index.ts` (run via `bun .`) orchestrates the entire provisioning process:
 
 1. Loads configuration from `maestro.yaml`
 2. Fetches secrets from Bitwarden Secrets Manager
@@ -169,7 +169,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Future Improvements
 
-- **style**: replace run.sh files by ts files and use pulumi and ansible packages instead of cli commands.
+- **style**: use the Pulumi and Ansible SDKs/packages instead of shelling out to their CLIs (the shell scripts have been replaced by TypeScript).
 
 - **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
 

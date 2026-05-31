@@ -52,15 +52,24 @@ export const log = createLogger("maestro");
  */
 export function requireCmds(cmds: string[]): void {
   for (const cmd of cmds) {
-    const result = Bun.spawnSync(["which", cmd], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    if (result.exitCode !== 0) {
+    if (!commandExists(cmd)) {
       throw new Error(`Error: required command '${cmd}' not found in PATH.`);
     }
   }
+}
+
+/**
+ * Check whether a command is available on PATH (non-throwing).
+ *
+ * @param cmd - The command to look up
+ * @returns true if the command is found in PATH
+ */
+export function commandExists(cmd: string): boolean {
+  const result = Bun.spawnSync(["which", cmd], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return result.exitCode === 0;
 }
 
 /**

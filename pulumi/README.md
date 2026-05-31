@@ -4,20 +4,9 @@ This directory contains a Dockerised Pulumi program that provisions the Cloudfla
 
 ## Workflow
 
-This script is typically called by the parent `run.sh` which handles configuration loading from `maestro.yaml`. For standalone usage:
+Pulumi is orchestrated from TypeScript by [`lib/runPulumi.ts`](../lib/runPulumi.ts), which is invoked when you run `bun .` from the repo root. It reads `maestro.yaml`, builds the `maestro_pulumi` Docker image, and runs it once per stack, passing configuration into the container via `-e` flags and mounting the SSH key.
 
-```bash
-# Configuration is passed via environment variables
-export DOMAIN="example.com"
-export CLOUDFLARE_ACCOUNT_ID="your_account_id"
-export SSH_PORT="22"
-export BACKEND_PORT="3000"
-export PULUMI_STACK="prod"
-export PULUMI_SERVERS_JSON='[{"roles":["backend","web"]}]'
-export BWS_ACCESS_TOKEN="your_bws_token"
-
-./run.sh --command up
-```
+The Pulumi command (`up`, `refresh`, `cancel`, `output`, or `destroy`) is taken from `pulumi.command` in `maestro.yaml`. When `pulumi.enabled` is `false` but `ansible.enabled` is `true`, the `output` command is used to read existing stack outputs for Ansible.
 
 The Pulumi program provisions:
 
@@ -36,7 +25,7 @@ In the event that a server is destroyed, Pulumi correctly takes down the tunnels
 
 ## Configuration
 
-Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
+Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into the container as `-e` flags:
 
 | Variable                | Source in maestro.yaml                  |
 | ----------------------- | --------------------------------------- |
@@ -56,20 +45,13 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 | `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         |
 | `VPS_SSH_KEY`          | SSH key for server provisioning |
 
-## Optional CLI Flags
-
-| Flag         | Purpose                                                                          |
-| ------------ | -------------------------------------------------------------------------------- |
-| `--command`  | Pulumi action: `up`, `refresh`, `cancel`, `output`, or `destroy` (default: `up`) |
-| `--skip-bws` | Skip fetching secrets from Bitwarden (use when called from parent script)        |
-
 ## Ports
 
 - SSH traffic is exposed via Cloudflare tunnels targeting port 22 on each host; no direct public exposure of port 22 is required when using the tunnel.
 
 ## Components
 
-- `run.sh` validates configuration, builds the Docker image, and starts a container.
+- [`lib/runPulumi.ts`](../lib/runPulumi.ts) validates configuration, builds the Docker image, and starts a container.
 - `image/` holds the Pulumi project.
 - `image/entrypoint.sh` runs inside the container and executes Pulumi commands.
 - `image/providers/` hosts services that discover infrastructure (e.g., Cloudflare zone ID).
