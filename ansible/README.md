@@ -96,7 +96,7 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
 
-- One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
+- One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc. Tags come from the stack name + server roles + any custom `tags` declared in `maestro.yaml` (see `pulumi.stacks.*.servers[].tags`).
 
 ### Multi-Stack Host Targeting
 

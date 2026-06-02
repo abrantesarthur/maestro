@@ -37,6 +37,11 @@ pulumi:
   # - output: Retrieve stack outputs without changes
   command: up
 
+  # [Required] Pulumi project name
+  # Identifies the Pulumi project that owns the stacks below. Stacks are
+  # namespaced under this project in Pulumi Cloud (e.g. <org>/<projectName>/prod).
+  projectName: your-project-name
+
   # [Required] Cloudflare account ID
   # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
   # dots next to account name
@@ -55,7 +60,14 @@ pulumi:
         # Single production server (handles backend and web)
         - roles: [backend, web] # Required: one or more of backend, web
           # groups: [devops]       # Optional: override global ansible.groups for this server
-          # tags: []               # Optional: custom user-defined tags
+          # tags: []               # Optional: custom user-defined tags. Each tag is:
+          #                        #   - added as a DigitalOcean droplet tag (on top of
+          #                        #     the stack name + roles, which are always applied)
+          #                        #   - turned into an Ansible inventory group of the same
+          #                        #     name, so playbooks can target `hosts: <tag>`
+          #                        #   Note: the reserved tags `web` and `backend` trigger
+          #                        #   the same infra as the matching roles (DNS records /
+          #                        #   api tunnel), even when used as a custom tag.
           # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
           # size: s-1vcpu-1gb      # Optional, default: s-1vcpu-1gb
           # region: nyc1           # Optional, default: nyc1
