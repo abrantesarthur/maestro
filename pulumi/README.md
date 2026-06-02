@@ -60,3 +60,4 @@ Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into 
 ## Prerequisites
 
 - Docker installed locally (the script builds and runs a container).
+- The base `domain` must already be an active zone in the Cloudflare account that `CLOUDFLARE_API_TOKEN` belongs to. The program looks up the zone by name (see `image/providers/`) and fails with `Cloudflare zone for <domain> not found.` if it is missing. Ownership is established out-of-band via Cloudflare nameserver delegation — see the [root README](../README.md#prerequisites).

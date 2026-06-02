@@ -2,6 +2,12 @@
 
 Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible to provision and configure cloud infrastructure.
 
+## Prerequisites
+
+Before running Maestro, the base `domain` in `maestro.yaml` **must already exist as an active zone in the Cloudflare account** that your `CLOUDFLARE_API_TOKEN` belongs to. Maestro does not create the zone or verify ownership itself — it looks up the zone by name at runtime and fails with `Cloudflare zone for <domain> not found.` if it is missing.
+
+Ownership is proven through Cloudflare's standard nameserver delegation: add the domain to your Cloudflare account and point your registrar's nameservers at the ones Cloudflare assigns. The zone becomes `active` only once that delegation is in place, and the scoped `CLOUDFLARE_API_TOKEN` is what authorizes Maestro to manage it.
+
 ## Quick Start
 
 1. Copy the example configuration file:
