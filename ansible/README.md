@@ -59,11 +59,11 @@ This mechanism is useful for secrets that need to be injected into backend conta
 
 ## Required Secrets (from Bitwarden)
 
-| Secret          | Purpose                            |
-| --------------- | ---------------------------------- |
-| `GHCR_TOKEN`    | GitHub Container Registry token    |
-| `GHCR_USERNAME` | GitHub Container Registry username |
-| `VPS_SSH_KEY`   | SSH key for server access          |
+| Secret          | Purpose                            | Required Scopes                                                                                                                                          |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GHCR_TOKEN`    | GitHub Container Registry token    | GitHub personal access token (classic) with **`read:packages`** to pull images from ghcr.io. No other scopes are required for read-only pulls.            |
+| `GHCR_USERNAME` | GitHub Container Registry username | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                          |
+| `VPS_SSH_KEY`   | SSH key for server access          | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                              |
 
 ## Container Registry
 

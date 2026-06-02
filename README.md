@@ -126,9 +126,9 @@ DNS records (both A records for web servers and CNAME records for tunnels) are c
 
 ### Required Environment Variable
 
-| Variable           | Purpose                                                                |
-| ------------------ | ---------------------------------------------------------------------- |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. |
+| Variable           | Purpose                                                                | Required Scopes                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. | A Bitwarden Secrets Manager machine-account access token with **read** access to the project(s) holding the secrets listed below. |
 
 ### CLI Options
 
@@ -140,14 +140,14 @@ DNS records (both A records for web servers and CNAME records for tunnels) are c
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-| Secret                 | Purpose                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. |
-| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  |
-| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           |
+| Secret                 | Purpose                                                                                                                                          | Required Scopes                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
+| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  | GitHub personal access token (classic) with **`read:packages`** to pull images from ghcr.io. No other scopes are required for read-only pulls.                                                                    |
+| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                                                                                   |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**, **SSL and Certificates:Edit** (Origin CA certs); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
 
 You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`. These secrets are validated at startup and automatically passed to the Ansible execution environment, where they can be accessed in playbooks via `lookup('env', 'VAR_NAME')`.
 

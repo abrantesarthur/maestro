@@ -38,12 +38,12 @@ Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into 
 
 ## Required Secrets (from Bitwarden)
 
-| Secret                 | Purpose                         |
-| ---------------------- | ------------------------------- |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API access           |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         |
-| `VPS_SSH_KEY`          | SSH key for server provisioning |
+| Secret                 | Purpose                         | Required Scopes                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API access           | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**, **SSL and Certificates:Edit** (Origin CA certs); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
+| `VPS_SSH_KEY`          | SSH key for server provisioning | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
 
 ## Ports
 
