@@ -47,4 +47,18 @@ describe("buildPlaybookArgs", () => {
     expect(penvCount).toBe(8);
     expect(args.join(" ")).toContain("--penv REAL");
   });
+
+  test("forwards BACKEND_ENV_* and WEB_DOCKER_ENV_* vars from the env", () => {
+    const args = buildPlaybookArgs("backend.yml", "/tmp/key", [], {
+      BACKEND_ENV_BWS_ACCESS_TOKEN: "token",
+      BACKEND_ENV_PORT: "3000",
+      WEB_DOCKER_ENV_FOO: "bar",
+      SOME_OTHER_VAR: "ignored",
+    });
+    const joined = args.join(" ");
+    expect(joined).toContain("--penv BACKEND_ENV_BWS_ACCESS_TOKEN");
+    expect(joined).toContain("--penv BACKEND_ENV_PORT");
+    expect(joined).toContain("--penv WEB_DOCKER_ENV_FOO");
+    expect(joined).not.toContain("--penv SOME_OTHER_VAR");
+  });
 });

@@ -227,10 +227,24 @@ export function buildPlaybookArgs(
   playbook: string,
   sshKeyTempFile: string,
   requiredVars: string[],
+  env: Record<string, string> = {},
 ): string[] {
   const penvArgs: string[] = [];
   for (const varName of requiredVars) {
     if (varName) {
+      penvArgs.push("--penv", varName);
+    }
+  }
+
+  // Forward the dynamically-named container env vars (BACKEND_ENV_*,
+  // WEB_DOCKER_ENV_*) into the execution-environment container. Without this
+  // the backend_app/web roles see an empty environment and start the container
+  // with no env (e.g. missing BWS_ACCESS_TOKEN), causing a crash loop.
+  for (const varName of Object.keys(env)) {
+    if (
+      varName.startsWith("BACKEND_ENV_") ||
+      varName.startsWith("WEB_DOCKER_ENV_")
+    ) {
       penvArgs.push("--penv", varName);
     }
   }
@@ -269,7 +283,7 @@ async function runPlaybook(
   sshKeyTempFile: string,
   requiredVars: string[],
 ): Promise<void> {
-  const args = buildPlaybookArgs(playbook, sshKeyTempFile, requiredVars);
+  const args = buildPlaybookArgs(playbook, sshKeyTempFile, requiredVars, env);
   const { exitCode } = await runCommand(args, {
     cwd: ANSIBLE_DIR,
     env,
