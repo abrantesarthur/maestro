@@ -45,8 +45,9 @@ domain: example.com # Domain for DNS and nginx
 pulumi:
   enabled: true # Enable/disable Pulumi provisioning
   command: up # Pulumi command: up, refresh, cancel, output
-  cloudflare_account_id: "" # Your Cloudflare account ID
-  ssh_port: 22 # SSH port for tunnels
+  projectName: your-project-name # Pulumi project name
+  cloudflareAccountId: "" # Your Cloudflare account ID
+  sshPort: 22 # SSH port for tunnels
   stacks: # Define one or more stacks (dev, staging, prod)
     prod:
       servers:
@@ -71,8 +72,8 @@ ansible:
 
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
-  project_id: "" # Optional BWS project ID
-  required_vars: [] # Secrets to validate and pass to Ansible
+  projectId: "" # Optional BWS project ID
+  requiredVars: [] # Secrets to validate and pass to Ansible
 ```
 
 ### Server Roles
