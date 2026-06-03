@@ -38,11 +38,17 @@ async function buildPulumiImage(): Promise<void> {
  *
  * Mirrors pulumi/run.sh: provider credentials and the SSH key mount are only
  * added when the command actually needs them (everything except `output`).
+ *
+ * `interactive` allocates a TTY (`-t`) and keeps stdin open (`-i`). It must only
+ * be set on the streaming (`showLogs`) path that inherits the user's real TTY;
+ * the silent capture path pipes stdout, where `docker run -t` would abort with
+ * "the input device is not a TTY".
  */
 export function buildPulumiRunArgs(
   pulumiCommand: string,
   env: Record<string, string>,
   sshKeyPath: string,
+  interactive: boolean,
 ): string[] {
   const withProviderCreds = needsProviderCreds(pulumiCommand);
 
@@ -69,7 +75,7 @@ export function buildPulumiRunArgs(
     `PULUMI_SERVERS_JSON=${env["PULUMI_SERVERS_JSON"] || "[]"}`,
   ];
 
-  const args = ["docker", "run", "-it", "--rm"];
+  const args = ["docker", "run", ...(interactive ? ["-it"] : []), "--rm"];
 
   if (withProviderCreds) {
     dockerEnv.push(
@@ -158,7 +164,7 @@ async function runPulumiStack(
   await buildPulumiImage();
 
   log(`Running the ${IMAGE_NAME} image...`);
-  const args = buildPulumiRunArgs(pulumiCommand, env, sshKeyPath);
+  const args = buildPulumiRunArgs(pulumiCommand, env, sshKeyPath, showLogs);
 
   let stdout: string;
   if (showLogs) {

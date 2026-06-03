@@ -24,14 +24,21 @@ describe("buildPulumiRunArgs", () => {
     process.env = { ...savedEnv };
   });
 
-  test("starts an interactive, auto-removed container of the pulumi image", () => {
-    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key");
+  test("starts an interactive, auto-removed container when interactive", () => {
+    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key", true);
     expect(args.slice(0, 4)).toEqual(["docker", "run", "-it", "--rm"]);
     expect(args[args.length - 1]).toBe("maestro_pulumi");
   });
 
+  test("omits -it for the silent (non-interactive) capture path", () => {
+    const args = buildPulumiRunArgs("output", BASE_ENV, "/tmp/key", false);
+    expect(args.slice(0, 3)).toEqual(["docker", "run", "--rm"]);
+    expect(args).not.toContain("-it");
+    expect(args[args.length - 1]).toBe("maestro_pulumi");
+  });
+
   test("passes config and the access token as -e flags", () => {
-    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key");
+    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key", true);
     const joined = args.join(" ");
     expect(joined).toContain("-e DOMAIN=example.com");
     expect(joined).toContain("-e PULUMI_COMMAND=up");
@@ -41,7 +48,7 @@ describe("buildPulumiRunArgs", () => {
   });
 
   test("mounts the ssh key and passes provider creds for non-output commands", () => {
-    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key");
+    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key", true);
     expect(args).toContain("-v");
     expect(args).toContain("/tmp/key:/root/.ssh/id_rsa:ro");
     const joined = args.join(" ");
@@ -50,7 +57,7 @@ describe("buildPulumiRunArgs", () => {
   });
 
   test("omits ssh key mount and provider creds for the output command", () => {
-    const args = buildPulumiRunArgs("output", BASE_ENV, "/tmp/key");
+    const args = buildPulumiRunArgs("output", BASE_ENV, "/tmp/key", false);
     expect(args).not.toContain("-v");
     const joined = args.join(" ");
     expect(joined).not.toContain("CLOUDFLARE_API_TOKEN");
@@ -62,6 +69,7 @@ describe("buildPulumiRunArgs", () => {
       "up",
       { ...BASE_ENV, PULUMI_SERVERS_JSON: "" },
       "/tmp/key",
+      true,
     );
     expect(args.join(" ")).toContain("-e PULUMI_SERVERS_JSON=[]");
   });
