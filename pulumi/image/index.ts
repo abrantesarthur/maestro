@@ -25,7 +25,7 @@ const domain = stackConfig.require("domain");
 const stackName = pulumi.getStack();
 
 // Compute the effective domain based on stack name
-// dev -> dev.example.com, staging -> stag.example.com, prod -> example.com
+// dev -> dev.example.com, staging -> staging.example.com, prod -> example.com
 const envPrefix = stackName !== "prod" ? stackName : undefined;
 const effectiveDomain = envPrefix ? `${envPrefix}.${domain}` : domain;
 
@@ -82,10 +82,10 @@ const VPS_CONFIGS: VpsConfig[] = serversConfig.map((server) => {
 
   return {
     args: {
-      image: server.image || "ubuntu-25-04-x64",
+      image: server.image || "ubuntu-24-04-x64",
       size: sizeMap[size] || digitalOcean.DropletSlug.DropletS1VCPU1GB,
       region: regionMap[region] || digitalOcean.Region.NYC1,
-      sshKeys: ["51520910"], // TODO: make this configurable
+      sshKeys: ["56816254"], // TODO: make this configurable
       tags: allTags,
       effectiveDomain,
     },

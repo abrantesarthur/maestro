@@ -4,20 +4,9 @@ This directory contains a Dockerised Pulumi program that provisions the Cloudfla
 
 ## Workflow
 
-This script is typically called by the parent `run.sh` which handles configuration loading from `maestro.yaml`. For standalone usage:
+Pulumi is orchestrated from TypeScript by [`lib/runPulumi.ts`](../lib/runPulumi.ts), which is invoked when you run `bun .` from the repo root. It reads `maestro.yaml`, builds the `maestro_pulumi` Docker image, and runs it once per stack, passing configuration into the container via `-e` flags and mounting the SSH key.
 
-```bash
-# Configuration is passed via environment variables
-export DOMAIN="example.com"
-export CLOUDFLARE_ACCOUNT_ID="your_account_id"
-export SSH_PORT="22"
-export BACKEND_PORT="3000"
-export PULUMI_STACK="prod"
-export PULUMI_SERVERS_JSON='[{"roles":["backend","web"]}]'
-export BWS_ACCESS_TOKEN="your_bws_token"
-
-./run.sh --command up
-```
+The Pulumi command (`up`, `refresh`, `cancel`, `output`, or `destroy`) is taken from `pulumi.command` in `maestro.yaml`. When `pulumi.enabled` is `false` but `ansible.enabled` is `true`, the `output` command is used to read existing stack outputs for Ansible.
 
 The Pulumi program provisions:
 
@@ -36,7 +25,7 @@ In the event that a server is destroyed, Pulumi correctly takes down the tunnels
 
 ## Configuration
 
-Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
+Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into the container as `-e` flags:
 
 | Variable                | Source in maestro.yaml                  |
 | ----------------------- | --------------------------------------- |
@@ -49,19 +38,12 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 
 ## Required Secrets (from Bitwarden)
 
-| Secret                 | Purpose                         |
-| ---------------------- | ------------------------------- |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API access           |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         |
-| `VPS_SSH_KEY`          | SSH key for server provisioning |
-
-## Optional CLI Flags
-
-| Flag         | Purpose                                                                          |
-| ------------ | -------------------------------------------------------------------------------- |
-| `--command`  | Pulumi action: `up`, `refresh`, `cancel`, `output`, or `destroy` (default: `up`) |
-| `--skip-bws` | Skip fetching secrets from Bitwarden (use when called from parent script)        |
+| Secret                 | Purpose                         | Required Scopes                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API access           | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; **User → SSL and Certificates:Edit** (Origin CA certs — this is a _user-level_ permission, not zone-level; without it Origin CA cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
+| `VPS_SSH_KEY`          | SSH key for server provisioning | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
 
 ## Ports
 
@@ -69,7 +51,7 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 
 ## Components
 
-- `run.sh` validates configuration, builds the Docker image, and starts a container.
+- [`lib/runPulumi.ts`](../lib/runPulumi.ts) validates configuration, builds the Docker image, and starts a container.
 - `image/` holds the Pulumi project.
 - `image/entrypoint.sh` runs inside the container and executes Pulumi commands.
 - `image/providers/` hosts services that discover infrastructure (e.g., Cloudflare zone ID).
@@ -78,3 +60,5 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 ## Prerequisites
 
 - Docker installed locally (the script builds and runs a container).
+- The base `domain` must already be an active zone in the Cloudflare account that `CLOUDFLARE_API_TOKEN` belongs to. The program looks up the zone by name (see `image/providers/`) and fails with `Cloudflare zone for <domain> not found.` if it is missing. Ownership is established out-of-band via Cloudflare nameserver delegation — see the [root README](../README.md#prerequisites).
+- The Cloudflare zone must be free of conflicting DNS records. The program creates the apex `A`, `www` `A`, and `api`/`ssh*` `CNAME` records itself and does not adopt pre-existing ones. If a record of a different type already occupies one of those names (e.g. a manual `www` `CNAME`), Cloudflare rejects the create with `A CNAME record with that host already exists` (error `81054`) and the run fails partway through — leaving any earlier resources (droplet, tunnel) live. Delete or `pulumi import` the conflicting record before re-running.

@@ -2,6 +2,14 @@
 
 Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible to provision and configure cloud infrastructure.
 
+## Prerequisites
+
+Before running Maestro, the base `domain` in `maestro.yaml` **must already exist as an active zone in the Cloudflare account** that your `CLOUDFLARE_API_TOKEN` belongs to. Maestro does not create the zone or verify ownership itself — it looks up the zone by name at runtime and fails with `Cloudflare zone for <domain> not found.` if it is missing.
+
+Ownership is proven through Cloudflare's standard nameserver delegation: add the domain to your Cloudflare account and point your registrar's nameservers at the ones Cloudflare assigns. The zone becomes `active` only once that delegation is in place, and the scoped `CLOUDFLARE_API_TOKEN` is what authorizes Maestro to manage it.
+
+The Cloudflare zone must also be **free of conflicting DNS records** before the first run. Maestro creates its own records (apex `A`, `www` `A`, and `api`/`ssh*` `CNAME`s) and does not adopt pre-existing ones. If a record of a different type already occupies one of those names — for example a manually-created `www` `CNAME` when Maestro wants to create a `www` `A` record — Cloudflare rejects the create with `A CNAME record with that host already exists` (error `81054`) and the run fails partway through. Remove (or import into Pulumi) any conflicting records on the apex, `www`, `api`, and `ssh*` names before provisioning.
+
 ## Quick Start
 
 1. Copy the example configuration file:
@@ -20,7 +28,7 @@ Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible
 
 4. Run the orchestration:
    ```bash
-   ./run.sh
+   bun .
    ```
 
 ## Configuration
@@ -36,9 +44,10 @@ domain: example.com # Domain for DNS and nginx
 
 pulumi:
   enabled: true # Enable/disable Pulumi provisioning
-  command: up # Pulumi command: up, refresh, cancel, output
-  cloudflare_account_id: "" # Your Cloudflare account ID
-  ssh_port: 22 # SSH port for tunnels
+  command: up # Pulumi command: up, refresh, cancel, output, destroy (destroy skips Ansible)
+  projectName: your-project-name # Pulumi project name
+  cloudflareAccountId: "" # Your Cloudflare account ID
+  sshPort: 22 # SSH port for tunnels
   stacks: # Define one or more stacks (dev, staging, prod)
     prod:
       servers:
@@ -63,8 +72,8 @@ ansible:
 
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
-  project_id: "" # Optional BWS project ID
-  required_vars: [] # Secrets to validate and pass to Ansible
+  projectId: "" # Optional BWS project ID
+  requiredVars: [] # Secrets to validate and pass to Ansible
 ```
 
 ### Server Roles
@@ -101,7 +110,7 @@ pulumi:
         - roles: [web]
 ```
 
-When you run `./run.sh`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
+When you run `bun .`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
 
 ### Domain Configuration
 
@@ -126,9 +135,9 @@ DNS records (both A records for web servers and CNAME records for tunnels) are c
 
 ### Required Environment Variable
 
-| Variable           | Purpose                                                                |
-| ------------------ | ---------------------------------------------------------------------- |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. |
+| Variable           | Purpose                                                                | Required Scopes                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. | A Bitwarden Secrets Manager machine-account access token with **read** access to the project(s) holding the secrets listed below. |
 
 ### CLI Options
 
@@ -140,14 +149,14 @@ DNS records (both A records for web servers and CNAME records for tunnels) are c
 
 Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
 
-| Secret                 | Purpose                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. |
-| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  |
-| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           |
+| Secret                 | Purpose                                                                                                                                          | Required Scopes                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
+| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  | GitHub personal access token (classic) with **`read:packages`** to pull images from ghcr.io. No other scopes are required for read-only pulls.                                                                    |
+| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                                                                                   |
+| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; **User → SSL and Certificates:Edit** (Origin CA certs — this is a _user-level_ permission, not zone-level; without it Origin CA cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
 
 You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`. These secrets are validated at startup and automatically passed to the Ansible execution environment, where they can be accessed in playbooks via `lookup('env', 'VAR_NAME')`.
 
@@ -158,7 +167,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Workflow
 
-`run.sh` orchestrates the entire provisioning process:
+`index.ts` (run via `bun .`) orchestrates the entire provisioning process:
 
 1. Loads configuration from `maestro.yaml`
 2. Fetches secrets from Bitwarden Secrets Manager
@@ -169,7 +178,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Future Improvements
 
-- **style**: replace run.sh files by ts files and use pulumi and ansible packages instead of cli commands.
+- **style**: use the Pulumi and Ansible SDKs/packages instead of shelling out to their CLIs (the shell scripts have been replaced by TypeScript).
 
 - **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
 

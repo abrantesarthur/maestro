@@ -4,6 +4,7 @@
  */
 
 import { $ } from "bun";
+import { chmod } from "node:fs/promises";
 
 // ============================================
 // CLI Parsing
@@ -52,15 +53,24 @@ export const log = createLogger("maestro");
  */
 export function requireCmds(cmds: string[]): void {
   for (const cmd of cmds) {
-    const result = Bun.spawnSync(["which", cmd], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    if (result.exitCode !== 0) {
+    if (!commandExists(cmd)) {
       throw new Error(`Error: required command '${cmd}' not found in PATH.`);
     }
   }
+}
+
+/**
+ * Check whether a command is available on PATH (non-throwing).
+ *
+ * @param cmd - The command to look up
+ * @returns true if the command is found in PATH
+ */
+export function commandExists(cmd: string): boolean {
+  const result = Bun.spawnSync(["which", cmd], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return result.exitCode === 0;
 }
 
 /**
@@ -85,6 +95,9 @@ export function requireVar(
 
 /** Prefix used for all maestro temp files */
 const TEMP_FILE_PREFIX = "maestro_";
+
+/** Legacy temp-file prefix from the old shell implementation; swept once for cleanup */
+const LEGACY_TEMP_FILE_PREFIX = "secret_";
 
 /**
  * Get the secure temp directory for the current platform
@@ -119,6 +132,10 @@ export async function createTempSecretFile(varName: string): Promise<string> {
   const tmpPath = `${getSecureTempDir()}/${TEMP_FILE_PREFIX}${randomSuffix}`;
 
   // Normalize escaped newlines, strip CRs, and ensure a trailing newline for OpenSSH
+  // NOTE: intentionally narrower than the old shell's `printf '%b'`, which expanded ALL
+  // backslash escapes (\t, \\, octal, ...). We only handle \n and strip \r, which is
+  // sufficient for the only current caller (VPS_SSH_KEY / PEM keys). A future secret
+  // relying on other escapes would need this widened.
   const normalizedValue =
     secretValue.replace(/\\n/g, "\n").replace(/\r/g, "") + "\n";
 
@@ -127,6 +144,8 @@ export async function createTempSecretFile(varName: string): Promise<string> {
   const oldUmask = process.umask(0o077);
   try {
     await Bun.write(tmpPath, normalizedValue);
+    // belt-and-suspenders: guarantee 0600 regardless of umask behavior
+    await chmod(tmpPath, 0o600);
   } finally {
     process.umask(oldUmask);
   }
@@ -157,6 +176,13 @@ export async function cleanupStaleTempFiles(): Promise<void> {
     const result =
       await $`find ${tempDir} -maxdepth 1 -name "${TEMP_FILE_PREFIX}*" -type f -delete`.quiet();
     if (result.exitCode !== 0) {
+      // Silently ignore errors - stale files are not critical
+    }
+    // Also sweep legacy secret_* files left behind by the old shell implementation
+    // (may contain decrypted SSH keys from prior crashed runs)
+    const legacyResult =
+      await $`find ${tempDir} -maxdepth 1 -name "${LEGACY_TEMP_FILE_PREFIX}*" -type f -delete`.quiet();
+    if (legacyResult.exitCode !== 0) {
       // Silently ignore errors - stale files are not critical
     }
   } catch {

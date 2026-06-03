@@ -83,10 +83,8 @@ async function main(): Promise<void> {
     requireBwsSecret(varName);
   }
 
-  // Prepare secrets required vars JSON for passing to ansible
-  const secretsRequiredVarsJson = JSON.stringify(
-    config.secrets?.requiredVars ?? [],
-  );
+  // Secrets required vars to forward to ansible playbooks
+  const secretsRequiredVars = config.secrets?.requiredVars ?? [];
 
   log("Setting up SSH key...");
   const sshKeyTempFile = await setupSshKeyTempFile();
@@ -100,7 +98,7 @@ async function main(): Promise<void> {
     await waitForTunnelsReady(allHosts, sshKeyTempFile);
 
     log("Provisioning ansible...");
-    await runAnsible(allHosts, config, secretsRequiredVarsJson);
+    await runAnsible(allHosts, config, sshKeyTempFile, secretsRequiredVars);
   } else {
     log("Skipping ansible provisioning");
   }

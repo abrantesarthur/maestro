@@ -4,27 +4,13 @@ This directory contains the Ansible automation that configures provisioned serve
 
 ## Workflow
 
-This script is typically called by the parent `run.sh` which handles configuration loading from `maestro.yaml`. For standalone usage:
+Ansible is orchestrated from TypeScript by [`lib/runAnsible.ts`](../lib/runAnsible.ts), which is invoked when you run `bun .` from the repo root (after Pulumi has produced the host list). It reads `maestro.yaml`, validates required inputs, ensures `ansible-builder`/`ansible-navigator` exist, prepares the static website assets, builds the execution environment image, and runs the playbooks (`web.yml`, `backend.yml`, `security.yml`) inside it.
 
-```bash
-# Configuration is passed via environment variables
-export DOMAIN="example.com"
-export BACKEND_PORT="3000"  # PORT is auto-injected into container env
-export BACKEND_IMAGE="ghcr.io/your-org/your-app"
-export BACKEND_IMAGE_TAG="latest"
-export BWS_ACCESS_TOKEN="your_bws_token"
-
-# SSH_HOSTS JSON includes effectiveDomain for nginx configuration
-./run.sh \
-  --ssh-hosts '{"hosts":[{"hostname":"ssh0.example.com","tags":["backend","prod","web"],"effectiveDomain":"example.com"}]}' \
-  --website-dir "/path/to/website"
-```
-
-The script validates required inputs, ensures `ansible-builder`/`ansible-navigator` exist, builds the execution environment image, and runs the playbooks.
+Host targeting is driven by the `SSH_HOSTS` JSON (aggregated from all Pulumi stacks), which includes an `effectiveDomain` per host for nginx configuration. Web and backend playbooks are skipped automatically when no server declares the corresponding role.
 
 ## Configuration
 
-Configuration is passed via environment variables from the parent `run.sh`, which reads from `maestro.yaml`:
+Configuration is read from `maestro.yaml` by `lib/runAnsible.ts` and passed into the execution environment as environment variables:
 
 | Variable            | Source in maestro.yaml  | Purpose                                               |
 | ------------------- | ----------------------- | ----------------------------------------------------- |
@@ -33,7 +19,7 @@ Configuration is passed via environment variables from the parent `run.sh`, whic
 | `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   | Tag/version of the backend image                      |
 | `BACKEND_ENV_*`     | `ansible.backend.env.*` | Environment variables passed to the backend container |
 
-Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `stag.example.com` for staging, `example.com` for prod).
+Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `staging.example.com` for staging, `example.com` for prod).
 
 ### Backend Container Environment
 
@@ -71,23 +57,13 @@ These secrets can be accessed in playbooks using:
 
 This mechanism is useful for secrets that need to be injected into backend containers or used during provisioning but are specific to your application rather than core infrastructure.
 
-## CLI Flags
-
-| Flag                   | Purpose                                                         |
-| ---------------------- | --------------------------------------------------------------- |
-| `--ssh-hosts <json>`   | JSON list of hosts and tags (required)                          |
-| `--website-dir <path>` | Path to website source directory (required unless `--skip-web`) |
-| `--skip-bws`           | Skip fetching secrets from Bitwarden                            |
-| `--skip-web`           | Skip provisioning web server                                    |
-| `--skip-backend`       | Skip provisioning backend                                       |
-
 ## Required Secrets (from Bitwarden)
 
-| Secret          | Purpose                            |
-| --------------- | ---------------------------------- |
-| `GHCR_TOKEN`    | GitHub Container Registry token    |
-| `GHCR_USERNAME` | GitHub Container Registry username |
-| `VPS_SSH_KEY`   | SSH key for server access          |
+| Secret          | Purpose                            | Required Scopes                                                                                                                                          |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GHCR_TOKEN`    | GitHub Container Registry token    | GitHub personal access token (classic) with **`read:packages`** to pull images from ghcr.io. No other scopes are required for read-only pulls.            |
+| `GHCR_USERNAME` | GitHub Container Registry username | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                          |
+| `VPS_SSH_KEY`   | SSH key for server access          | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                              |
 
 ## Container Registry
 
@@ -120,7 +96,7 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
 
-- One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc.
+- One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc. Tags come from the stack name + server roles + any custom `tags` declared in `maestro.yaml` (see `pulumi.stacks.*.servers[].tags`).
 
 ### Multi-Stack Host Targeting
 
@@ -158,7 +134,7 @@ The built-in playbooks target servers by role (`backend`, `web`), applying ident
 
 ## Prerequisites
 
-- Docker installed locally (the script builds and runs a container).
+- Docker installed locally (Maestro builds and runs a container).
 - The `ansible-builder` and `ansible-navigator` programs (auto-installed if missing).
 
 ## Idempotence
