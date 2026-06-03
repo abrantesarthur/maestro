@@ -68,7 +68,7 @@ pulumi:
           #                        #   Note: the reserved tags `web` and `backend` trigger
           #                        #   the same infra as the matching roles (DNS records /
           #                        #   api tunnel), even when used as a custom tag.
-          # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
+          # image: ubuntu-24-04-x64 # Optional, default: ubuntu-24-04-x64
           # size: s-1vcpu-1gb      # Optional, default: s-1vcpu-1gb
           # region: nyc1           # Optional, default: nyc1
 
