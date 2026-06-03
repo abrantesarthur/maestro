@@ -14,7 +14,7 @@
 #
 # Environment-specific subdomains are automatically created based on stack name:
 #   - dev stack:     dev.example.com, api.dev.example.com, ssh0.dev.example.com
-#   - staging stack: stag.example.com, api.stag.example.com, ssh0.stag.example.com
+#   - staging stack: staging.example.com, api.staging.example.com, ssh0.staging.example.com
 #   - prod stack:    example.com, api.example.com, ssh0.example.com
 domain: example.com
 
@@ -30,11 +30,12 @@ pulumi:
   # configure the server via Ansible (see below).
   enabled: true
 
-  # [Required] Pulumi command to run: up, refresh, cancel, or output
+  # [Required] Pulumi command to run: up, refresh, cancel, output, or destroy
   # - up: Apply infrastructure changes
   # - refresh: Reconcile state without deploying
   # - cancel: Cancel a running update
   # - output: Retrieve stack outputs without changes
+  # - destroy: Tear down all infrastructure for the stack (skips Ansible)
   command: up
 
   # [Required] Pulumi project name

@@ -15,6 +15,9 @@ export interface PulumiHosts {
   hosts: HostInfo[];
 }
 
+/** Strict DNS-label pattern; rejects shell metacharacters before host is interpolated into ssh ProxyCommand (which runs via /bin/sh -c). */
+const VALID_HOSTNAME = /^[A-Za-z0-9.-]+$/;
+
 /**
  * Wait for a single tunnel to become reachable via SSH through cloudflared
  *
@@ -30,6 +33,10 @@ export async function waitForTunnel(
   attempts: number = 30,
   delayMs: number = 10000,
 ): Promise<void> {
+  if (!VALID_HOSTNAME.test(host)) {
+    throw new Error(`Refusing to connect: invalid hostname ${host}`);
+  }
+
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const result = Bun.spawnSync(
       [

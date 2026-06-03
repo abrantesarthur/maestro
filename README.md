@@ -44,7 +44,7 @@ domain: example.com # Domain for DNS and nginx
 
 pulumi:
   enabled: true # Enable/disable Pulumi provisioning
-  command: up # Pulumi command: up, refresh, cancel, output
+  command: up # Pulumi command: up, refresh, cancel, output, destroy (destroy skips Ansible)
   projectName: your-project-name # Pulumi project name
   cloudflareAccountId: "" # Your Cloudflare account ID
   sshPort: 22 # SSH port for tunnels

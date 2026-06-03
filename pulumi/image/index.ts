@@ -25,7 +25,7 @@ const domain = stackConfig.require("domain");
 const stackName = pulumi.getStack();
 
 // Compute the effective domain based on stack name
-// dev -> dev.example.com, staging -> stag.example.com, prod -> example.com
+// dev -> dev.example.com, staging -> staging.example.com, prod -> example.com
 const envPrefix = stackName !== "prod" ? stackName : undefined;
 const effectiveDomain = envPrefix ? `${envPrefix}.${domain}` : domain;
 

@@ -19,7 +19,7 @@ Configuration is read from `maestro.yaml` by `lib/runAnsible.ts` and passed into
 | `BACKEND_IMAGE_TAG` | `ansible.backend.tag`   | Tag/version of the backend image                      |
 | `BACKEND_ENV_*`     | `ansible.backend.env.*` | Environment variables passed to the backend container |
 
-Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `stag.example.com` for staging, `example.com` for prod).
+Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `staging.example.com` for staging, `example.com` for prod).
 
 ### Backend Container Environment
 

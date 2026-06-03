@@ -52,6 +52,9 @@ export function buildPulumiRunArgs(
 ): string[] {
   const withProviderCreds = needsProviderCreds(pulumiCommand);
 
+  // PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN and DIGITALOCEAN_TOKEN are read
+  // directly from process.env (where the secrets layer injects them) rather than
+  // threaded through `env`. This sourcing difference is intentional.
   const dockerEnv = [
     "-e",
     `DOMAIN=${env["DOMAIN"] ?? ""}`,
