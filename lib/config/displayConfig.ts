@@ -10,6 +10,40 @@ export function displayConfig(config: MaestroConfig): void {
   );
   console.log("  pulumi.ssh_port:", config?.pulumi?.sshPort);
   console.log("  pulumi.stacks:", JSON.stringify(config?.pulumi?.stacks));
+
+  // Database tier (Pulumi-provisioned DigitalOcean Managed Postgres)
+  const database = config?.pulumi?.database;
+  console.log("  pulumi.database.enabled:", database?.enabled ?? false);
+  if (database?.enabled) {
+    console.log("    version:", database.version ?? "16 (default)");
+    console.log("    size:", database.size ?? "db-s-1vcpu-1gb (default)");
+    console.log("    nodeCount:", database.nodeCount ?? "1 (default)");
+    console.log("    region:", "co-locates with the stack's droplets");
+
+    // Per-stack database overrides (sizing/placement only)
+    for (const [stackName, stack] of Object.entries(
+      config?.pulumi?.stacks ?? {},
+    )) {
+      if (stack?.database) {
+        console.log(
+          `    stacks.${stackName}.database:`,
+          JSON.stringify(stack.database),
+        );
+      }
+    }
+
+    // Connection details: USER/DB come from Bitwarden; HOST/PORT/PASSWORD are
+    // derived from DigitalOcean and surfaced as Pulumi stack outputs.
+    console.log(
+      "    BWS-required:",
+      JSON.stringify(["POSTGRES_USER", "POSTGRES_DB"]),
+    );
+    console.log(
+      "    Pulumi-output:",
+      JSON.stringify(["POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_PASSWORD"]),
+    );
+  }
+
   console.log("  ansible.enabled:", config?.ansible?.enabled);
   console.log(`  ansible.web:`);
   console.log("    mode:", config?.ansible?.web?.static ? "static" : "docker");

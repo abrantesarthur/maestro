@@ -21,6 +21,17 @@ Configuration is read from `maestro.yaml` by `lib/runAnsible.ts` and passed into
 
 Note: The domain for nginx configuration is passed per-host via the `effectiveDomain` field in `SSH_HOSTS` JSON, which allows environment-specific domains (e.g., `dev.example.com` for dev, `staging.example.com` for staging, `example.com` for prod).
 
+### Database Connection (Postgres)
+
+When the database tier is enabled (`pulumi.database.enabled`), the backend container receives its Postgres connection details from two paths that the `backend_app` role merges:
+
+- **Global (`BACKEND_ENV_POSTGRES_*`).** `POSTGRES_USER` and `POSTGRES_DB` are stable Bitwarden values, identical across the whole deploy, so they ride the existing global `BACKEND_ENV_*` path. `POSTGRES_SSLMODE=require` (and `PGSSLMODE=require` for libpq) are injected as constants by `lib/runAnsible.ts` (`BACKEND_ENV_POSTGRES_SSLMODE`, `BACKEND_ENV_PGSSLMODE`).
+- **Per-host (`postgres_host` / `postgres_port` / `postgres_password` hostvars).** `POSTGRES_HOST` (the private VPC endpoint), `POSTGRES_PORT` (the cluster's DO-assigned port), and `POSTGRES_PASSWORD` are derived from DigitalOcean **per stack** and differ between environments. Maestro stamps them onto each stack's backend host(s) in the `SSH_HOSTS` JSON (keys `postgresHost` / `postgresPort` / `postgresPassword`), and `inventory/hosts.py` exposes them as the `postgres_host` / `postgres_port` / `postgres_password` hostvars (mirroring `effective_domain`). The `backend_app` role merges them into the container env as `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_PASSWORD` only when `postgres_host` is defined.
+
+Threading host, port, and password **per host** (rather than as global `BACKEND_ENV_*` values) keeps multi-stack deploys correct: Maestro merges hosts across stacks and runs Ansible once, so a global host/port/password would silently point every stack's backend at one stack's database. It also means the port is always whatever DO actually assigned — never a value you maintain by hand.
+
+**Secret hygiene.** The `backend_app` tasks that read or build the backend environment (the `env | grep BACKEND_ENV_` task, the `set_fact` tasks that assemble `backend_env`, the per-host combine of `postgres_host`/`postgres_port`/`postgres_password`, and the `docker_container` run task) all set `no_log: true`, so the database password never appears in Ansible output.
+
 ### Backend Container Environment
 
 Environment variables needed by your backend containerized application can be configured in `maestro.yaml` under `ansible.backend.env`:
@@ -97,6 +108,8 @@ The dynamic inventory (`inventory/hosts.py`) reads the SSH_HOSTS JSON and builds
 - `all` hosts with common vars (including the Cloudflare proxy SSH args).
 
 - One group per tag listed on each host, so you can target plays to `backend`, `prod`, `web`, etc. Tags come from the stack name + server roles + any custom `tags` declared in `maestro.yaml` (see `pulumi.stacks.*.servers[].tags`).
+
+- Per-host `postgres_host` / `postgres_password` hostvars when the host belongs to a database-enabled stack (stamped from the `postgresHost` / `postgresPassword` keys in `SSH_HOSTS`). These carry the per-stack private endpoint and DigitalOcean-generated password into the `backend_app` role.
 
 ### Multi-Stack Host Targeting
 

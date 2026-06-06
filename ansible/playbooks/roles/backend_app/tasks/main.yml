@@ -6,16 +6,30 @@
   become: false
   register: backend_env_raw
   changed_when: false
+  no_log: true  # BACKEND_ENV_* may carry secrets (e.g. POSTGRES_PASSWORD-adjacent values)
 
 - name: Parse backend environment variables
   ansible.builtin.set_fact:
     backend_env: "{{ backend_env_raw.stdout_lines | map('split', '=', 1) | items2dict(key_name=0, value_name=1) }}"
   when: backend_env_raw.stdout_lines | length > 0
+  no_log: true  # backend_env may carry secrets
 
 - name: Set empty backend environment if no variables found
   ansible.builtin.set_fact:
     backend_env: {}
   when: backend_env_raw.stdout_lines | length == 0
+  no_log: true  # keep masking consistent across both backend_env branches
+
+# POSTGRES_USER/DB and the constant SSLMODE travel globally via BACKEND_ENV_* (already merged above).
+# POSTGRES_HOST/POSTGRES_PORT/POSTGRES_PASSWORD are per-stack, DO-derived values threaded onto this
+# stack's backend host(s) as the postgres_host/postgres_port/postgres_password hostvars (see
+# inventory/hosts.py). Merge them into backend_env so the backend connects to its own isolated
+# database on the endpoint and port DigitalOcean actually assigned.
+- name: Merge per-stack Postgres connection details into backend environment
+  ansible.builtin.set_fact:
+    backend_env: "{{ backend_env | combine({'POSTGRES_HOST': postgres_host, 'POSTGRES_PORT': postgres_port | string, 'POSTGRES_PASSWORD': postgres_password}) }}"
+  when: postgres_host is defined
+  no_log: true  # postgres_password is a secret
 
 - name: Ensure GHCR credentials are present
   ansible.builtin.assert:
@@ -47,3 +61,4 @@
     published_ports:
       - "{{ backend_bind_address }}:{{ backend_host_port }}:{{ backend_container_port }}"
     env: "{{ backend_env }}"
+  no_log: true  # backend_env carries secrets (e.g. POSTGRES_PASSWORD)

@@ -24,12 +24,26 @@ require_env_var "PULUMI_COMMAND"
 require_env_var "PULUMI_PROJECT_NAME"
 require_env_var "PULUMI_STACK"
 require_env_var "PULUMI_SSH_KEY_PATH"
-require_env_var "PULUMI_SERVERS_JSON" 
+require_env_var "PULUMI_SERVERS_JSON"
+require_env_var "PULUMI_DATABASE_JSON"
+
+# Detect whether the managed database tier is enabled for this stack.
+database_enabled() {
+  [[ "${PULUMI_DATABASE_JSON}" == *'"enabled":true'* ]] || \
+    [[ "${PULUMI_DATABASE_JSON}" == *'"enabled": true'* ]]
+}
 
 # Only provisioning commands need provider credentials
 if [[ "${PULUMI_COMMAND}" != "output" ]]; then
   require_env_var "CLOUDFLARE_API_TOKEN"
   require_env_var "DIGITALOCEAN_TOKEN"
+
+  # When the database is enabled, USER + NAME come from bitwarden (i.e., process.env) and HOST/PORT/PASSWORD are DigitalOcean derived (i.e., exported as stack outputs).
+  # Hence, once the former are required.
+  if database_enabled; then
+    require_env_var "POSTGRES_USER"
+    require_env_var "POSTGRES_DB"
+  fi
 fi
 
 # Generate Pulumi.yaml dynamically
@@ -50,7 +64,9 @@ pulumi stack select "${PULUMI_STACK}" --create
 
 print_stack_outputs() {
   echo "__PULUMI_OUTPUTS_BEGIN__"
-  pulumi stack output --stack "${PULUMI_STACK}" --json
+  # --show-secrets surfaces sensitive secrets, such as POSTGRES_PASSWORD.
+  # It is the caller's responsibility to redact everything so these values never reach the teminal or CI logs., 
+  pulumi stack output --stack "${PULUMI_STACK}" --json --show-secrets
   echo "__PULUMI_OUTPUTS_END__"
 }
 
@@ -63,6 +79,11 @@ case "$PULUMI_COMMAND" in
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:backendPort" "$BACKEND_PORT" --non-interactive
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:sshPort" "$SSH_PORT" --non-interactive
     pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:servers" "$PULUMI_SERVERS_JSON" --non-interactive
+    pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:database" "$PULUMI_DATABASE_JSON" --non-interactive
+    if database_enabled; then
+      pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:postgresUser" "$POSTGRES_USER" --non-interactive
+      pulumi config set --stack "${PULUMI_STACK}" "${PULUMI_PROJECT_NAME}:postgresDb" "$POSTGRES_DB" --non-interactive
+    fi
 esac
 
 # Run the requested Pulumi action

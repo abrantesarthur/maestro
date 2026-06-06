@@ -51,6 +51,38 @@ pulumi:
   # [Required] SSH port for Cloudflare tunnel configuration
   sshPort: 22
 
+  # [Optional] Managed PostgreSQL database tier (global defaults)
+  #
+  # When enabled, Pulumi provisions a DigitalOcean Managed Postgres cluster PER
+  # STACK (each environment gets its own isolated database), placed in the same
+  # per-stack VPC as the backend droplet. The backend reaches it over the
+  # PRIVATE VPC endpoint with TLS (sslmode=require). A dedicated least-privilege
+  # app user and app database are created, and a DatabaseFirewall restricts
+  # access to the stack's backend droplet (by stack-name tag).
+  #
+  # The database is the "crown jewels": the cluster carries retainOnDelete and
+  # protect, so a `pulumi destroy` of the disposable backend droplet leaves the
+  # database (and its data) intact. Durability is covered by DigitalOcean's
+  # built-in daily backups and point-in-time recovery (PITR).
+  #
+  # Connection details are wired through the existing plumbing (no secrets here):
+  #   - POSTGRES_USER, POSTGRES_DB originate in Bitwarden (values you choose;
+  #     stable). Pulumi reads them to create the user + database; the backend reads
+  #     the same values. One source of truth, no drift.
+  #   - POSTGRES_HOST (the private endpoint), POSTGRES_PORT (the cluster's assigned
+  #     port), and POSTGRES_PASSWORD are DERIVED by DigitalOcean (unknowable until
+  #     provisioned). Pulumi exports them as stack outputs (password as a Pulumi
+  #     secret); Maestro threads them into the backend container per stack. They
+  #     are NEVER stored in Bitwarden or committed.
+  # database:
+  #   enabled: false          # [Required] Set to true to provision the DB tier
+  #   version: "16"           # [Optional, default: "16"] Postgres major version: "15", "16", or "17"
+  #   size: db-s-1vcpu-1gb    # [Optional, default: db-s-1vcpu-1gb] DigitalOcean DB node size
+  #   nodeCount: 1            # [Optional, default: 1] Number of nodes (1 = single node)
+  # The database region is NOT configurable: it always co-locates with the
+  # stack's droplets (a DigitalOcean VPC is region-scoped and the private
+  # endpoint only resolves inside it).
+
   # [Required when pulumi.enabled is true] Stack definitions
   # Each stack (dev, staging, prod) represents an isolated environment.
   # Maestro provisions each defined stack sequentially.
@@ -72,6 +104,14 @@ pulumi:
           # image: ubuntu-24-04-x64 # Optional, default: ubuntu-24-04-x64
           # size: s-1vcpu-1gb      # Optional, default: s-1vcpu-1gb
           # region: nyc1           # Optional, default: nyc1
+      # [Optional] Per-stack database sizing override. Merged over pulumi.database
+      # (override wins). Only sizing may be overridden here (size / nodeCount) —
+      # enabling the DB tier (enabled) and the engine version (version) are global,
+      # and region is never configurable (the database co-locates with this stack's
+      # droplets).
+      # database:
+      #   size: db-s-2vcpu-4gb   # [Optional] Override node size for this stack
+      #   nodeCount: 1           # [Optional] Override node count for this stack
 
   # Multi-stack setup example (uncomment to use):
   # stacks:
@@ -225,6 +265,19 @@ secrets:
   #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
   #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
   #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
+  #
+  # Required only when pulumi.database.enabled is true (NAMES only — values live
+  # in Bitwarden, never here). These are the stable identifiers you choose; both
+  # Pulumi (to create the user/database) and the backend read them:
+  #   - POSTGRES_USER: dedicated least-privilege app database user name
+  #   - POSTGRES_DB:   application database name
+  # POSTGRES_HOST (private endpoint), POSTGRES_PORT (the DO-assigned cluster port),
+  # and POSTGRES_PASSWORD are derived from DigitalOcean and flow in as Pulumi stack
+  # outputs — they are NOT Bitwarden secrets and must never be committed.
+  #
+  # POSTGRES_USER and POSTGRES_DB are also injected into the backend's environment
+  # (as BACKEND_ENV_POSTGRES_USER/BACKEND_ENV_POSTGRES_DB), so they live in two
+  # places at runtime — keep them in sync.
   requiredVars: []
   # Example:
   # requiredVars:

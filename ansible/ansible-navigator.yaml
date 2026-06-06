@@ -12,8 +12,8 @@ ansible-navigator:
     image: ansible_ee:latest # Name of the execution environment image to run
     pull:
       policy: missing # Only pull the image if it’s not present locally
-    environment-variables:
-      pass:
+    environment-variables: # forward host env vars into the execution-environment container
+      pass: # names of host env vars to pass through as-is (use `set:` for explicit NAME: value pairs)
         - SSH_HOSTS
         - SSH_KEY_PATH
         - GHCR_TOKEN
@@ -25,4 +25,6 @@ ansible-navigator:
     inventory:
       help: False # Do not show inventory help output
       entries:
-        - inventory/hosts.py # Dynamic inventory populated via SSH_HOSTS
+        # Executable dynamic inventory: Ansible runs this script and parses its stdout as JSON
+        # (host list is computed at runtime from the SSH_HOSTS env var, not a static file)
+        - inventory/hosts.py

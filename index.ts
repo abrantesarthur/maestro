@@ -73,6 +73,12 @@ async function main(): Promise<void> {
     requireBwsSecret("DIGITALOCEAN_TOKEN");
   }
 
+  // POSTGRES_HOST, POSTGRES_PORT, and POSTGRES_PASSWORD are DigitalOcean-derived Pulumi outputs
+  if (config.pulumi?.database?.enabled) {
+    requireBwsSecret("POSTGRES_USER");
+    requireBwsSecret("POSTGRES_DB");
+  }
+
   if (config.ansible?.enabled) {
     requireBwsSecret("GHCR_TOKEN");
     requireBwsSecret("GHCR_USERNAME");

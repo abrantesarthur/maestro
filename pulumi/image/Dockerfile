@@ -28,7 +28,7 @@ ENV PATH="/root/.pulumi/bin:${PATH}"
 WORKDIR /workspace
 
 # copy the project files into the container
-COPY package.json package-lock.json tsconfig.json index.ts ./
+COPY package.json package-lock.json tsconfig.json index.ts constants.ts ./
 COPY resources ./resources
 COPY commands ./commands
 COPY providers ./providers

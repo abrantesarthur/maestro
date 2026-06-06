@@ -23,6 +23,33 @@ Host ssh0.example.com
 
 In the event that a server is destroyed, Pulumi correctly takes down the tunnels that were linked to it.
 
+## Managed Database (Postgres)
+
+When `pulumi.database.enabled` is `true`, the program provisions a database tier per stack via the `ManagedDatabase` component resource (`image/resources/managedDatabase.ts`), which mirrors the `VirtualServer` pattern:
+
+- A `digitalocean.DatabaseCluster` (engine `pg`, pinned major version, sized from the merged `database` config, `nodeCount` 1 by default).
+- A `digitalocean.DatabaseDb` (named from `POSTGRES_DB`) and a `digitalocean.DatabaseUser` (named from `POSTGRES_USER`; DigitalOcean generates its password). The application user is never the cluster admin `doadmin`.
+- A `digitalocean.DatabaseFirewall` whose only rule trusts the backend droplet by the per-stack **tag** (the stack name), not the droplet ID — so it survives the disposable droplet being replaced. No `0.0.0.0/0` rule.
+
+**Shared VPC.** The program creates one `digitalocean.Vpc` per stack and joins **both** the backend droplet (`vpcUuid`) and the database cluster (`privateNetworkUuid`) to it. The same VPC is required for the database's private endpoint to resolve from the droplet. The region-default VPC is account-global and shared, so it is not used. Because VPC membership is immutable on a droplet, enabling the database replaces the existing droplet once on first apply (the backend is cattle; Ansible re-converges).
+
+**Lifecycle safeguards.** The cluster carries `retainOnDelete: true` **and** `protect: true`; the database, user, and VPC carry `retainOnDelete`. A `pulumi destroy` of the disposable backend therefore succeeds while keeping the cloud database (and its data); intentional teardown requires deliberately removing the resource from state and unprotecting it. The cluster's stable resource name (`pg-<stackName>`) deliberately does **not** encode size/version/region, so changing those never triggers a replace of the crown jewels.
+
+**Stack outputs.** The program exports a `postgres` object alongside `hosts`:
+
+```
+postgres = {
+  host:     <cluster.privateHost>,   # private VPC endpoint
+  port:     <cluster.port>,          # DO-assigned, typically 25060
+  user:     <POSTGRES_USER>,
+  database: <POSTGRES_DB>,
+  password: pulumi.secret(<appUser.password>),
+  sslmode:  "require",
+}
+```
+
+The `postgres` export is present only when the stack enabled the database. The password is a Pulumi **secret**, so it is masked (`[secret]`) in stack output unless `--show-secrets` is passed. The entrypoint prints stack outputs with `pulumi stack output --json --show-secrets` between the `__PULUMI_OUTPUTS_BEGIN__` / `__PULUMI_OUTPUTS_END__` markers; Maestro redacts that marker block from the teed console so the password never reaches the terminal or CI logs while still being captured for parsing (see [`lib/runPulumi.ts`](../lib/runPulumi.ts) and [`lib/helpers.ts`](../lib/helpers.ts)).
+
 ## Configuration
 
 Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into the container as `-e` flags:
@@ -35,6 +62,11 @@ Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into 
 | `BACKEND_PORT`          | `ansible.backend.port`                  |
 | `PULUMI_STACK`          | Derived from `pulumi.stacks.<env>` keys |
 | `PULUMI_SERVERS_JSON`   | `pulumi.stacks.<env>.servers` (as JSON) |
+| `PULUMI_DATABASE_JSON`  | `pulumi.database` merged with `pulumi.stacks.<env>.database` (override wins), as JSON; defaults to `{}` |
+| `POSTGRES_USER`         | Bitwarden (used to create the dedicated DB user) |
+| `POSTGRES_DB`           | Bitwarden (used to create the app database)      |
+
+The database `-e` values are applied inside the container via `pulumi config set` (`<project>:database`, `:postgresUser`, `:postgresDb`). The program reads them to create the cluster, the dedicated user, and the app database. `POSTGRES_USER`/`DB` are required only when the merged `database.enabled` is `true`. The port is **not** an input: the backend connects on the cluster's DO-assigned port, surfaced as the `postgres.port` stack output and threaded to the backend per-stack like host and password.
 
 ## Required Secrets (from Bitwarden)
 
@@ -42,8 +74,17 @@ Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into 
 | ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud authentication     | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API access           | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; **User → SSL and Certificates:Edit** (Origin CA certs — this is a _user-level_ permission, not zone-level; without it Origin CA cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API access         | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works. When the database tier is enabled, also needs `database:create`, `database:read`, `database:update`, `database:delete` and VPC read/write.                                                |
 | `VPS_SSH_KEY`          | SSH key for server provisioning | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
+
+When `pulumi.database.enabled` is `true`, these additional Bitwarden values are required (stable identifiers you choose, read by the Pulumi program to create the user/database):
+
+| Secret          | Purpose                                                              |
+| --------------- | ------------------------------------------------------------------- |
+| `POSTGRES_USER` | Name of the dedicated least-privilege app database user to create.  |
+| `POSTGRES_DB`   | Name of the application database to create.                         |
+
+`POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_PASSWORD` are derived from DigitalOcean and surfaced as stack outputs — they are not Bitwarden secrets.
 
 ## Ports
 

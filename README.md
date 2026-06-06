@@ -48,6 +48,11 @@ pulumi:
   projectName: your-project-name # Pulumi project name
   cloudflareAccountId: "" # Your Cloudflare account ID
   sshPort: 22 # SSH port for tunnels
+  database: # Optional: Managed Postgres tier (global defaults)
+    enabled: false # Provision a DigitalOcean Managed Postgres cluster per stack
+    version: "16" # Postgres major version: "15", "16", or "17"
+    size: db-s-1vcpu-1gb # DigitalOcean DB node size
+    nodeCount: 1 # Single node (region always co-locates with the stack's droplets)
   stacks: # Define one or more stacks (dev, staging, prod)
     prod:
       servers:
@@ -55,6 +60,8 @@ pulumi:
           # groups: [devops]   # Optional: override global ansible.groups
           # size: s-1vcpu-1gb  # Optional: DigitalOcean droplet size
           # region: nyc1       # Optional: DigitalOcean region
+      # database:            # Optional: per-stack sizing override (override wins)
+      #   size: db-s-2vcpu-4gb
 
 ansible:
   enabled: true # Enable/disable all Ansible provisioning
@@ -133,6 +140,33 @@ This applies to all resources provisioned for each stack:
 
 DNS records (both A records for web servers and CNAME records for tunnels) are created under the base domain's Cloudflare zone. SSL certificates are issued for each environment's effective domain.
 
+### Database (Managed Postgres)
+
+When `pulumi.database.enabled` is `true`, Maestro provisions a **DigitalOcean Managed Postgres** cluster as a dedicated database tier. The guiding principle is _the backend is cattle; the database is the crown jewels_ — the database lives in its own managed failure domain, separate from the disposable backend droplet.
+
+**Per-environment isolation.** The database is stack-aware like the rest of the stack: each enabled stack (`dev` / `staging` / `prod`) provisions its **own** cluster, app database, and app user. A `dev` deploy never touches the `prod` database.
+
+**Private VPC endpoint + TLS.** Each stack gets a dedicated DigitalOcean VPC that **both** the backend droplet and the database cluster join. The backend connects over the database's **private** VPC endpoint (`cluster.privateHost`), so database traffic never traverses the public internet. TLS is still required: the connection uses `sslmode=require` (and `PGSSLMODE=require` for libpq clients).
+
+**Least-privilege user + dedicated database.** Pulumi creates a dedicated `DatabaseUser` (named from `POSTGRES_USER`) and `DatabaseDb` (named from `POSTGRES_DB`). The application never uses the cluster admin (`doadmin`). DigitalOcean-managed Postgres users are non-superuser by default; tightening per-database `GRANT`s further is a documented follow-up.
+
+**DatabaseFirewall (trusted sources).** A `DatabaseFirewall` restricts access to the backend droplet by the per-stack **tag** (the stack name, applied to every droplet in the stack) rather than the droplet ID, so it survives the disposable droplet being rebuilt with a new ID. There is no `0.0.0.0/0` rule; the public endpoint is locked down.
+
+**Lifecycle safeguards (`retainOnDelete` + `protect`).** The cluster carries both `retainOnDelete: true` and `protect: true`; the app database, app user, and the VPC carry `retainOnDelete`. This means a `pulumi destroy` of the disposable backend **succeeds while leaving the cloud database (and its data) intact**, and accidental targeted deletes are blocked. Intentional teardown is therefore deliberate: it requires unprotecting and removing the resource from Pulumi state (a manual-cleanup runbook step), which is by design for the crown jewels.
+
+> **One-time droplet replacement.** VPC membership is immutable on a DigitalOcean droplet, so enabling the database (and the per-stack VPC) replaces the existing backend droplet once on first apply. The backend is cattle, so this is acceptable — Ansible re-converges the replacement.
+
+**Durability.** DigitalOcean's built-in **daily backups** plus **point-in-time recovery (PITR)** cover durability today. PITR (the decisive feature) recovers to any point within the provider's retention window, protecting against operator/application mistakes (a bad migration, an accidental `DELETE`), not just infrastructure loss. Choose your retention window deliberately.
+
+**Connection wiring (one source of truth).** Connection details flow through the existing plumbing, with a hybrid origin:
+
+- `POSTGRES_USER` and `POSTGRES_DB` **originate in Bitwarden** (stable values you choose). Pulumi reads them to create the dedicated user + database, and the backend reads the same values — no drift.
+- `POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the cluster's assigned port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean** and exported as Pulumi **stack outputs** (the password as a Pulumi secret). Maestro captures them from the Pulumi container output and threads them **per stack** onto that stack's backend host(s), so multi-stack deploys never cross-wire one stack's backend to another stack's database — and the port is always whatever DO actually assigned, never a value you keep in sync by hand.
+
+The backend container ends up with `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, and `POSTGRES_SSLMODE=require`.
+
+> **Note:** `POSTGRES_USER`/`POSTGRES_DB` originate in Bitwarden but are also injected into the container environment (as `BACKEND_ENV_POSTGRES_USER`/`BACKEND_ENV_POSTGRES_DB`, see `buildAnsibleEnv`), so the backend can read them from either source — keep the two in sync. `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_PASSWORD` are DigitalOcean-derived and live only in the environment.
+
 ### Required Environment Variable
 
 | Variable           | Purpose                                                                | Required Scopes                                                                                                                       |
@@ -156,7 +190,18 @@ Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The foll
 | `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                                                                                   |
 | `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; **User → SSL and Certificates:Edit** (Origin CA certs — this is a _user-level_ permission, not zone-level; without it Origin CA cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
-| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works.                                                |
+| `DIGITALOCEAN_TOKEN`   | DigitalOcean API token                                                                                                                           | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works. When the database tier is enabled, also needs `database:create`, `database:read`, `database:update`, `database:delete` and VPC read/write. |
+
+When `pulumi.database.enabled` is `true`, the following additional secrets are required (the values are stable identifiers you choose):
+
+| Secret          | Purpose                                                                 | Required Scopes                                                                                                   |
+| --------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER` | Dedicated least-privilege app database user name (created by Pulumi).   | Not an API token — a stable identifier you choose. Read by both Pulumi (to create the user) and the backend.     |
+| `POSTGRES_DB`   | Application database name (created by Pulumi).                           | Not an API token — a stable identifier you choose. Read by both Pulumi (to create the database) and the backend. |
+
+`POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the DO-assigned cluster port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean**, surfaced as Pulumi stack outputs, and injected into the backend by Maestro. They are **not** Bitwarden secrets and must never be committed.
+
+> **Note:** `POSTGRES_USER`/`POSTGRES_DB` are also injected into the backend's environment (see the note in [Database (Managed Postgres)](#database-managed-postgres)), so they live in two places at runtime — keep them in sync.
 
 You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`. These secrets are validated at startup and automatically passed to the Ansible execution environment, where they can be accessed in playbooks via `lookup('env', 'VAR_NAME')`.
 
@@ -177,6 +222,10 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 6. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)
 
 ## Future Improvements
+
+- **Independent logical backup stream to DigitalOcean Spaces** (deferred): in addition to DigitalOcean's built-in daily backups + PITR, run a self-owned `pg_dump`-style logical backup into a DO Spaces bucket (a _different_ service from the database), on a schedule, with bucket lifecycle/retention rules and periodic tested restore drills. This is defense-in-depth against account- or provider-level problems with the managed backups and gives portable, provider-independent copies. The Spaces bucket, the backup cron, and the restore drills are intentionally **out of scope** of the current core database tier; built-in daily backups + PITR cover durability for now.
+
+- **Per-database GRANT tightening**: the app user is non-superuser and never `doadmin`, but scoping its privileges to only what it needs within its own database (beyond DigitalOcean's defaults) is a follow-up.
 
 - **style**: use the Pulumi and Ansible SDKs/packages instead of shelling out to their CLIs (the shell scripts have been replaced by TypeScript).
 

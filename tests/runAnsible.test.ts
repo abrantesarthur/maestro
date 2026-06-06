@@ -14,20 +14,11 @@ describe("buildPlaybookArgs", () => {
     );
   });
 
-  test("always forwards the static set of penv variables", () => {
+  test("does not add --penv flags when there are no dynamic vars", () => {
+    // The static vars are forwarded via ansible-navigator.yaml's
+    // environment-variables.pass list, not via --penv.
     const args = buildPlaybookArgs("security.yml", "/tmp/key", []);
-    const joined = args.join(" ");
-    for (const v of [
-      "SSH_HOSTS",
-      "SSH_KEY_PATH",
-      "GHCR_TOKEN",
-      "GHCR_USERNAME",
-      "BACKEND_IMAGE",
-      "BACKEND_IMAGE_TAG",
-      "BACKEND_PORT",
-    ]) {
-      expect(joined).toContain(`--penv ${v}`);
-    }
+    expect(args.filter((a) => a === "--penv").length).toBe(0);
   });
 
   test("appends a --penv flag for each required var", () => {
@@ -43,8 +34,8 @@ describe("buildPlaybookArgs", () => {
   test("ignores empty required var names", () => {
     const args = buildPlaybookArgs("backend.yml", "/tmp/key", ["", "REAL"]);
     const penvCount = args.filter((a) => a === "--penv").length;
-    // 7 static + 1 real dynamic
-    expect(penvCount).toBe(8);
+    // only the 1 real dynamic var; empty names are skipped
+    expect(penvCount).toBe(1);
     expect(args.join(" ")).toContain("--penv REAL");
   });
 

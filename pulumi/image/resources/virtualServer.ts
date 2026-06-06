@@ -4,6 +4,7 @@ import * as digitalOcean from "@pulumi/digitalocean";
 import * as tls from "@pulumi/tls";
 import { installCertificate } from "../commands/installCertificate";
 import { Tunnel, TunnelIngress, TunnelIngressProtocol } from "./tunnel";
+import { resourceType } from "./resourceType";
 
 /** The arguments for constructing a VirtualServer instance */
 export interface VirtualServerArgs {
@@ -21,6 +22,11 @@ export interface VirtualServerArgs {
   index: pulumi.Input<number>;
   /** The effective domain for this environment (e.g., dev.example.com, staging.example.com, example.com) */
   effectiveDomain: pulumi.Input<string>;
+  /**
+   * The VPC the droplet joins so it shares a private network with the managed
+   * resources. 
+   */
+  vpcUuid?: pulumi.Input<string>;
 }
 
 /** The pre-defined tag values for a VirtualServer */
@@ -48,9 +54,14 @@ export class VirtualServer extends pulumi.ComponentResource {
   readonly effectiveDomain: pulumi.Output<string>;
 
   constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
-    super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);
+    super(
+      resourceType("VirtualServer"),
+      VirtualServer.buildResourceName(args),
+      opts,
+    );
     const name = VirtualServer.buildResourceName(args);
-    const { image, size, region, sshKeys, tags, effectiveDomain } = args;
+    const { image, size, region, sshKeys, tags, effectiveDomain, vpcUuid } =
+      args;
 
     const virtualServer = new digitalOcean.Droplet(
       name,
@@ -61,6 +72,7 @@ export class VirtualServer extends pulumi.ComponentResource {
         sshKeys,
         name,
         tags,
+        vpcUuid,
       },
       { parent: this },
     );

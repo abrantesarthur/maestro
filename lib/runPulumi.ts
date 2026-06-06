@@ -52,7 +52,7 @@ export function buildPulumiRunArgs(
 ): string[] {
   const withProviderCreds = needsProviderCreds(pulumiCommand);
 
-  // PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN and DIGITALOCEAN_TOKEN are read
+  // PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, DIGITALOCEAN_TOKEN, POSTGRES_USER AND POSTGRES_DB are read
   // directly from process.env (where the secrets layer injects them) rather than
   // threaded through `env`. This sourcing difference is intentional.
   const dockerEnv = [
@@ -76,6 +76,12 @@ export function buildPulumiRunArgs(
     `PULUMI_SSH_KEY_PATH=${PULUMI_SSH_KEY_PATH}`,
     "-e",
     `PULUMI_SERVERS_JSON=${env["PULUMI_SERVERS_JSON"] || "[]"}`,
+    "-e",
+    `PULUMI_DATABASE_JSON=${env["PULUMI_DATABASE_JSON"] || "{}"}`,
+    "-e",
+    `POSTGRES_USER=${process.env["POSTGRES_USER"] ?? ""}`,
+    "-e",
+    `POSTGRES_DB=${process.env["POSTGRES_DB"] ?? ""}`,
   ];
 
   const args = ["docker", "run", ...(interactive ? ["-it"] : []), "--rm"];
@@ -130,6 +136,26 @@ function validatePulumiRequirements(
     requireBwsSecret("DIGITALOCEAN_TOKEN");
   }
   requireBwsSecret("VPS_SSH_KEY");
+
+  // When the database tier is enabled AND we're actually provisioning, the
+  // POSTGRES_USER/DB pair (Bitwarden values we choose) must be present in
+  // process.env so the Pulumi program can create the dedicated app user +
+  // database. POSTGRES_HOST/PORT/PASSWORD are DigitalOcean-derived outputs, not
+  // required here.
+  if (needsProviderCreds(pulumiCommand) && databaseEnabled(env)) {
+    requireBwsSecret("POSTGRES_USER");
+    requireBwsSecret("POSTGRES_DB");
+  }
+}
+
+/** Whether PULUMI_DATABASE_JSON in the env map enables the database tier. */
+function databaseEnabled(env: Record<string, string>): boolean {
+  try {
+    const parsed = JSON.parse(env["PULUMI_DATABASE_JSON"] || "{}");
+    return parsed?.enabled === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -152,6 +178,13 @@ async function runPulumiStack(
     pulumi?.stacks?.[stackName]?.servers ?? [],
   );
 
+  // Merge the global database defaults with this stack's sizing/placement
+  // override (override wins).
+  const databaseConfig = pulumi?.database
+    ? { ...pulumi.database, ...(pulumi.stacks?.[stackName]?.database ?? {}) }
+    : {};
+  const databaseJson = JSON.stringify(databaseConfig);
+
   const env: Record<string, string> = {
     DOMAIN: config.domain,
     CLOUDFLARE_ACCOUNT_ID: pulumi?.cloudflareAccountId ?? "",
@@ -160,6 +193,7 @@ async function runPulumiStack(
     PULUMI_PROJECT_NAME: pulumi?.projectName ?? "",
     PULUMI_STACK: stackName,
     PULUMI_SERVERS_JSON: serversJson,
+    PULUMI_DATABASE_JSON: databaseJson,
   };
 
   validatePulumiRequirements(pulumiCommand, env);
@@ -167,7 +201,13 @@ async function runPulumiStack(
   await buildPulumiImage();
 
   log(`Running the ${IMAGE_NAME} image...`);
-  const args = buildPulumiRunArgs(pulumiCommand, env, sshKeyPath, showLogs);
+  // Only allocate a TTY (`-t`) when we are streaming logs AND a real terminal is
+  // actually attached. Under a non-interactive stdio (CI, a pipe, or an agent
+  // harness) `docker run -t` aborts with "the input device is not a TTY" and
+  // Pulumi reports "unusable dimensions" — so fall back to plain piped output.
+  const interactive =
+    showLogs && Boolean(process.stdout.isTTY) && Boolean(process.stdin.isTTY);
+  const args = buildPulumiRunArgs(pulumiCommand, env, sshKeyPath, interactive);
 
   let stdout: string;
   if (showLogs) {

@@ -249,25 +249,14 @@ export function buildPlaybookArgs(
     }
   }
 
+  // The static vars (SSH_HOSTS, GHCR_TOKEN, etc.) are forwarded via the
+  // execution-environment.environment-variables.pass list in
+  // ansible-navigator.yaml, so only the dynamically-named vars need --penv here.
   return [
     "ansible-navigator",
     "run",
     `playbooks/${playbook}`,
     `--container-options=-v=${sshKeyTempFile}:${CONTAINER_SSH_KEY_PATH}:ro`,
-    "--penv",
-    "SSH_HOSTS",
-    "--penv",
-    "SSH_KEY_PATH",
-    "--penv",
-    "GHCR_TOKEN",
-    "--penv",
-    "GHCR_USERNAME",
-    "--penv",
-    "BACKEND_IMAGE",
-    "--penv",
-    "BACKEND_IMAGE_TAG",
-    "--penv",
-    "BACKEND_PORT",
     ...penvArgs,
   ];
 }
@@ -303,7 +292,7 @@ async function runPlaybook(
  * (inventory/hosts.py) and playbooks read these via the static pass-list in
  * ansible-navigator.yaml plus the per-run `--penv` flags.
  */
-function buildAnsibleEnv(
+export function buildAnsibleEnv(
   pulumiHosts: PulumiHosts,
   config: MaestroConfig,
   requiredVars: string[],
@@ -340,6 +329,23 @@ function buildAnsibleEnv(
 
   // Auto-inject PORT into the container environment from backend.port
   env["BACKEND_ENV_PORT"] = String(ansible?.backend?.port ?? "");
+
+  // Database connection wiring (DigitalOcean Managed Postgres).
+  //
+  // USER, DB, and SSLMODE are the same across the whole deploy, so they travel
+  // globally here. HOST, PORT, and PASSWORD are per-stack and DO-derived, so
+  // they ride per-host in SSH_HOSTS instead and are merged in by the
+  // backend_app role.
+  //
+  // Gate on per-host postgres data (not the config flag) so the global and
+  // per-host credential sets stay consistent: parsePulumiHosts stamps
+  // postgresHost whenever the live output carries postgres data.
+  if (pulumiHosts.hosts.some((h) => h.postgresHost)) {
+    env["BACKEND_ENV_POSTGRES_USER"] = process.env["POSTGRES_USER"] ?? "";
+    env["BACKEND_ENV_POSTGRES_DB"] = process.env["POSTGRES_DB"] ?? "";
+    env["BACKEND_ENV_POSTGRES_SSLMODE"] = "require";
+    env["BACKEND_ENV_PGSSLMODE"] = "require";
+  }
 
   // Export web docker environment variables (WEB_DOCKER_ENV_*)
   for (const [key, value] of Object.entries(ansible?.web?.docker?.env ?? {})) {
@@ -435,6 +441,4 @@ export async function runAnsible(
   // We recommend running this playbook last because it may block connections.
   log("Applying security hardening...");
   await runPlaybook("security.yml", env, sshKeyTempFile, requiredVars);
-
-  log("Done.");
 }

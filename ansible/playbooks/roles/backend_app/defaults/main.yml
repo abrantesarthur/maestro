@@ -5,6 +5,15 @@ backend_host_port: "{{ lookup('env', 'BACKEND_PORT') }}"
 backend_bind_address: 127.0.0.1
 # backend_env is dynamically built from BACKEND_ENV_* environment variables in tasks
 # Example: BACKEND_ENV_MY_VAR=value becomes MY_VAR=value in the container
+#
+# Postgres connection wiring (hybrid origin):
+#   - POSTGRES_USER / POSTGRES_DB / POSTGRES_SSLMODE / PGSSLMODE are stable global values delivered
+#     via BACKEND_ENV_* (POSTGRES_SSLMODE/PGSSLMODE are the constant 'require' for TLS over the
+#     private VPC endpoint).
+#   - POSTGRES_HOST / POSTGRES_PORT / POSTGRES_PASSWORD are per-stack, DO-derived values threaded
+#     onto this stack's backend host(s) as the per-host 'postgres_host' / 'postgres_port' /
+#     'postgres_password' hostvars (see inventory/hosts.py). The tasks merge them into backend_env
+#     when postgres_host is defined, so each stack's backend reaches its own isolated database.
 backend_image: "{{ lookup('env', 'BACKEND_IMAGE') }}"
 backend_image_tag: "{{ lookup('env', 'BACKEND_IMAGE_TAG') }}"
 ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') }}"

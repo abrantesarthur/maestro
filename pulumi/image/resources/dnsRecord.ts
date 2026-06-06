@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { getZoneId } from "../providers";
+import { resourceType } from "./resourceType";
 
 /** The arguments for constructing a DnsRecord instance */
 export interface DnsRecordArgs {
@@ -29,7 +30,7 @@ export class DnsRecord extends pulumi.ComponentResource {
 
   constructor(args: DnsRecordArgs, opts?: DnsRecordOptions) {
     super(
-      "dalhe:cloudflare:DnsRecord",
+      resourceType("cloudflare:DnsRecord"),
       DnsRecord.buildResourceName(args),
       {},
       {

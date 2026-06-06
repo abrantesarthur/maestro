@@ -15,10 +15,14 @@ dependencies:
   system: # linux system packages to install
     - openssh-clients # required for SSH connections to remote hosts.
 
+# stage local files into the _build/ build context so later build steps can COPY them into the image
+# (here: files/website/ -> _build/files/website/, consumed by the append_final COPY below)
 additional_build_files:
   - src: files/website/
     dest: files/website/
     
+# inject raw Containerfile instructions into ansible-builder's generated build at specific points
+# (prepend_final/append_final run before/after the standard steps of the final image stage)
 additional_build_steps:
   # install the cloudflared client for sshing into the server via named host (e.g., ssh.dalhe.ai)
   prepend_final:

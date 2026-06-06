@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { DnsRecord } from "./dnsRecord";
 import { installCloudflared } from "../commands";
+import { resourceType } from "./resourceType";
 
 export enum TunnelIngressProtocol {
   Http = "http",
@@ -34,7 +35,7 @@ export class Tunnel extends pulumi.ComponentResource {
 
   constructor(args: TunnelArgs, opts?: pulumi.ComponentResourceOptions) {
     super(
-      "dalhe:cloudflare:Tunnel",
+      resourceType("cloudflare:Tunnel"),
       Tunnel.buildResourceName(args.name),
       {},
       opts,
