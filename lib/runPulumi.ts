@@ -52,7 +52,7 @@ export function buildPulumiRunArgs(
 ): string[] {
   const withProviderCreds = needsProviderCreds(pulumiCommand);
 
-  // PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, DIGITALOCEAN_TOKEN, POSTGRES_USER AND POSTGRES_DB are read
+  // PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, DIGITALOCEAN_ACCESS_TOKEN, POSTGRES_USER AND POSTGRES_DB are read
   // directly from process.env (where the secrets layer injects them) rather than
   // threaded through `env`. This sourcing difference is intentional.
   const dockerEnv = [
@@ -91,7 +91,7 @@ export function buildPulumiRunArgs(
       "-e",
       `CLOUDFLARE_API_TOKEN=${process.env["CLOUDFLARE_API_TOKEN"] ?? ""}`,
       "-e",
-      `DIGITALOCEAN_TOKEN=${process.env["DIGITALOCEAN_TOKEN"] ?? ""}`,
+      `DIGITALOCEAN_ACCESS_TOKEN=${process.env["DIGITALOCEAN_ACCESS_TOKEN"] ?? ""}`,
     );
     args.push("-v", `${sshKeyPath}:${PULUMI_SSH_KEY_PATH}:ro`);
   }
@@ -133,7 +133,7 @@ function validatePulumiRequirements(
   requireBwsSecret("PULUMI_ACCESS_TOKEN");
   if (needsProviderCreds(pulumiCommand)) {
     requireBwsSecret("CLOUDFLARE_API_TOKEN");
-    requireBwsSecret("DIGITALOCEAN_TOKEN");
+    requireBwsSecret("DIGITALOCEAN_ACCESS_TOKEN");
   }
   requireBwsSecret("VPS_SSH_KEY");
 

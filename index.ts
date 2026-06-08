@@ -70,7 +70,7 @@ async function main(): Promise<void> {
   if (config.pulumi?.enabled) {
     requireBwsSecret("PULUMI_ACCESS_TOKEN");
     requireBwsSecret("CLOUDFLARE_API_TOKEN");
-    requireBwsSecret("DIGITALOCEAN_TOKEN");
+    requireBwsSecret("DIGITALOCEAN_ACCESS_TOKEN");
   }
 
   // POSTGRES_HOST, POSTGRES_PORT, and POSTGRES_PASSWORD are DigitalOcean-derived Pulumi outputs

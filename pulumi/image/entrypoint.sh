@@ -36,7 +36,7 @@ database_enabled() {
 # Only provisioning commands need provider credentials
 if [[ "${PULUMI_COMMAND}" != "output" ]]; then
   require_env_var "CLOUDFLARE_API_TOKEN"
-  require_env_var "DIGITALOCEAN_TOKEN"
+  require_env_var "DIGITALOCEAN_ACCESS_TOKEN"
 
   # When the database is enabled, USER + NAME come from bitwarden (i.e., process.env) and HOST/PORT/PASSWORD are DigitalOcean derived (i.e., exported as stack outputs).
   # Hence, once the former are required.

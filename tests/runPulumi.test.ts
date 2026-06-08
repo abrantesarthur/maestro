@@ -17,7 +17,7 @@ describe("buildPulumiRunArgs", () => {
   beforeEach(() => {
     process.env["PULUMI_ACCESS_TOKEN"] = "pulumi-token";
     process.env["CLOUDFLARE_API_TOKEN"] = "cf-token";
-    process.env["DIGITALOCEAN_TOKEN"] = "do-token";
+    process.env["DIGITALOCEAN_ACCESS_TOKEN"] = "do-token";
   });
 
   afterEach(() => {
@@ -53,7 +53,7 @@ describe("buildPulumiRunArgs", () => {
     expect(args).toContain("/tmp/key:/root/.ssh/id_rsa:ro");
     const joined = args.join(" ");
     expect(joined).toContain("-e CLOUDFLARE_API_TOKEN=cf-token");
-    expect(joined).toContain("-e DIGITALOCEAN_TOKEN=do-token");
+    expect(joined).toContain("-e DIGITALOCEAN_ACCESS_TOKEN=do-token");
   });
 
   test("omits ssh key mount and provider creds for the output command", () => {
@@ -61,7 +61,7 @@ describe("buildPulumiRunArgs", () => {
     expect(args).not.toContain("-v");
     const joined = args.join(" ");
     expect(joined).not.toContain("CLOUDFLARE_API_TOKEN");
-    expect(joined).not.toContain("DIGITALOCEAN_TOKEN");
+    expect(joined).not.toContain("DIGITALOCEAN_ACCESS_TOKEN");
   });
 
   test("defaults PULUMI_SERVERS_JSON to [] when empty", () => {

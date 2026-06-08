@@ -84,20 +84,15 @@ const stackRegion = serversConfig[0]?.region || "nyc1";
 const region = REGION_MAP[stackRegion] || digitalOcean.Region.NYC1;
 
 // One explicit, per-stack VPC joined by BOTH the droplets and the database. We
-// avoid the account-global region-default VPC (shared, not isolated). retainOnDelete
-// so a backend `pulumi destroy` never orphans the database that lives inside it.
+// avoid the account-global region-default VPC (shared, not isolated).
 //
 // region is immutable: changing it on a provisioned DB stack replaces the VPC,
 // which forces replacement of the protect:true cluster and Pulumi hard-stops.
 // Moving regions requires the unprotect + recreate runbook (see pulumi/README.md).
-const vpc = new digitalOcean.Vpc(
-  `vpc-${stackName}`,
-  {
-    name: `vpc-${stackName}`,
-    region,
-  },
-  { retainOnDelete: true },
-);
+const vpc = new digitalOcean.Vpc(`vpc-${stackName}`, {
+  name: `vpc-${stackName}`,
+  region,
+});
 
 // Build VirtualServerArgs from config, combining stack name + roles + custom tags
 // Also preserve per-server groups for security hardening

@@ -264,7 +264,7 @@ secrets:
   #   - VPS_SSH_KEY: SSH private key for server provisioning and configuration
   #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
   #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
-  #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
+  #   - DIGITALOCEAN_ACCESS_TOKEN: DigitalOcean API token for provisioning servers
   #
   # Required only when pulumi.database.enabled is true (NAMES only — values live
   # in Bitwarden, never here). These are the stable identifiers you choose; both
