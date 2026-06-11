@@ -39,7 +39,7 @@ backend_proxy_bind_address: 127.0.0.1
 backend_live_port: "{{ lookup('env', 'BACKEND_PORT') }}"
 
 # Loopback port nginx listens on; the Cloudflare tunnel routes api.<domain> here.
-# MUST match NGINX_BACKEND_EDGE_PORT in pulumi/image/constants.ts.
+# MUST match NGINX_BACKEND_EDGE_PORT in pulumi/constants.ts.
 backend_proxy_edge_port: 8080
 
 # Distinct from the web-tier site file so web+backend on one domain don't collide;

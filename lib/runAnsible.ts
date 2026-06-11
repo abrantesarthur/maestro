@@ -10,7 +10,7 @@ import {
 } from "./helpers.ts";
 import { requireBwsSecret } from "./secrets.ts";
 import { buildWebsiteAssets } from "./website.ts";
-import { type PulumiHosts } from "./ssh.ts";
+import { type PulumiHosts } from "./hosts.ts";
 
 const SCRIPT_DIR = import.meta.dir.replace(/\/lib$/, "");
 const ANSIBLE_DIR = `${SCRIPT_DIR}/ansible`;
@@ -339,7 +339,7 @@ export function buildAnsibleEnv(
   // backend_app role.
   //
   // Gate on per-host postgres data (not the config flag) so the global and
-  // per-host credential sets stay consistent: parsePulumiHosts stamps
+  // per-host credential sets stay consistent: resolveStackHosts stamps
   // postgresHost whenever the live output carries postgres data.
   if (pulumiHosts.hosts.some((h) => h.postgresHost)) {
     env["BACKEND_ENV_POSTGRES_USER"] = process.env["POSTGRES_USER"] ?? "";

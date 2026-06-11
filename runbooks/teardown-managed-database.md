@@ -31,8 +31,10 @@ dump. The private endpoint resolves only inside the VPC, so either SSH into a
 stack droplet, or temporarily trust your IP and use the public endpoint:
 
 ```bash
-# Read the connection bundle (password is a secret):
-cd pulumi/image
+# Read the connection bundle (password is a secret). `pulumi stack output` only
+# needs a project marker, not the program — a throwaway dir works:
+mkdir -p /tmp/maestro-teardown && cd /tmp/maestro-teardown
+printf 'name: instrutoria\nruntime: nodejs\n' > Pulumi.yaml
 pulumi stack select <stack_name>
 pulumi stack output postgres --show-secrets --json
 
@@ -79,22 +81,8 @@ pulumi state delete   'urn:pulumi:<stack>::...:ManagedDatabase::pg-<stack>' --ta
 pulumi stack --show-urns | grep -Ei 'DatabaseCluster|ManagedDatabase|DatabaseDb|DatabaseUser' || echo "clean"
 ```
 
-**No local pulumi?** Run the same commands inside the maestro image — it already
-has `pulumi`, the program, and plugins. Override the entrypoint with `bash`
-(the default entrypoint only does `up`/`destroy`):
-
-```bash
-docker build -t maestro_pulumi pulumi/image
-docker run --rm -it -e PULUMI_ACCESS_TOKEN=$PULUMI_ACCESS_TOKEN \
-  --entrypoint bash maestro_pulumi
-#   inside the container — minimal Pulumi.yaml is enough for `pulumi state`:
-cat > /workspace/Pulumi.yaml <<'EOF'
-name: instrutoria
-runtime: nodejs
-EOF
-cd /workspace && pulumi login && pulumi stack select <stack_name>
-#   ...then the same unprotect / state delete / confirm commands above.
-```
+(The `pulumi` CLI is a maestro host requirement now — it is already installed
+wherever maestro runs.)
 
 ## 4. Destroy the rest of the stack
 

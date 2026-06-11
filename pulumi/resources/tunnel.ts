@@ -121,8 +121,9 @@ export class Tunnel extends pulumi.ComponentResource {
       });
       return { ssh, http };
     });
-    this.sshHostname = hostnamesByProtocol.apply((h) => h.ssh)[0];
-    this.httpHostname = hostnamesByProtocol.apply((h) => h.http)[0];
+    // validateIngresses guarantees exactly one SSH and one HTTP ingress.
+    this.sshHostname = hostnamesByProtocol.apply((h) => h.ssh[0]!);
+    this.httpHostname = hostnamesByProtocol.apply((h) => h.http[0]!);
 
     // create a commands to set and destroy cloudflared on set and destroy this Tunnel
     installCloudflared({

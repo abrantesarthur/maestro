@@ -7,7 +7,15 @@ import { createTempSecretFile, removeTempFile } from "./helpers.ts";
  * @throws Error if VPS_SSH_KEY is not set in environment
  */
 export async function setupSshKeyTempFile(): Promise<string> {
-  const sshKeyTempFile = await createTempSecretFile("VPS_SSH_KEY");
+  // Stable (non-random) filename: the path lands in Pulumi stack config
+  // (sshKeyPath) and inside local.Command create scripts, so it must not
+  // change between runs on the same machine or those resources would be
+  // replaced on every deploy. The file lives in the per-user temp dir with
+  // 0600 permissions and is removed on exit.
+  const sshKeyTempFile = await createTempSecretFile(
+    "VPS_SSH_KEY",
+    "vps_ssh_key",
+  );
 
   const cleanup = async () => {
     await removeTempFile(sshKeyTempFile);

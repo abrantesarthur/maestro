@@ -47,7 +47,7 @@ export const PostgresVersionValues = {
 } as const;
 
 // Managed-database size slugs. Must stay in sync with `databaseSizeMap` in
-// pulumi/image/index.ts, which maps these strings to digitalocean.DatabaseSlug.
+// pulumi/index.ts, which maps these strings to digitalocean.DatabaseSlug.
 export const DatabaseSizeValues = {
   DB_1VCPU_1GB: "db-s-1vcpu-1gb",
   DB_1VCPU_2GB: "db-s-1vcpu-2gb",
@@ -59,7 +59,7 @@ export const DatabaseSizeValues = {
 } as const;
 
 // DigitalOcean region slugs. Must stay in sync with `regionMap` in
-// pulumi/image/index.ts, which maps these strings to digitalocean.Region.
+// pulumi/index.ts, which maps these strings to digitalocean.Region.
 export const RegionValues = {
   NYC1: "nyc1",
   NYC2: "nyc2",

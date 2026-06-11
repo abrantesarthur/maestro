@@ -4,6 +4,13 @@ Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible
 
 ## Prerequisites
 
+Maestro runs on [Bun](https://bun.sh) and requires these commands on the host (validated at startup):
+
+- `pulumi` — the Pulumi CLI. Maestro drives it in-process via the [Automation API](https://www.pulumi.com/docs/iac/automation-api/); state lives in Pulumi Cloud (authenticated with `PULUMI_ACCESS_TOKEN`, no interactive `pulumi login`).
+- `bws` — Bitwarden Secrets Manager CLI, the source of all secrets.
+- `cloudflared` — used to reach the servers through Cloudflare SSH tunnels.
+- `docker` — used by the Ansible execution environment (the Pulumi path no longer uses Docker).
+
 Before running Maestro, the base `domain` in `maestro.yaml` **must already exist as an active zone in the Cloudflare account** that your `CLOUDFLARE_API_TOKEN` belongs to. Maestro does not create the zone or verify ownership itself — it looks up the zone by name at runtime and fails with `Cloudflare zone for <domain> not found.` if it is missing.
 
 Ownership is proven through Cloudflare's standard nameserver delegation: add the domain to your Cloudflare account and point your registrar's nameservers at the ones Cloudflare assigns. The zone becomes `active` only once that delegation is in place, and the scoped `CLOUDFLARE_API_TOKEN` is what authorizes Maestro to manage it.
@@ -165,7 +172,7 @@ When `pulumi.database.enabled` is `true`, Maestro provisions a **DigitalOcean Ma
 **Connection wiring (one source of truth).** Connection details flow through the existing plumbing, with a hybrid origin:
 
 - `POSTGRES_USER` and `POSTGRES_DB` **originate in Bitwarden** (stable values you choose). Pulumi reads them to create the dedicated user + database, and the backend reads the same values — no drift.
-- `POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the cluster's assigned port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean** and exported as Pulumi **stack outputs** (the password as a Pulumi secret). Maestro captures them from the Pulumi container output and threads them **per stack** onto that stack's backend host(s), so multi-stack deploys never cross-wire one stack's backend to another stack's database — and the port is always whatever DO actually assigned, never a value you keep in sync by hand.
+- `POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the cluster's assigned port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean** and exported as Pulumi **stack outputs** (the password as a Pulumi secret). Maestro reads them from the typed Pulumi stack outputs (via the Automation API) and threads them **per stack** onto that stack's backend host(s), so multi-stack deploys never cross-wire one stack's backend to another stack's database — and the port is always whatever DO actually assigned, never a value you keep in sync by hand.
 
 The backend container ends up with `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, and `POSTGRES_SSLMODE=require`.
 
@@ -239,7 +246,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 ## Components
 
-- `pulumi/` — Pulumi programs for provisioning Cloudflare DNS, DigitalOcean VPS, and SSH tunneling into the servers.
+- `pulumi/` — the Pulumi program (run in-process via the Automation API) provisioning Cloudflare DNS, DigitalOcean VPS, and SSH tunneling into the servers.
 - `ansible/` — Ansible execution environment, inventories, and playbooks that configure the servers.
 
 ## Workflow
@@ -259,7 +266,7 @@ You can specify additional required secrets in your `maestro.yaml` under `secret
 
 - **Per-database GRANT tightening**: the app user is non-superuser and never `doadmin`, but scoping its privileges to only what it needs within its own database (beyond DigitalOcean's defaults) is a follow-up.
 
-- **style**: use the Pulumi and Ansible SDKs/packages instead of shelling out to their CLIs (the shell scripts have been replaced by TypeScript).
+- **style**: use the Ansible SDK/packages instead of shelling out to the CLI (Pulumi already runs in-process via the Automation API; the shell scripts have been replaced by TypeScript).
 
 - **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
 

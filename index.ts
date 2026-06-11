@@ -42,7 +42,9 @@ async function main(): Promise<void> {
   await cleanupStaleTempFiles();
 
   log("Ensuring required commands exist...");
-  requireCmds(["bws", "cloudflared"]);
+  // `pulumi` is driven in-process via the Automation API, which shells out to
+  // the host CLI; `docker` is still required by the Ansible execution env.
+  requireCmds(["bws", "cloudflared", "pulumi"]);
 
   log(`Loading configuration from ${CONFIG_FILE}...`);
   const config = await loadConfig(CONFIG_FILE);

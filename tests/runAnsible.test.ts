@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildAnsibleEnv, buildPlaybookArgs } from "../lib/runAnsible";
 import { validateSchema } from "../lib/config/validateSchema";
-import type { PulumiHosts } from "../lib/ssh";
+import type { PulumiHosts } from "../lib/hosts";
 
 const NO_HOSTS: PulumiHosts = { hosts: [] };
 

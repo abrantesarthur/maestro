@@ -113,23 +113,30 @@ function getSecureTempDir(): string {
  *
  * Security features:
  * - Uses umask to create file with 600 permissions atomically
- * - Uses cryptographically random filename
+ * - Uses cryptographically random filename (unless a stable name is requested)
  * - Uses per-user temp directory when available
  *
  * @param varName - The environment variable containing the secret
+ * @param fileName - Optional stable filename (instead of a random one). Used
+ *   for the SSH key, whose path is recorded in Pulumi stack config and
+ *   interpolated into `local.Command` scripts — a random per-run path would
+ *   diff (and replace) those resources on every deploy.
  * @returns The path to the temporary file
  * @throws Error if the variable is not set
  */
-export async function createTempSecretFile(varName: string): Promise<string> {
+export async function createTempSecretFile(
+  varName: string,
+  fileName?: string,
+): Promise<string> {
   const secretValue = process.env[varName];
 
   if (!secretValue) {
     throw new Error(`Missing ${varName} in the environment.`);
   }
 
-  // Generate cryptographically random filename
-  const randomSuffix = crypto.randomUUID();
-  const tmpPath = `${getSecureTempDir()}/${TEMP_FILE_PREFIX}${randomSuffix}`;
+  // Random filename by default; callers may pin a stable name (see above)
+  const suffix = fileName ?? crypto.randomUUID();
+  const tmpPath = `${getSecureTempDir()}/${TEMP_FILE_PREFIX}${suffix}`;
 
   // Normalize escaped newlines, strip CRs, and ensure a trailing newline for OpenSSH
   // NOTE: intentionally narrower than the old shell's `printf '%b'`, which expanded ALL
@@ -237,153 +244,4 @@ export async function runCommand(
   const exitCode = await proc.exited;
 
   return { exitCode, stdout, stderr };
-}
-
-/**
- * Run a shell command with output streamed to console (tee-like behavior)
- * Captures stdout while also displaying it
- *
- * @param args - Command and arguments
- * @param env - Environment variables to set
- * @returns Object with captured stdout and exit code
- */
-export async function runCommandWithTee(
-  args: string[],
-  env?: Record<string, string | undefined>,
-): Promise<{ stdout: string; exitCode: number }> {
-  const proc = Bun.spawn(args, {
-    env: { ...process.env, ...env },
-    stdin: "inherit",
-    stdout: "pipe",
-    stderr: "inherit",
-  });
-
-  // Read stdout incrementally and tee to console.
-  //
-  // SECURITY: the captured buffer (`chunks`) keeps the FULL text — including the
-  // Pulumi stack-output block, which now carries the DigitalOcean-generated
-  // POSTGRES_PASSWORD (revealed via `pulumi stack output --show-secrets`) so
-  // parsePulumiHosts can read it. The CONSOLE echo, however, must NOT print that
-  // secret to the terminal / CI logs. So we redact everything between the
-  // __PULUMI_OUTPUTS_BEGIN__ and __PULUMI_OUTPUTS_END__ markers in the teed copy
-  // while leaving the captured buffer untouched. The redaction is cross-chunk
-  // safe: a partial marker spanning a read boundary is held back until enough
-  // bytes arrive to decide whether it is a real marker.
-  const chunks: string[] = [];
-  const reader = proc.stdout.getReader();
-  const decoder = new TextDecoder();
-
-  const tee = createRedactingTee();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const text = decoder.decode(value, { stream: true });
-    chunks.push(text);
-    process.stdout.write(tee.push(text));
-  }
-
-  // Flush any held-back tail to the console.
-  process.stdout.write(tee.flush());
-
-  const exitCode = await proc.exited;
-  return { stdout: chunks.join(""), exitCode };
-}
-
-export const PULUMI_OUTPUTS_BEGIN_MARKER = "__PULUMI_OUTPUTS_BEGIN__";
-export const PULUMI_OUTPUTS_END_MARKER = "__PULUMI_OUTPUTS_END__";
-/** Single redacted line emitted to the console in place of the secret block. */
-export const PULUMI_OUTPUTS_REDACTED_LINE =
-  "[maestro] Pulumi stack outputs captured (contents redacted from console).\n";
-
-/**
- * Stateful tee filter that, for the CONSOLE copy only, replaces everything
- * between the Pulumi output markers (inclusive) with a single redacted line.
- *
- * `push` accepts a raw chunk and returns the text safe to echo. It buffers a
- * small tail (up to the length of the longest marker minus one) so a marker
- * split across read boundaries is still detected. `flush` emits whatever tail
- * remains once the stream ends.
- */
-export function createRedactingTee(): {
-  push: (chunk: string) => string;
-  flush: () => string;
-} {
-  const maxMarker = Math.max(
-    PULUMI_OUTPUTS_BEGIN_MARKER.length,
-    PULUMI_OUTPUTS_END_MARKER.length,
-  );
-
-  // `pending` holds text not yet decided on (possible partial marker at the end).
-  let pending = "";
-  // Whether we are currently inside a (possibly multi-chunk) redacted block.
-  let inBlock = false;
-
-  /** Could `s` be a prefix of either marker? (used to hold back partial tails) */
-  const isPartialMarker = (s: string): boolean =>
-    PULUMI_OUTPUTS_BEGIN_MARKER.startsWith(s) ||
-    PULUMI_OUTPUTS_END_MARKER.startsWith(s);
-
-  const push = (chunk: string): string => {
-    pending += chunk;
-    let out = "";
-
-    // Process the buffer, holding back only a short tail that might be the
-    // start of a marker split across the next read.
-    while (true) {
-      if (inBlock) {
-        const endIdx = pending.indexOf(PULUMI_OUTPUTS_END_MARKER);
-        if (endIdx === -1) {
-          // Still inside the redacted block. Drop everything except a tail that
-          // could be the start of the END marker.
-          const keep = Math.min(pending.length, maxMarker - 1);
-          const tail = pending.slice(pending.length - keep);
-          pending = isPartialMarker(tail) ? tail : "";
-          break;
-        }
-        // Consume through the END marker (redacted, nothing emitted).
-        pending = pending.slice(endIdx + PULUMI_OUTPUTS_END_MARKER.length);
-        inBlock = false;
-        continue;
-      }
-
-      const beginIdx = pending.indexOf(PULUMI_OUTPUTS_BEGIN_MARKER);
-      if (beginIdx === -1) {
-        // No full BEGIN marker. Emit everything except a possible partial-marker
-        // tail held back for the next chunk.
-        const safeLen = Math.max(0, pending.length - (maxMarker - 1));
-        out += pending.slice(0, safeLen);
-        const tail = pending.slice(safeLen);
-        // Find the longest suffix of the tail that is a marker prefix; emit the rest.
-        let holdFrom = tail.length;
-        for (let i = 0; i < tail.length; i++) {
-          if (isPartialMarker(tail.slice(i))) {
-            holdFrom = i;
-            break;
-          }
-        }
-        out += tail.slice(0, holdFrom);
-        pending = tail.slice(holdFrom);
-        break;
-      }
-
-      // Emit text before the block, then enter the redacted block.
-      out += pending.slice(0, beginIdx);
-      out += PULUMI_OUTPUTS_REDACTED_LINE;
-      pending = pending.slice(beginIdx + PULUMI_OUTPUTS_BEGIN_MARKER.length);
-      inBlock = true;
-    }
-
-    return out;
-  };
-
-  const flush = (): string => {
-    // Inside an unterminated block, drop the tail (still redacted). Otherwise
-    // emit whatever partial tail remained.
-    const out = inBlock ? "" : pending;
-    pending = "";
-    return out;
-  };
-
-  return { push, flush };
 }

@@ -1,19 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  runCommandWithTee,
-  createRedactingTee,
-  PULUMI_OUTPUTS_BEGIN_MARKER,
-  PULUMI_OUTPUTS_END_MARKER,
-} from "../lib/helpers";
-import { parsePulumiHosts, mergeHosts } from "../lib/ssh";
-import { buildPulumiRunArgs } from "../lib/runPulumi";
+import { resolveStackHosts, mergeHosts } from "../lib/hosts";
+import { buildStackConfig } from "../lib/runPulumi";
 import { buildPlaybookArgs, buildAnsibleEnv } from "../lib/runAnsible";
 import type { MaestroConfig } from "../lib/config/index.ts";
 
-const BEGIN = "__PULUMI_OUTPUTS_BEGIN__";
-const END = "__PULUMI_OUTPUTS_END__";
-
-/** A realistic stack-output payload with the DB password between the markers. */
+/** A realistic resolved stack-outputs payload (as `stack.outputs()` yields it). */
 const SECRET_PASSWORD = "s3cr3t-db-pa55word-do-generated";
 const SAMPLE_OUTPUT = {
   hosts: [
@@ -33,113 +24,14 @@ const SAMPLE_OUTPUT = {
   },
 };
 
-describe("runCommandWithTee secret-safe redaction", () => {
-  let writes: string[];
-  const originalWrite = process.stdout.write.bind(process.stdout);
+/** Deep-clone so tests never mutate the shared sample (hosts are stamped in place). */
+function clone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
 
-  beforeEach(() => {
-    writes = [];
-    // Capture everything teed to the console without printing it.
-    const spy = (chunk: string | Uint8Array): boolean => {
-      writes.push(
-        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
-      );
-      return true;
-    };
-    process.stdout.write = spy as typeof process.stdout.write;
-  });
-
-  afterEach(() => {
-    process.stdout.write = originalWrite as typeof process.stdout.write;
-  });
-
-  test("keeps the secret in the returned buffer but hides it from the console (single chunk)", async () => {
-    const payload = `before\n${BEGIN}\n${JSON.stringify(SAMPLE_OUTPUT, null, 2)}\n${END}\nafter\n`;
-    const { stdout, exitCode } = await runCommandWithTee([
-      "bash",
-      "-c",
-      `cat <<'EOF'\n${payload}EOF`,
-    ]);
-
-    expect(exitCode).toBe(0);
-
-    // The full text (with the secret) must be captured for parsing.
-    expect(stdout).toContain(BEGIN);
-    expect(stdout).toContain(END);
-    expect(stdout).toContain(SECRET_PASSWORD);
-
-    // The console echo must NOT leak the secret.
-    const console = writes.join("");
-    expect(console).not.toContain(SECRET_PASSWORD);
-
-    // Text outside the marker block is still shown to the user.
-    expect(console).toContain("before");
-    expect(console).toContain("after");
-  });
-
-  test("hides the secret even when the markers are split across read chunks", async () => {
-    // Emit the BEGIN marker, the secret block, and the END marker as separate
-    // writes with tiny sleeps so the reader observes them in distinct chunks.
-    // This exercises the cross-chunk (byte-split) redaction path.
-    const body = JSON.stringify(SAMPLE_OUTPUT);
-    const script = [
-      `printf 'before\\n'`,
-      `sleep 0.05`,
-      `printf '${BEGIN}\\n'`,
-      `sleep 0.05`,
-      `printf '%s\\n' '${body}'`,
-      `sleep 0.05`,
-      `printf '${END}\\n'`,
-      `sleep 0.05`,
-      `printf 'after\\n'`,
-    ].join("; ");
-
-    const { stdout, exitCode } = await runCommandWithTee([
-      "bash",
-      "-c",
-      script,
-    ]);
-
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain(SECRET_PASSWORD);
-
-    const console = writes.join("");
-    expect(console).not.toContain(SECRET_PASSWORD);
-    expect(console).toContain("before");
-    expect(console).toContain("after");
-  });
-
-  test("createRedactingTee hides the secret across a TRUE mid-marker / mid-secret split", () => {
-    const tee = createRedactingTee();
-    const half = Math.floor(SECRET_PASSWORD.length / 2);
-    const firstHalf = SECRET_PASSWORD.slice(0, half);
-    const secondHalf = SECRET_PASSWORD.slice(half);
-
-    // Split the BEGIN marker mid-bytes, and split the secret across two pushes
-    // while inside the redacted block.
-    const beginCut = Math.floor(PULUMI_OUTPUTS_BEGIN_MARKER.length / 2);
-    const out: string[] = [];
-    out.push(tee.push(`before\n${PULUMI_OUTPUTS_BEGIN_MARKER.slice(0, beginCut)}`));
-    out.push(tee.push(`${PULUMI_OUTPUTS_BEGIN_MARKER.slice(beginCut)}\n${firstHalf}`));
-    out.push(
-      tee.push(`${secondHalf}\n${PULUMI_OUTPUTS_END_MARKER}\nafter\n`),
-    );
-    out.push(tee.flush());
-
-    const consoleText = out.join("");
-    expect(consoleText).not.toContain(SECRET_PASSWORD);
-    expect(consoleText).toContain("before");
-    expect(consoleText).toContain("after");
-  });
-});
-
-describe("parsePulumiHosts threads the postgres output per host", () => {
-  function wrap(obj: unknown): string {
-    return `noise\n${BEGIN}\n${JSON.stringify(obj)}\n${END}\ntrailing\n`;
-  }
-
+describe("resolveStackHosts threads the postgres output per host", () => {
   test("stamps host/password from the postgres output onto backend-tagged hosts", () => {
-    const parsed = parsePulumiHosts(wrap(SAMPLE_OUTPUT));
+    const parsed = resolveStackHosts(clone(SAMPLE_OUTPUT));
     const host = parsed.hosts.find((h) => h.hostname === "ssh0.example.com");
     expect(host).toBeDefined();
     expect(host?.postgresHost).toBe(SAMPLE_OUTPUT.postgres.host);
@@ -149,8 +41,6 @@ describe("parsePulumiHosts threads the postgres output per host", () => {
   });
 
   test("stamps postgres only onto backend hosts, never web-only hosts", () => {
-    // Local output (don't mutate the shared SAMPLE_OUTPUT) with a postgres block
-    // and two hosts: one backend, one web-only.
     const output = {
       hosts: [
         {
@@ -174,8 +64,10 @@ describe("parsePulumiHosts threads the postgres output per host", () => {
       },
     };
 
-    const parsed = parsePulumiHosts(wrap(output));
-    const backend = parsed.hosts.find((h) => h.hostname === "backend.example.com");
+    const parsed = resolveStackHosts(clone(output));
+    const backend = parsed.hosts.find(
+      (h) => h.hostname === "backend.example.com",
+    );
     const web = parsed.hosts.find((h) => h.hostname === "web.example.com");
 
     expect(backend?.postgresHost).toBe(output.postgres.host);
@@ -188,49 +80,28 @@ describe("parsePulumiHosts threads the postgres output per host", () => {
     expect(web?.postgresPassword).toBeUndefined();
   });
 
-  test("parses the JSON even when Pulumi interleaves terminal control sequences", () => {
-    // Under a TTY (`docker run -it`) Pulumi emits ANSI/OSC control sequences to
-    // stdout — color codes, cursor moves, `ESC[6n` cursor-position reports, and
-    // `ESC]11;?BEL` background-color queries — which land inside the captured
-    // output block and break a naive JSON.parse.
-    const CSI = "\x1b[38;5;13m\x1b[1m";
-    const RESET = "\x1b[0m";
-    const OSC = "\x1b]11;?\x1b\\\x1b[6n";
-    const json = JSON.stringify(SAMPLE_OUTPUT);
-    const contaminated =
-      `${CSI}noise${RESET}\n${BEGIN}\n${OSC}${json}${OSC}\n${END}${RESET}\n`;
-
-    const parsed = parsePulumiHosts(contaminated);
-    const host = parsed.hosts.find((h) => h.hostname === "ssh0.example.com");
-    expect(host).toBeDefined();
-    expect(host?.postgresHost).toBe(SAMPLE_OUTPUT.postgres.host);
-    expect(host?.postgresPassword).toBe(SAMPLE_OUTPUT.postgres.password);
-  });
-
   test("leaves hosts unchanged when the stack has no postgres output", () => {
-    const parsed = parsePulumiHosts(
-      wrap({
-        hosts: [
-          {
-            hostname: "ssh0.example.com",
-            tags: ["prod", "backend"],
-            effectiveDomain: "example.com",
-          },
-        ],
-      }),
-    );
-    const host = parsed.hosts[0];
+    const parsed = resolveStackHosts({
+      hosts: [
+        {
+          hostname: "ssh0.example.com",
+          tags: ["prod", "backend"],
+          effectiveDomain: "example.com",
+        },
+      ],
+    });
+    const host = parsed.hosts[0]!;
     expect(host.postgresHost).toBeUndefined();
     expect(host.postgresPort).toBeUndefined();
     expect(host.postgresPassword).toBeUndefined();
   });
+
+  test("returns no hosts for empty outputs (e.g. a never-deployed stack)", () => {
+    expect(resolveStackHosts({}).hosts).toEqual([]);
+  });
 });
 
 describe("mergeHosts keeps per-stack credentials isolated", () => {
-  function wrap(obj: unknown): string {
-    return `noise\n${BEGIN}\n${JSON.stringify(obj)}\n${END}\ntrailing\n`;
-  }
-
   test("each stack's password rides only its own backend host", () => {
     const passwordA = "stack-A-pa55word";
     const passwordB = "stack-B-pa55word";
@@ -271,8 +142,8 @@ describe("mergeHosts keeps per-stack credentials isolated", () => {
     };
 
     const merged = mergeHosts(
-      parsePulumiHosts(wrap(stackA)),
-      parsePulumiHosts(wrap(stackB)),
+      resolveStackHosts(stackA),
+      resolveStackHosts(stackB),
     );
 
     const a = merged.hosts.find((h) => h.hostname === "a-backend.example.com");
@@ -285,7 +156,7 @@ describe("mergeHosts keeps per-stack credentials isolated", () => {
   });
 });
 
-describe("buildPulumiRunArgs carries the database inputs", () => {
+describe("buildStackConfig carries the database inputs", () => {
   const savedEnv = { ...process.env };
   const BASE_ENV = {
     DOMAIN: "example.com",
@@ -294,8 +165,6 @@ describe("buildPulumiRunArgs carries the database inputs", () => {
     CLOUDFLARE_ACCOUNT_ID: "cf-acct",
     PULUMI_PROJECT_NAME: "proj",
     PULUMI_STACK: "prod",
-    PULUMI_SERVERS_JSON: "[]",
-    PULUMI_DATABASE_JSON: '{"enabled":true,"version":"16"}',
   };
 
   beforeEach(() => {
@@ -311,27 +180,20 @@ describe("buildPulumiRunArgs carries the database inputs", () => {
     process.env = { ...savedEnv };
   });
 
-  test("passes POSTGRES_USER/DB and PULUMI_DATABASE_JSON as -e flags, never POSTGRES_PORT", () => {
-    const args = buildPulumiRunArgs("up", BASE_ENV, "/tmp/key", true);
-    const joined = args.join(" ");
-    expect(joined).toContain("-e POSTGRES_USER=appuser");
-    expect(joined).toContain("-e POSTGRES_DB=appdb");
-    expect(joined).toContain(
-      `-e PULUMI_DATABASE_JSON=${BASE_ENV.PULUMI_DATABASE_JSON}`,
-    );
+  test("sets postgresUser/postgresDb when the database tier is enabled, never POSTGRES_PORT", () => {
+    const config = buildStackConfig(BASE_ENV, "/tmp/key", true);
+    expect(config["proj:postgresUser"]).toEqual({ value: "appuser" });
+    expect(config["proj:postgresDb"]).toEqual({ value: "appdb" });
     // The port is derived from the cluster output, never passed into Pulumi —
-    // even though it is present in process.env here, it must not leak into args.
-    expect(joined).not.toContain("POSTGRES_PORT");
+    // even though it is present in process.env here, it must not leak in.
+    expect(config["proj:postgresPort"]).toBeUndefined();
+    expect(Object.values(config).map((v) => v.value)).not.toContain("25060");
   });
 
-  test("defaults PULUMI_DATABASE_JSON to {} when absent", () => {
-    const args = buildPulumiRunArgs(
-      "up",
-      { ...BASE_ENV, PULUMI_DATABASE_JSON: "" },
-      "/tmp/key",
-      true,
-    );
-    expect(args.join(" ")).toContain("-e PULUMI_DATABASE_JSON={}");
+  test("omits postgresUser/postgresDb when the database tier is disabled", () => {
+    const config = buildStackConfig(BASE_ENV, "/tmp/key", false);
+    expect(config["proj:postgresUser"]).toBeUndefined();
+    expect(config["proj:postgresDb"]).toBeUndefined();
   });
 });
 
@@ -374,7 +236,7 @@ describe("buildAnsibleEnv keeps HOST/PORT/PASSWORD out of the global env", () =>
   });
 
   test("includes USER/DB/SSLMODE/PGSSLMODE but never HOST/PORT/PASSWORD", () => {
-    // A backend host carrying postgres data (as parsePulumiHosts would stamp it)
+    // A backend host carrying postgres data (as resolveStackHosts would stamp it)
     // is what gates the global USER/DB/SSLMODE injection.
     const pulumiHosts = {
       hosts: [

@@ -1,12 +1,12 @@
 # Pulumi Infrastructure
 
-This directory contains a Dockerised Pulumi program that provisions the Cloudflare environment. The program supports multiple stacks (`dev`, `staging`, `prod`) configured via `maestro.yaml`.
+This directory contains the Pulumi program that provisions the Cloudflare environment. The program supports multiple stacks (`dev`, `staging`, `prod`) configured via `maestro.yaml`.
 
 ## Workflow
 
-Pulumi is orchestrated from TypeScript by [`lib/runPulumi.ts`](../lib/runPulumi.ts), which is invoked when you run `bun .` from the repo root. It reads `maestro.yaml`, builds the `maestro_pulumi` Docker image, and runs it once per stack, passing configuration into the container via `-e` flags and mounting the SSH key.
+Pulumi is orchestrated from TypeScript by [`lib/runPulumi.ts`](../lib/runPulumi.ts), which is invoked when you run `bun .` from the repo root. It imports the program from this directory (`pulumi/index.ts`) and drives it **in-process** through the Pulumi [Automation API](https://www.pulumi.com/docs/iac/automation-api/) (`@pulumi/pulumi/automation`): once per stack it selects the stack (creating it if missing), applies the `maestro.yaml`-derived stack config, runs the requested command against the host `pulumi` CLI, and reads the stack outputs back as typed objects. No Docker is involved on the Pulumi path; the only host requirements are the `pulumi` CLI (validated at startup) and `ssh`/`scp` for the in-program provisioning commands. State lives in Pulumi Cloud, authenticated via the `PULUMI_ACCESS_TOKEN` env var (no interactive `pulumi login`).
 
-The Pulumi command (`up`, `refresh`, `cancel`, `output`, or `destroy`) is taken from `pulumi.command` in `maestro.yaml`. When `pulumi.enabled` is `false` but `ansible.enabled` is `true`, the `output` command is used to read existing stack outputs for Ansible.
+The Pulumi command (`up`, `refresh`, `cancel`, `output`, or `destroy`) is taken from `pulumi.command` in `maestro.yaml`. When `pulumi.enabled` is `false` but `ansible.enabled` is `true`, the `output` command is used to read existing stack outputs for Ansible — this path needs no cloud-provider credentials, only `PULUMI_ACCESS_TOKEN`.
 
 The Pulumi program provisions:
 
@@ -25,7 +25,7 @@ In the event that a server is destroyed, Pulumi correctly takes down the tunnels
 
 ## Managed Database (Postgres)
 
-When `pulumi.database.enabled` is `true`, the program provisions a database tier per stack via the `ManagedDatabase` component resource (`image/resources/managedDatabase.ts`), which mirrors the `VirtualServer` pattern:
+When `pulumi.database.enabled` is `true`, the program provisions a database tier per stack via the `ManagedDatabase` component resource (`resources/managedDatabase.ts`), which mirrors the `VirtualServer` pattern:
 
 - A `digitalocean.DatabaseCluster` (engine `pg`, pinned major version, sized from the merged `database` config, `nodeCount` 1 by default).
 - A `digitalocean.DatabaseDb` (named from `POSTGRES_DB`) and a `digitalocean.DatabaseUser` (named from `POSTGRES_USER`; DigitalOcean generates its password). The application user is never the cluster admin `doadmin`.
@@ -48,25 +48,25 @@ postgres = {
 }
 ```
 
-The `postgres` export is present only when the stack enabled the database. The password is a Pulumi **secret**, so it is masked (`[secret]`) in stack output unless `--show-secrets` is passed. The entrypoint prints stack outputs with `pulumi stack output --json --show-secrets` between the `__PULUMI_OUTPUTS_BEGIN__` / `__PULUMI_OUTPUTS_END__` markers; Maestro redacts that marker block from the teed console so the password never reaches the terminal or CI logs while still being captured for parsing (see [`lib/runPulumi.ts`](../lib/runPulumi.ts) and [`lib/helpers.ts`](../lib/helpers.ts)).
+The `postgres` export is present only when the stack enabled the database. The password is a Pulumi **secret**, so the streamed `pulumi up` console output masks it as `[secret]`. Maestro reads the real values in-process via the Automation API's `stack.outputs()` (which reveals secrets) and threads them onto the stack's backend hosts without ever printing them — the outputs object is never logged (see [`lib/runPulumi.ts`](../lib/runPulumi.ts) and [`lib/ssh.ts`](../lib/ssh.ts)).
 
 ## Configuration
 
-Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and passed into the container as `-e` flags:
+Configuration is read from `maestro.yaml` by `lib/runPulumi.ts` and applied to the stack via the Automation API's `setAllConfig` before provisioning commands (every key namespaced under the project, exactly as the old `pulumi config set` flow did):
 
-| Variable                | Source in maestro.yaml                  |
-| ----------------------- | --------------------------------------- |
-| `DOMAIN`                | `domain`                                |
-| `CLOUDFLARE_ACCOUNT_ID` | `pulumi.cloudflare_account_id`          |
-| `SSH_PORT`              | `pulumi.ssh_port`                       |
-| `BACKEND_PORT`          | `ansible.backend.port`                  |
-| `PULUMI_STACK`          | Derived from `pulumi.stacks.<env>` keys |
-| `PULUMI_SERVERS_JSON`   | `pulumi.stacks.<env>.servers` (as JSON) |
-| `PULUMI_DATABASE_JSON`  | `pulumi.database` merged with `pulumi.stacks.<env>.database` (override wins), as JSON; defaults to `{}` |
-| `POSTGRES_USER`         | Bitwarden (used to create the dedicated DB user) |
-| `POSTGRES_DB`           | Bitwarden (used to create the app database)      |
+| Stack config key       | Source                                  |
+| ---------------------- | --------------------------------------- |
+| `domain`               | `domain`                                |
+| `cloudflareAccountId`  | `pulumi.cloudflare_account_id`          |
+| `sshKeyPath`           | Host path of the SSH key temp file (written from the `VPS_SSH_KEY` secret; stable per machine) |
+| `sshPort`              | `pulumi.ssh_port`                       |
+| `backendPort`          | `ansible.backend.port`                  |
+| `servers`              | `pulumi.stacks.<env>.servers` (as JSON) |
+| `database`             | `pulumi.database` merged with `pulumi.stacks.<env>.database` (override wins), as JSON; defaults to `{}` |
+| `postgresUser`         | Bitwarden `POSTGRES_USER` (used to create the dedicated DB user; set only when the database tier is enabled) |
+| `postgresDb`           | Bitwarden `POSTGRES_DB` (used to create the app database; set only when the database tier is enabled)       |
 
-The database `-e` values are applied inside the container via `pulumi config set` (`<project>:database`, `:postgresUser`, `:postgresDb`). The program reads them to create the cluster, the dedicated user, and the app database. `POSTGRES_USER`/`DB` are required only when the merged `database.enabled` is `true`. The port is **not** an input: the backend connects on the cluster's DO-assigned port, surfaced as the `postgres.port` stack output and threaded to the backend per-stack like host and password.
+The stack itself (one per `pulumi.stacks.<env>` key) is selected/created against the project named by `pulumi.projectName`. The program reads the database keys to create the cluster, the dedicated user, and the app database. The port is **not** an input: the backend connects on the cluster's DO-assigned port, surfaced as the `postgres.port` stack output and threaded to the backend per-stack like host and password.
 
 ## Required Secrets (from Bitwarden)
 
@@ -92,14 +92,14 @@ When `pulumi.database.enabled` is `true`, these additional Bitwarden values are 
 
 ## Components
 
-- [`lib/runPulumi.ts`](../lib/runPulumi.ts) validates configuration, builds the Docker image, and starts a container.
-- `image/` holds the Pulumi project.
-- `image/entrypoint.sh` runs inside the container and executes Pulumi commands.
-- `image/providers/` hosts services that discover infrastructure (e.g., Cloudflare zone ID).
-- `image/resources/` defines record components for provisioning resources.
+- [`lib/runPulumi.ts`](../lib/runPulumi.ts) validates configuration and drives the program through the Automation API.
+- `index.ts` is the Pulumi program entry point, imported by maestro and run in-process (its `@pulumi/*` packages are regular maestro dependencies).
+- `providers/` hosts services that discover infrastructure (e.g., Cloudflare zone ID).
+- `resources/` defines record components for provisioning resources.
+- `commands/` shells out to `ssh`/`scp` on the host (via `local.Command`) to install certificates and cloudflared on the droplets.
 
 ## Prerequisites
 
-- Docker installed locally (the script builds and runs a container).
+- The `pulumi` CLI installed locally (validated at startup; the Automation API drives it).
 - The base `domain` must already be an active zone in the Cloudflare account that `CLOUDFLARE_API_TOKEN` belongs to. The program looks up the zone by name (see `image/providers/`) and fails with `Cloudflare zone for <domain> not found.` if it is missing. Ownership is established out-of-band via Cloudflare nameserver delegation — see the [root README](../README.md#prerequisites).
 - The Cloudflare zone must be free of conflicting DNS records. The program creates the apex `A`, `www` `A`, and `api`/`ssh*` `CNAME` records itself and does not adopt pre-existing ones. If a record of a different type already occupies one of those names (e.g. a manual `www` `CNAME`), Cloudflare rejects the create with `A CNAME record with that host already exists` (error `81054`) and the run fails partway through — leaving any earlier resources (droplet, tunnel) live. Delete or `pulumi import` the conflicting record before re-running.

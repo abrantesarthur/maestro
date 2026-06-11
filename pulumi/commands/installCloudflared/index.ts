@@ -1,7 +1,7 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import path from "node:path";
-import { InstallCloudflaredOptions } from "./types";
+import type { InstallCloudflaredOptions } from "./types";
 
 /**
  * Creates a pulumi command that runs the start.sh script on create and stop.sh on destroy

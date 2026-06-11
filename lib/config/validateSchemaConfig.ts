@@ -53,7 +53,7 @@ export const validateSemanticConfig = async ({
 
   // Mixed-region guard: a stack gets a single region-scoped VPC and every droplet
   // must join it, so all servers in a stack must share one region. The stack's
-  // effective region is servers[0].region ?? "nyc1" (matching pulumi/image/index.ts).
+  // effective region is servers[0].region ?? "nyc1" (matching pulumi/index.ts).
   // Servers that omit region inherit it; an explicit differing region is invalid.
   for (const [stackName, stack] of Object.entries(raw.pulumi?.stacks ?? {})) {
     const stackRegion = stack.servers[0]?.region ?? "nyc1";

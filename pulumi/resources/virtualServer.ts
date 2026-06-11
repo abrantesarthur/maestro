@@ -3,7 +3,7 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as digitalOcean from "@pulumi/digitalocean";
 import * as tls from "@pulumi/tls";
 import { installCertificate } from "../commands/installCertificate";
-import { Tunnel, TunnelIngress, TunnelIngressProtocol } from "./tunnel";
+import { Tunnel, type TunnelIngress, TunnelIngressProtocol } from "./tunnel";
 import { resourceType } from "./resourceType";
 import { NGINX_BACKEND_EDGE_PORT } from "../constants";
 
