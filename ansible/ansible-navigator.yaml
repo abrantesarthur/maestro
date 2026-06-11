@@ -12,15 +12,8 @@ ansible-navigator:
     image: ansible_ee:latest # Name of the execution environment image to run
     pull:
       policy: missing # Only pull the image if it’s not present locally
-    environment-variables: # forward host env vars into the execution-environment container
-      pass: # names of host env vars to pass through as-is (use `set:` for explicit NAME: value pairs)
-        - SSH_HOSTS
-        - SSH_KEY_PATH
-        - GHCR_TOKEN
-        - GHCR_USERNAME
-        - BACKEND_IMAGE
-        - BACKEND_IMAGE_TAG
-        - BACKEND_PORT
+    # Env vars are forwarded into the container via --penv
+    # (see buildPlaybookArgs in lib/runAnsible.ts).
   ansible:
     inventory:
       help: False # Do not show inventory help output

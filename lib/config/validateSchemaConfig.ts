@@ -140,5 +140,15 @@ export const validateSemanticConfig = async ({
         `ansible.backend.image and ansible.backend.tag are required when servers have the 'backend' role`,
       );
     }
+
+    // The migrate block is optional (absence = no migration), but when present
+    // its command must be non-empty — an empty argv would start the migration
+    // container with no command, which the codec cannot reject (empty array is
+    // a valid t.array(t.string)).
+    if (backendConfig.migrate && backendConfig.migrate.command.length === 0) {
+      throw new Error(
+        `ansible.backend.migrate.command must be a non-empty array`,
+      );
+    }
   }
 };

@@ -213,6 +213,9 @@ export const postgres = managedDatabase
       user: managedDatabase.user,
       database: managedDatabase.database,
       password: managedDatabase.password,
+      // doadmin creds, used only to grant the app user privileges before migrating.
+      adminUser: managedDatabase.adminUser,
+      adminPassword: managedDatabase.adminPassword,
       sslmode: "require",
     }
   : undefined;

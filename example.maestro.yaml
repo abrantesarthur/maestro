@@ -242,6 +242,20 @@ ansible:
       # REDIS_URL: redis://localhost:6379
       # API_KEY: your_api_key_here
 
+    # [Optional] Migration run before each deploy, as a one-shot container from
+    # the backend image, with the app's env, against the live DB. Non-zero exit
+    # aborts the deploy; the old container keeps serving. Omit to skip migrations.
+    # 'command' is the argv run inside the container (not a host shell line):
+    # migrate:
+    #   command: ["npm", "run", "migrate"]   # e.g. ["alembic", "upgrade", "head"]
+
+    # [Optional] Readiness probe for the blue/green cutover. Maestro polls this
+    # path on the new container until it returns 200 before flipping nginx to it;
+    # if it never passes, the deploy aborts and the old container keeps serving.
+    # Defaults to /health.
+    # healthCheck:
+    #   path: /health
+
 # ============================================
 # Secrets Configuration
 # ============================================

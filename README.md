@@ -76,6 +76,10 @@ ansible:
     port: 3000 # Backend port
     env: # Environment variables for container
       DATABASE_URL: postgres://...
+    migrate: # Optional: run a DB migration before each deploy (omit = no migration)
+      command: ["npm", "run", "migrate"] # argv run inside the backend image
+    healthCheck: # Optional: blue/green readiness probe
+      path: /health # HTTP path polled for 200 before cutover (default: /health)
 
 secrets:
   provider: bws # Secrets provider (bws = Bitwarden)
@@ -166,6 +170,34 @@ When `pulumi.database.enabled` is `true`, Maestro provisions a **DigitalOcean Ma
 The backend container ends up with `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, and `POSTGRES_SSLMODE=require`.
 
 > **Note:** `POSTGRES_USER`/`POSTGRES_DB` originate in Bitwarden but are also injected into the container environment (as `BACKEND_ENV_POSTGRES_USER`/`BACKEND_ENV_POSTGRES_DB`, see `buildAnsibleEnv`), so the backend can read them from either source — keep the two in sync. `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_PASSWORD` are DigitalOcean-derived and live only in the environment.
+
+### Zero-Downtime Backend Deploys & Migrations
+
+Backend deploys are **zero-downtime** by default. nginx stays up as a stable
+reverse proxy in front of the backend and Maestro swaps containers blue/green,
+so traffic is always being served.
+
+**Blue/green cutover.** The backend runs as one of two containers: `backend-blue`
+(on `ansible.backend.port`) and `backend-green` (on `ansible.backend.port + 1`),
+both bound to `127.0.0.1`. On each deploy Maestro starts the new image on the
+idle port while the live one keeps serving, waits for it to pass the health
+check, then points nginx at the new port and reloads (`nginx -s reload` drains
+in-flight requests). Only then does it stop the old container. If the new
+container never gets healthy, the old one keeps serving and the deploy fails —
+no half-deployed state.
+
+**Health check (`ansible.backend.healthCheck.path`).** Optional. The HTTP path
+polled for a `200` on the new container before cutover. Defaults to `/health`.
+The retry/timeout budget is fixed.
+
+**Migrations (`ansible.backend.migrate.command`).** Optional. An argv array
+(e.g. `["npm", "run", "migrate"]`, not a shell line) run once inside the backend
+image **before the new container starts**, against the live database, with the
+same environment as the app (including the per-stack `POSTGRES_*` values). A
+non-zero exit aborts the deploy before the app container is touched, so a bad
+migration never leaves a half-deployed stack. Omit the block to skip migrations.
+The DB password and other secrets stay on the `no_log`-guarded path and are
+never printed.
 
 ### Required Environment Variable
 

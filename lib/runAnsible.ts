@@ -221,7 +221,7 @@ async function buildExecutionEnvironment(): Promise<void> {
 
 /**
  * Assemble the `ansible-navigator run` argv for a playbook, including the
- * SSH-key mount and the static + dynamic `--penv` flags.
+ * SSH-key mount and a `--penv` flag for every env var the playbooks need.
  */
 export function buildPlaybookArgs(
   playbook: string,
@@ -229,29 +229,26 @@ export function buildPlaybookArgs(
   requiredVars: string[],
   env: Record<string, string> = {},
 ): string[] {
-  const penvArgs: string[] = [];
-  for (const varName of requiredVars) {
+  // Every env var the playbooks need is forwarded into the
+  // execution-environment container with --penv.
+  const penvNames = new Set<string>();
+
+  // Secrets living in process.env: GHCR pull credentials and user-declared vars.
+  for (const varName of ["GHCR_TOKEN", "GHCR_USERNAME", ...requiredVars]) {
     if (varName) {
-      penvArgs.push("--penv", varName);
+      penvNames.add(varName);
     }
   }
 
-  // Forward the dynamically-named container env vars (BACKEND_ENV_*,
-  // WEB_DOCKER_ENV_*) into the execution-environment container. Without this
-  // the backend_app/web roles see an empty environment and start the container
-  // with no env (e.g. missing BWS_ACCESS_TOKEN), causing a crash loop.
-  for (const varName of Object.keys(env)) {
-    if (
-      varName.startsWith("BACKEND_ENV_") ||
-      varName.startsWith("WEB_DOCKER_ENV_")
-    ) {
-      penvArgs.push("--penv", varName);
+  // Everything from buildAnsibleEnv; skip empties so unset stays unset.
+  for (const [varName, value] of Object.entries(env)) {
+    if (value) {
+      penvNames.add(varName);
     }
   }
 
-  // The static vars (SSH_HOSTS, GHCR_TOKEN, etc.) are forwarded via the
-  // execution-environment.environment-variables.pass list in
-  // ansible-navigator.yaml, so only the dynamically-named vars need --penv here.
+  const penvArgs = [...penvNames].flatMap((name) => ["--penv", name]);
+
   return [
     "ansible-navigator",
     "run",
@@ -303,6 +300,10 @@ export function buildAnsibleEnv(
     BACKEND_PORT: String(ansible?.backend?.port ?? ""),
     BACKEND_IMAGE: ansible?.backend?.image ?? "",
     BACKEND_IMAGE_TAG: ansible?.backend?.tag ?? "",
+    BACKEND_MIGRATE_COMMAND: ansible?.backend?.migrate
+      ? JSON.stringify(ansible.backend.migrate.command)
+      : "",
+    BACKEND_HEALTH_PATH: ansible?.backend?.healthCheck?.path ?? "/health",
     WEB_MODE: resolveWebMode(config),
     // FIXME: ensure empty value is ok
     WEB_STATIC_SOURCE: ansible?.web?.static?.source ?? "",

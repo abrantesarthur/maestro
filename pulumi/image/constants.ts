@@ -1,5 +1,10 @@
 import * as digitalOcean from "@pulumi/digitalocean";
 
+// Loopback port nginx listens on; the Cloudflare tunnel routes api.<domain> here
+// (not the backend port), so nginx stays the stable edge while blue/green swaps
+// behind it. MUST match `backend_proxy_edge_port` in the ansible nginx role.
+export const NGINX_BACKEND_EDGE_PORT = 8080;
+
 // Map DigitalOcean droplet size strings (from config) to the DropletSlug enum.
 export const SIZE_MAP: Record<string, digitalOcean.DropletSlug> = {
   "s-1vcpu-1gb": digitalOcean.DropletSlug.DropletS1VCPU1GB,

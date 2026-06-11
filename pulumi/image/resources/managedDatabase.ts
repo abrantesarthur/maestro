@@ -51,6 +51,10 @@ export class ManagedDatabase extends pulumi.ComponentResource {
   readonly database: pulumi.Output<string>;
   /** The DO-generated application user password (a Pulumi secret) */
   readonly password: pulumi.Output<string>;
+  /** Cluster admin (`doadmin`) role, used only to grant the app user privileges. */
+  readonly adminUser: pulumi.Output<string>;
+  /** The cluster admin (`doadmin`) password (a Pulumi secret). */
+  readonly adminPassword: pulumi.Output<string>;
 
   constructor(args: ManagedDatabaseArgs, opts?: pulumi.ComponentResourceOptions) {
     const name = ManagedDatabase.buildResourceName(args);
@@ -129,6 +133,8 @@ export class ManagedDatabase extends pulumi.ComponentResource {
     this.user = pulumi.output(appUser.name);
     this.database = pulumi.output(appDatabase.name);
     this.password = pulumi.secret(appUser.password);
+    this.adminUser = cluster.user;
+    this.adminPassword = pulumi.secret(cluster.password);
 
     this.registerOutputs({
       host: this.host,
@@ -136,6 +142,8 @@ export class ManagedDatabase extends pulumi.ComponentResource {
       user: this.user,
       database: this.database,
       password: this.password,
+      adminUser: this.adminUser,
+      adminPassword: this.adminPassword,
     });
   }
 

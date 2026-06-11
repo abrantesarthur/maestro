@@ -44,6 +44,8 @@ class HostEntry(TypedDict, total=False):
     postgresHost: str  # Optional per-stack Postgres private endpoint host (DO-generated)
     postgresPort: str  # Optional per-stack Postgres cluster port (DO-assigned)
     postgresPassword: str  # Optional per-stack Postgres app-user password (DO-generated secret)
+    postgresAdminUser: str  # Optional cluster admin (doadmin) user
+    postgresAdminPassword: str  # Optional cluster admin (doadmin) password (secret)
 
 
 def parse_hosts() -> List[HostEntry]:
@@ -132,6 +134,16 @@ def parse_hosts() -> List[HostEntry]:
             sys.stderr.write(f"Host entry for {hostname} has an invalid 'postgresPassword' (must be a string).\n")
             sys.exit(1)
 
+        postgres_admin_user = host_entry.get("postgresAdminUser")
+        if postgres_admin_user is not None and not isinstance(postgres_admin_user, str):
+            sys.stderr.write(f"Host entry for {hostname} has an invalid 'postgresAdminUser' (must be a string).\n")
+            sys.exit(1)
+
+        postgres_admin_password = host_entry.get("postgresAdminPassword")
+        if postgres_admin_password is not None and not isinstance(postgres_admin_password, str):
+            sys.stderr.write(f"Host entry for {hostname} has an invalid 'postgresAdminPassword' (must be a string).\n")
+            sys.exit(1)
+
         host_entry_normalized: HostEntry = {
             "hostname": hostname.strip(),
             "tags": sorted(set(tags)),
@@ -146,6 +158,10 @@ def parse_hosts() -> List[HostEntry]:
             host_entry_normalized["postgresPort"] = postgres_port.strip()
         if postgres_password is not None:
             host_entry_normalized["postgresPassword"] = postgres_password
+        if postgres_admin_user is not None:
+            host_entry_normalized["postgresAdminUser"] = postgres_admin_user.strip()
+        if postgres_admin_password is not None:
+            host_entry_normalized["postgresAdminPassword"] = postgres_admin_password
 
         normalized_hosts.append(host_entry_normalized)
 
@@ -183,6 +199,10 @@ def build_inventory(hosts: List[HostEntry]) -> Dict[str, Dict[str, dict]]:
             host_vars["postgres_port"] = host_entry["postgresPort"]
         if "postgresPassword" in host_entry:
             host_vars["postgres_password"] = host_entry["postgresPassword"]
+        if "postgresAdminUser" in host_entry:
+            host_vars["postgres_admin_user"] = host_entry["postgresAdminUser"]
+        if "postgresAdminPassword" in host_entry:
+            host_vars["postgres_admin_password"] = host_entry["postgresAdminPassword"]
         hostvars[host] = host_vars
         for tag in host_entry.get("tags", []):
             tag_groups.setdefault(tag, set()).add(host)

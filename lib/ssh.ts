@@ -12,6 +12,9 @@ export interface HostInfo {
   postgresHost?: string;
   postgresPort?: string;
   postgresPassword?: string;
+  /** Cluster admin (doadmin) creds — used only to grant the app user privileges. */
+  postgresAdminUser?: string;
+  postgresAdminPassword?: string;
 }
 
 export interface PulumiHosts {
@@ -168,6 +171,10 @@ export function parsePulumiHosts(output: string): PulumiHosts {
           host.postgresHost = postgres.host;
           host.postgresPort = String(postgres.port);
           host.postgresPassword = postgres.password;
+          // Only when present, so older stacks don't get undefined keys.
+          if (postgres.adminUser) host.postgresAdminUser = postgres.adminUser;
+          if (postgres.adminPassword)
+            host.postgresAdminPassword = postgres.adminPassword;
         }
       }
     }

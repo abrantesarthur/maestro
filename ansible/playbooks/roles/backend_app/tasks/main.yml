@@ -20,16 +20,34 @@
   when: backend_env_raw.stdout_lines | length == 0
   no_log: true  # keep masking consistent across both backend_env branches
 
-# POSTGRES_USER/DB and the constant SSLMODE travel globally via BACKEND_ENV_* (already merged above).
-# POSTGRES_HOST/POSTGRES_PORT/POSTGRES_PASSWORD are per-stack, DO-derived values threaded onto this
-# stack's backend host(s) as the postgres_host/postgres_port/postgres_password hostvars (see
-# inventory/hosts.py). Merge them into backend_env so the backend connects to its own isolated
-# database on the endpoint and port DigitalOcean actually assigned.
+# POSTGRES_HOST/PORT/PASSWORD are per-stack hostvars derived from DigitalOcean
+# (see inventory/hosts.py); merge them so each backend hits its own database.
+# POSTGRES_USER/DB and SSLMODE already arrived via BACKEND_ENV_* above.
 - name: Merge per-stack Postgres connection details into backend environment
   ansible.builtin.set_fact:
     backend_env: "{{ backend_env | combine({'POSTGRES_HOST': postgres_host, 'POSTGRES_PORT': postgres_port | string, 'POSTGRES_PASSWORD': postgres_password}) }}"
   when: postgres_host is defined
   no_log: true  # postgres_password is a secret
+
+# The app user lacks CREATE permissions by default; grant them.
+- name: Grant the app user privileges on its own database
+  community.docker.docker_container:
+    name: backend-db-grant
+    image: "{{ backend_db_client_image }}"
+    command:
+      - psql
+      - "postgresql://{{ postgres_admin_user }}:{{ postgres_admin_password }}@{{ postgres_host }}:{{ postgres_port }}/{{ backend_env.POSTGRES_DB }}?sslmode=require"
+      - "-v"
+      - "ON_ERROR_STOP=1"
+      - "-c"
+      - >-
+        GRANT CREATE ON DATABASE "{{ backend_env.POSTGRES_DB }}" TO "{{ backend_env.POSTGRES_USER }}";
+        GRANT CREATE, USAGE ON SCHEMA public TO "{{ backend_env.POSTGRES_USER }}";
+    detach: false
+    cleanup: true
+    recreate: true
+  no_log: true  # doadmin password in the connection string
+  when: postgres_admin_password is defined
 
 - name: Ensure GHCR credentials are present
   ansible.builtin.assert:
@@ -52,13 +70,148 @@
     source: pull
     force_source: true
 
-- name: Run backend container
+# --- Database migration (one-shot, between pull and green start) ---
+# Decode the JSON argv (e.g. ["npm","run","migrate"]) into a list; an empty
+# result skips the migration tasks. Ansible may pre-coerce the value to a list,
+# so only from_json non-empty strings.
+- name: Parse backend migration command
+  ansible.builtin.set_fact:
+    backend_migrate_command: >-
+      {{ backend_migrate_command_raw
+         if backend_migrate_command_raw is not string
+         else (backend_migrate_command_raw | from_json
+               if (backend_migrate_command_raw | length > 0) else []) }}
+
+# Runs before any app container is touched. cleanup: false on purpose — with
+# detach: false, cleanup would remove the container before we can read its exit code.
+- name: Run database migration (one-shot)
   community.docker.docker_container:
-    name: "{{ backend_container_name }}"
+    name: backend-migrate
+    image: "{{ backend_image }}:{{ backend_image_tag }}"
+    command: "{{ backend_migrate_command }}"
+    env: "{{ backend_env }}"
+    detach: false
+    cleanup: false
+    recreate: true
+  failed_when: false
+  no_log: true  # backend_env carries secrets (e.g. POSTGRES_PASSWORD)
+  when: backend_migrate_command | length > 0
+
+- name: Read migration container exit code
+  community.docker.docker_container_info:
+    name: backend-migrate
+  register: backend_migrate_info
+  no_log: true  # inspect output includes the container env (secrets)
+  when: backend_migrate_command | length > 0
+
+# Save failure logs before removing the container. Written to a file, not the
+# deploy output, since migration errors can include the connection string.
+- name: Save failed migration logs to the host
+  ansible.builtin.shell: |
+    mkdir -p /var/log/maestro
+    docker logs backend-migrate > /var/log/maestro/backend-migrate-failed.log 2>&1
+  changed_when: false
+  failed_when: false
+  when:
+    - backend_migrate_command | length > 0
+    - (backend_migrate_info.container.State.ExitCode | default(1)) != 0
+
+# Remove the one-shot container on success or failure, so it never lingers.
+- name: Remove migration container
+  community.docker.docker_container:
+    name: backend-migrate
+    state: absent
+  when: backend_migrate_command | length > 0
+
+- name: Abort deploy if database migration failed
+  ansible.builtin.fail:
+    msg: >-
+      Database migration failed (exited
+      {{ backend_migrate_info.container.State.ExitCode | default('non-zero') }}).
+      The new app container was NOT started; the previous container is still serving.
+      Logs saved on the host at /var/log/maestro/backend-migrate-failed.log.
+  when:
+    - backend_migrate_command | length > 0
+    - (backend_migrate_info.container.State.ExitCode | default(1)) != 0
+
+# --- Blue/green cutover ---
+# Track the live color by inspecting running containers (no state file).
+- name: Inspect running backend containers
+  community.docker.docker_container_info:
+    name: "{{ item }}"
+  loop:
+    - "{{ backend_container_name_blue }}"
+    - "{{ backend_container_name_green }}"
+  register: backend_container_states
+
+- name: Determine live and idle backend colors and ports
+  ansible.builtin.set_fact:
+    backend_blue_running: "{{ backend_container_states.results[0].container.State.Running | default(false) }}"
+    backend_green_running: "{{ backend_container_states.results[1].container.State.Running | default(false) }}"
+
+# Deploy to the idle color: blue if green is live, else green (the clean-host default).
+- name: Select idle color (target for the new container)
+  ansible.builtin.set_fact:
+    backend_target_color: "{{ 'blue' if (backend_green_running | bool) else 'green' }}"
+
+- name: Compute idle/live container names and ports
+  ansible.builtin.set_fact:
+    backend_idle_name: "{{ backend_container_name_blue if backend_target_color == 'blue' else backend_container_name_green }}"
+    backend_idle_port: "{{ backend_blue_port if backend_target_color == 'blue' else backend_green_port }}"
+
+# recreate: true only affects the idle name; the live container stays up.
+- name: Start new ({{ backend_target_color }}) backend container
+  community.docker.docker_container:
+    name: "{{ backend_idle_name }}"
     image: "{{ backend_image }}:{{ backend_image_tag }}"
     restart_policy: unless-stopped
     recreate: true
     published_ports:
-      - "{{ backend_bind_address }}:{{ backend_host_port }}:{{ backend_container_port }}"
+      - "{{ backend_bind_address }}:{{ backend_idle_port }}:{{ backend_container_port }}"
     env: "{{ backend_env }}"
   no_log: true  # backend_env carries secrets (e.g. POSTGRES_PASSWORD)
+
+# If the new container never goes healthy, remove it and fail the deploy —
+# no cutover happens and the old container keeps serving.
+- name: Cut over only once the new container is healthy
+  block:
+    - name: Wait for new backend container to become healthy
+      ansible.builtin.uri:
+        url: "http://{{ backend_bind_address }}:{{ backend_idle_port }}{{ backend_health_path }}"
+        status_code: 200
+      register: backend_health_result
+      until: backend_health_result.status == 200
+      retries: 30
+      delay: 2
+  rescue:
+    - name: Remove the unhealthy new container
+      community.docker.docker_container:
+        name: "{{ backend_idle_name }}"
+        state: absent
+    - name: Abort deploy — new container never became healthy
+      ansible.builtin.fail:
+        msg: >-
+          The new {{ backend_target_color }} container never passed its health
+          check and was removed. The previous container is still serving.
+
+# set_fact overrides the nginx role's default, so it proxies to the new color.
+- name: Expose the live backend port to the nginx role
+  ansible.builtin.set_fact:
+    backend_live_port: "{{ backend_idle_port }}"
+
+# Also record the live port on the host (for debugging / a standalone nginx run).
+- name: Ensure maestro state directory exists
+  ansible.builtin.file:
+    path: "{{ backend_upstream_port_file | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Publish live backend upstream port for nginx
+  ansible.builtin.copy:
+    dest: "{{ backend_upstream_port_file }}"
+    content: "{{ backend_idle_port }}"
+    mode: "0644"
+  notify: Reload nginx
+
+# NOTE: the old container is removed in backend.yml post_tasks, after nginx
+# reloads onto the new port — removing it here would leave nginx proxying a dead port.

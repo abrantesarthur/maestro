@@ -1,0 +1,37 @@
+# Backend reverse-proxy site (blue/green cutover edge).
+#
+# The backend container binds 127.0.0.1 only; nginx is the public edge. The
+# upstream member is repointed to the live (blue or green) host port on each
+# deploy and applied with a graceful `nginx -s reload`, so in-flight requests on
+# old workers drain while new requests route to the freshly-promoted container.
+upstream {{ backend_upstream_name }} {
+  server {{ backend_proxy_bind_address }}:{{ backend_live_port }};
+}
+
+server {
+  # The Cloudflare tunnel connects here over loopback. TLS ends at the Cloudflare
+  # edge, so this hop is plain HTTP (no cert). nginx is the stable origin; the
+  # blue/green deploy repoints the upstream behind it, so this port never changes.
+  listen {{ backend_proxy_bind_address }}:{{ backend_proxy_edge_port }};
+  server_name {{ backend_proxy_domain }};
+
+  access_log /var/log/nginx/{{ backend_proxy_site_name }}.access.log combined;
+  error_log  /var/log/nginx/{{ backend_proxy_site_name }}.error.log;
+
+  location / {
+    proxy_pass http://{{ backend_upstream_name }};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_buffering off;
+  }
+
+  add_header X-Content-Type-Options nosniff always;
+  add_header X-Frame-Options DENY always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+}

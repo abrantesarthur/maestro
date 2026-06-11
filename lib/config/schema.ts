@@ -286,7 +286,18 @@ const WebConfigCodec = t.exact(
 // Backend Config Codec
 // ============================================
 
-// FIXME: do we prefix backend env vars with BACKEND_ENV_ ?
+const MigrateConfigCodec = t.exact(
+  t.type({
+    command: t.array(t.string),
+  }),
+);
+
+const HealthCheckConfigCodec = t.exact(
+  t.partial({
+    path: t.string,
+  }),
+);
+
 const BackendConfigCodec = t.exact(
   t.intersection([
     t.type({
@@ -296,6 +307,8 @@ const BackendConfigCodec = t.exact(
     }),
     t.partial({
       env: t.record(t.string, t.string),
+      migrate: MigrateConfigCodec,
+      healthCheck: HealthCheckConfigCodec,
     }),
   ]),
 );

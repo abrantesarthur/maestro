@@ -388,6 +388,61 @@ pulumi:
       expect(stackDb?.size).toBe("db-s-2vcpu-4gb");
     });
 
+    test("accepts backend with a migrate command", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command:
+        - npm
+        - run
+        - migrate
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.migrate?.command).toEqual([
+        "npm",
+        "run",
+        "migrate",
+      ]);
+    });
+
+    test("accepts backend with a healthCheck path", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    healthCheck:
+      path: /ready
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.healthCheck?.path).toBe("/ready");
+    });
+
+    test("accepts backend with no migrate block (backward compatible)", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.image).toBe("myapp");
+      expect(result.ansible?.backend?.migrate).toBeUndefined();
+      expect(result.ansible?.backend?.healthCheck).toBeUndefined();
+    });
+
     test("accepts web static with image source", async () => {
       const yaml = `
 domain: example.com
@@ -497,6 +552,22 @@ ansible:
   backend:
     image: myapp
     tag: latest
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
+    test("rejects backend migrate without command field", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate: {}
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -687,6 +758,23 @@ ansible:
     image: myapp
     tag: latest
     port: "8080"
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
+    test("rejects backend.migrate.command as a string instead of array", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command: "npm run migrate"
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -1306,6 +1394,70 @@ pulumi:
       await expect(validateSchema(yaml)).rejects.toThrow(
         /stack "prod" defines a database override but pulumi\.database is not configured/,
       );
+    });
+
+    test("rejects an empty migrate.command array", async () => {
+      // The codec accepts an empty array (t.array(t.string)); the semantic
+      // check is what rejects it.
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command: []
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.backend.migrate.command must be a non-empty array",
+      );
+    });
+
+    test("accepts a non-empty migrate.command with the backend role", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command:
+        - npm
+        - run
+        - migrate
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.migrate?.command).toEqual([
+        "npm",
+        "run",
+        "migrate",
+      ]);
     });
 
     test("rejects config with source local but missing dist", async () => {
