@@ -1,6 +1,6 @@
 {
   "name": "@arthuroabrantes/maestro",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Provision DigitalOcean infrastructure from a single maestro.yaml (Pulumi + Ansible)",
   "type": "module",
   "bin": {
