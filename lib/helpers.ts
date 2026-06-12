@@ -4,27 +4,63 @@
  */
 
 import { $ } from "bun";
-import { chmod } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 
 // ============================================
 // CLI Parsing
 // ============================================
 
-export function parseArgs(): { dryRun: boolean } {
-  const args = Bun.argv.slice(2);
+export interface CliArgs {
+  dryRun: boolean;
+  /** Path to maestro.yaml as given on the CLI (default: ./maestro.yaml in cwd) */
+  configPath: string;
+}
 
-  for (const arg of args) {
+const USAGE = `Usage: maestro [--config <path>] [--dry-run]
+
+Options:
+  --config <path>  Path to maestro.yaml (default: ./maestro.yaml in the
+                   current working directory)
+  --dry-run        Validate the config and display settings without provisioning
+  --help           Show this help message`;
+
+export function parseArgs(argv: string[] = Bun.argv.slice(2)): CliArgs {
+  const parsed: CliArgs = {
+    dryRun: false,
+    configPath: "./maestro.yaml",
+  };
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
     if (arg === "--dry-run") {
-      continue;
+      parsed.dryRun = true;
+    } else if (arg === "--config") {
+      const value = argv[++i];
+      if (!value) {
+        console.error("Missing value for --config");
+        console.error(USAGE);
+        process.exit(1);
+      }
+      parsed.configPath = value;
+    } else if (arg.startsWith("--config=")) {
+      const value = arg.slice("--config=".length);
+      if (!value) {
+        console.error("Missing value for --config");
+        console.error(USAGE);
+        process.exit(1);
+      }
+      parsed.configPath = value;
+    } else if (arg === "--help" || arg === "-h") {
+      console.log(USAGE);
+      process.exit(0);
+    } else {
+      console.error(`Unknown option: ${arg}`);
+      console.error(USAGE);
+      process.exit(1);
     }
-    console.error(`Unknown option: ${arg}`);
-    console.error(`Usage: bun . [--dry-run]`);
-    process.exit(1);
   }
 
-  return {
-    dryRun: args.includes("--dry-run"),
-  };
+  return parsed;
 }
 
 // ============================================
@@ -103,8 +139,22 @@ const LEGACY_TEMP_FILE_PREFIX = "secret_";
  * Get the secure temp directory for the current platform
  * Uses $TMPDIR (per-user on macOS) with fallback to /tmp
  */
-function getSecureTempDir(): string {
+export function getSecureTempDir(): string {
   return process.env["TMPDIR"] ?? "/tmp";
+}
+
+/**
+ * Create a unique temp directory with the maestro prefix. Swept by
+ * cleanupStaleTempFiles on the next run if the owning process crashes
+ * before removing it.
+ *
+ * @param label - Short label distinguishing the directory's purpose
+ * @returns The absolute path to the created directory
+ */
+export async function createTempDir(label: string): Promise<string> {
+  const path = `${getSecureTempDir()}/${TEMP_FILE_PREFIX}${label}_${crypto.randomUUID()}`;
+  await mkdir(path, { recursive: true });
+  return path;
 }
 
 /**
@@ -184,6 +234,13 @@ export async function cleanupStaleTempFiles(): Promise<void> {
       await $`find ${tempDir} -maxdepth 1 -name "${TEMP_FILE_PREFIX}*" -type f -delete`.quiet();
     if (result.exitCode !== 0) {
       // Silently ignore errors - stale files are not critical
+    }
+    // Also sweep stale staging directories (e.g. website assets from runs
+    // that crashed before their own cleanup)
+    const dirResult =
+      await $`find ${tempDir} -maxdepth 1 -name "${TEMP_FILE_PREFIX}*" -type d -exec rm -rf {} +`.quiet();
+    if (dirResult.exitCode !== 0) {
+      // Silently ignore errors - stale dirs are not critical
     }
     // Also sweep legacy secret_* files left behind by the old shell implementation
     // (may contain decrypted SSH keys from prior crashed runs)

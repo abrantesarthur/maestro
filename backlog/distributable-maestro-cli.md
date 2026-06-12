@@ -1,14 +1,9 @@
 # Distributable Maestro — Versioned CLI Consumable by Any Application
 
-> **Prerequisite:** `backlog/pulumi-automation-api.md` is executed first. This
-> spec assumes Pulumi already runs **in-process via the Automation API** —
-> there is no Pulumi Docker image; the only internal image is the Ansible
-> execution environment (EE).
-
 ## Background — where maestro is today
 
 Maestro provisions DigitalOcean infrastructure from a single `maestro.yaml`:
-**Pulumi** (infrastructure-as-code) runs in-process via the Automation API,
+**Pulumi** runs in-process via the Automation API,
 and **Ansible** (server/container configuration) runs in a containerized
 execution environment. Today maestro is **repo-centric**: the only way to use
 it is to clone this repository, place a `maestro.yaml` at the repo root, and

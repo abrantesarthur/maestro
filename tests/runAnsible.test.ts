@@ -60,6 +60,31 @@ describe("buildPlaybookArgs", () => {
     expect(joined).toContain("--penv REAL");
   });
 
+  test("mounts the staged website assets dir when provided", () => {
+    const args = buildPlaybookArgs("web.yml", "/tmp/key", [], {}, {
+      websiteAssetsDir: "/tmp/maestro_website_abc",
+    });
+    expect(args).toContain(
+      "--container-options=-v=/tmp/maestro_website_abc:/opt/website:ro",
+    );
+    // the ssh key mount must survive alongside the website mount
+    expect(args).toContain(
+      "--container-options=-v=/tmp/key:/tmp/vps_ssh_key:ro",
+    );
+  });
+
+  test("omits the website mount when no assets dir is provided", () => {
+    const args = buildPlaybookArgs("backend.yml", "/tmp/key", []);
+    expect(args.join(" ")).not.toContain("/opt/website");
+  });
+
+  test("writes the navigator log to the temp dir, not the package dir", () => {
+    const args = buildPlaybookArgs("web.yml", "/tmp/key", []);
+    const lfIndex = args.indexOf("--lf");
+    expect(lfIndex).toBeGreaterThan(-1);
+    expect(args[lfIndex + 1]).toMatch(/maestro_ansible-navigator\.log$/);
+  });
+
   test("forwards every non-empty env var via --penv, skipping empty ones", () => {
     const args = buildPlaybookArgs("backend.yml", "/tmp/key", [], {
       BACKEND_ENV_BWS_ACCESS_TOKEN: "token",

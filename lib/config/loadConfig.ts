@@ -1,6 +1,7 @@
 // ============================================
 // Config Loading
 // ============================================
+import { dirname, resolve } from "node:path";
 import { type MaestroConfig } from "./schema";
 import { validateSchema } from "./validateSchema";
 
@@ -14,9 +15,8 @@ export async function loadConfig(configPath: string): Promise<MaestroConfig> {
     );
   }
 
-  // validate the Maestro configuration according to the yaml schema
+  // Validate the configuration against the yaml schema; relative paths in the
+  // config resolve against the config file's directory, not the cwd.
   const content = await file.text();
-  const raw = await validateSchema(content);
-
-  return raw;
+  return validateSchema(content, dirname(resolve(configPath)));
 }

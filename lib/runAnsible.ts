@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { rm, mkdir } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { ServerRole, type MaestroConfig } from "./config/index.ts";
 import {
   log,
@@ -7,18 +8,36 @@ import {
   requireVar,
   commandExists,
   runCommand,
+  createTempDir,
+  getSecureTempDir,
 } from "./helpers.ts";
 import { requireBwsSecret } from "./secrets.ts";
 import { buildWebsiteAssets } from "./website.ts";
 import { type PulumiHosts } from "./hosts.ts";
 
-const SCRIPT_DIR = import.meta.dir.replace(/\/lib$/, "");
-const ANSIBLE_DIR = `${SCRIPT_DIR}/ansible`;
+// Internal assets (playbooks, EE definition) travel with the installed
+// package, so they resolve relative to this file — never relative to cwd.
+const PACKAGE_DIR = import.meta.dir.replace(/\/lib$/, "");
+const ANSIBLE_DIR = `${PACKAGE_DIR}/ansible`;
 const EE_DEFINITION_FILE = `${ANSIBLE_DIR}/execution_environment/execution-environment.yml`;
-const WEBSITE_ASSETS_DIR = `${ANSIBLE_DIR}/execution_environment/files/website`;
+/**
+ * Tag for the locally built EE image. Matches the image name in
+ * ansible/ansible-navigator.yaml.
+ */
 const EE_IMAGE = "ansible_ee";
 /** Path the SSH private key is mounted to inside the EE container */
 const CONTAINER_SSH_KEY_PATH = "/tmp/vps_ssh_key";
+/**
+ * Path website assets are mounted to inside the EE container. Must match
+ * `website_src_dir` in ansible/playbooks/roles/nginx/defaults/main.yml.
+ */
+const CONTAINER_WEBSITE_DIR = "/opt/website";
+
+/** Per-playbook runtime options threaded into ansible-navigator flags */
+export interface PlaybookRunOptions {
+  /** Host directory with built website assets, mounted at CONTAINER_WEBSITE_DIR */
+  websiteAssetsDir?: string | null;
+}
 
 /** Derive the web mode from the typed config ("docker", "static", or ""). */
 function resolveWebMode(config: MaestroConfig): string {
@@ -104,130 +123,187 @@ async function ensureAnsibleTooling(): Promise<void> {
   }
 }
 
-/** Recreate the website assets directory as empty. */
-async function resetWebsiteAssetsDir(): Promise<void> {
-  await rm(WEBSITE_ASSETS_DIR, { recursive: true, force: true });
-  await mkdir(WEBSITE_ASSETS_DIR, { recursive: true });
-}
-
 /**
- * Prepare static website assets for the execution environment, mirroring
- * ansible/run.sh: build from a local directory, extract from a container
- * image, or create an empty directory when web provisioning is skipped.
+ * Stage static website assets into a temp directory that is volume-mounted
+ * into the EE container at runtime (the EE image itself is app-agnostic).
+ * Builds from a local directory or extracts from a container image.
+ *
+ * @returns The staging directory to mount, or null when web provisioning is
+ *   skipped or the web tier is not in static mode
  */
 async function prepareWebsiteAssets(
   config: MaestroConfig,
   skipWeb: boolean,
-): Promise<void> {
+): Promise<string | null> {
   const web = config.ansible?.web;
   const webMode = resolveWebMode(config);
 
-  if (!skipWeb && webMode === "static") {
-    const source = web?.static?.source;
-    if (source === "local") {
-      log("Preparing static website assets from local directory...");
-      await buildWebsiteAssets({
-        websiteDir: web!.static!.dir!,
-        outputDir: WEBSITE_ASSETS_DIR,
-        buildCommand: web?.static?.build,
-        distDir: web?.static?.dist,
-      });
-      return;
+  if (skipWeb || webMode !== "static") {
+    log("Skipping website assets preparation...");
+    return null;
+  }
+
+  const stagingDir = await createTempDir("website");
+  const source = web?.static?.source;
+
+  if (source === "local") {
+    log("Preparing static website assets from local directory...");
+    await buildWebsiteAssets({
+      websiteDir: web!.static!.dir!,
+      outputDir: stagingDir,
+      buildCommand: web?.static?.build,
+      distDir: web?.static?.dist,
+    });
+    return stagingDir;
+  }
+
+  if (source === "image") {
+    log("Extracting static website assets from container image...");
+
+    const ref = `${web!.static!.image}:${web?.static?.tag || "latest"}`;
+
+    const pull = await runCommand(["docker", "pull", ref], {
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    if (pull.exitCode !== 0) {
+      throw new Error(`failed to pull image "${ref}".`);
     }
 
-    if (source === "image") {
-      log("Extracting static website assets from container image...");
-      await resetWebsiteAssetsDir();
+    const create = await runCommand(["docker", "create", ref], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (create.exitCode !== 0) {
+      throw new Error(`failed to create container from image "${ref}".`);
+    }
+    const containerId = create.stdout.trim();
 
-      const ref = `${web!.static!.image}:${web?.static?.tag || "latest"}`;
-
-      const pull = await runCommand(["docker", "pull", ref], {
-        stdin: "ignore",
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      if (pull.exitCode !== 0) {
-        throw new Error(`failed to pull image "${ref}".`);
+    try {
+      const path = web?.static?.path || "/app/dist";
+      const cp = await runCommand(
+        ["docker", "cp", `${containerId}:${path}/.`, `${stagingDir}/`],
+        { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+      );
+      if (cp.exitCode !== 0) {
+        throw new Error(`failed to copy assets out of image "${ref}".`);
       }
-
-      const create = await runCommand(["docker", "create", ref], {
+    } finally {
+      await runCommand(["docker", "rm", "-f", containerId], {
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
       });
-      if (create.exitCode !== 0) {
-        throw new Error(`failed to create container from image "${ref}".`);
-      }
-      const containerId = create.stdout.trim();
-
-      try {
-        const path = web?.static?.path || "/app/dist";
-        const cp = await runCommand(
-          [
-            "docker",
-            "cp",
-            `${containerId}:${path}/.`,
-            `${WEBSITE_ASSETS_DIR}/`,
-          ],
-          { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
-        );
-        if (cp.exitCode !== 0) {
-          throw new Error(`failed to copy assets out of image "${ref}".`);
-        }
-      } finally {
-        await runCommand(["docker", "rm", "-f", containerId], {
-          stdin: "ignore",
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-      }
-      return;
     }
+    return stagingDir;
   }
 
-  log("Skipping website assets preparation; creating empty directory...");
-  await resetWebsiteAssetsDir();
+  throw new Error(`unsupported web static source "${source}".`);
 }
 
 /**
- * Build the Ansible execution environment image.
+ * Fingerprint the EE definition inputs. The hash changes whenever the files
+ * the image is built from change (e.g. on a maestro upgrade), so an image
+ * tagged with it can be reused safely.
+ */
+async function eeDefinitionHash(): Promise<string> {
+  const hash = createHash("sha256");
+  for (const file of [
+    EE_DEFINITION_FILE,
+    `${ANSIBLE_DIR}/execution_environment/requirements.yml`,
+  ]) {
+    hash.update(await Bun.file(file).text());
+  }
+  return hash.digest("hex").slice(0, 12);
+}
+
+/** Check whether a Docker image reference exists locally. */
+async function dockerImageExists(ref: string): Promise<boolean> {
+  const { exitCode } = await runCommand(["docker", "image", "inspect", ref], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return exitCode === 0;
+}
+
+/**
+ * Build the Ansible execution environment image locally, or reuse the
+ * existing one when it was built from the same EE definition (matched via a
+ * content-hash tag).
+ *
+ * The build context goes to a temp directory (not the package installation,
+ * which must stay read-only at runtime).
  *
  * @throws Error if the build fails
  */
 async function buildExecutionEnvironment(): Promise<void> {
+  if (!existsSync(EE_DEFINITION_FILE)) {
+    throw new Error(
+      `execution environment definition not found at ${EE_DEFINITION_FILE}.`,
+    );
+  }
+
+  const hashedRef = `${EE_IMAGE}:${await eeDefinitionHash()}`;
+  if (await dockerImageExists(hashedRef)) {
+    log(`Reusing existing execution environment image ${hashedRef}...`);
+    // Point the tag ansible-navigator runs (:latest) at the reused image, in
+    // case another build moved it since.
+    await runCommand(["docker", "tag", hashedRef, EE_IMAGE], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return;
+  }
+
   log(`Building Ansible execution environment image '${EE_IMAGE}'...`);
-  const { exitCode } = await runCommand(
-    [
-      "ansible-builder",
-      "build",
-      "--container-runtime",
-      "docker",
-      "--tag",
-      EE_IMAGE,
-      "-f",
-      EE_DEFINITION_FILE,
-    ],
-    {
-      cwd: ANSIBLE_DIR,
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  );
-  if (exitCode !== 0) {
-    throw new Error(`ansible-builder build failed with exit code ${exitCode}.`);
+  const contextDir = await createTempDir("ee-context");
+  try {
+    const { exitCode } = await runCommand(
+      [
+        "ansible-builder",
+        "build",
+        "--container-runtime",
+        "docker",
+        "--tag",
+        EE_IMAGE,
+        hashedRef,
+        "-f",
+        EE_DEFINITION_FILE,
+        "--context",
+        contextDir,
+      ],
+      {
+        cwd: ANSIBLE_DIR,
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    );
+    if (exitCode !== 0) {
+      throw new Error(
+        `ansible-builder build failed with exit code ${exitCode}.`,
+      );
+    }
+  } finally {
+    await rm(contextDir, { recursive: true, force: true });
   }
 }
 
 /**
  * Assemble the `ansible-navigator run` argv for a playbook, including the
- * SSH-key mount and a `--penv` flag for every env var the playbooks need.
+ * SSH-key mount, the website-assets mount (when staged), and a `--penv`
+ * flag for every env var the playbooks need.
  */
 export function buildPlaybookArgs(
   playbook: string,
   sshKeyTempFile: string,
   requiredVars: string[],
   env: Record<string, string> = {},
+  options: PlaybookRunOptions = {},
 ): string[] {
   // Every env var the playbooks need is forwarded into the
   // execution-environment container with --penv.
@@ -249,13 +325,24 @@ export function buildPlaybookArgs(
 
   const penvArgs = [...penvNames].flatMap((name) => ["--penv", name]);
 
-  return [
+  const args = [
     "ansible-navigator",
     "run",
     `playbooks/${playbook}`,
+    // Keep the navigator log out of the (read-only) package installation
+    "--lf",
+    `${getSecureTempDir()}/maestro_ansible-navigator.log`,
     `--container-options=-v=${sshKeyTempFile}:${CONTAINER_SSH_KEY_PATH}:ro`,
-    ...penvArgs,
   ];
+
+  if (options.websiteAssetsDir) {
+    args.push(
+      `--container-options=-v=${options.websiteAssetsDir}:${CONTAINER_WEBSITE_DIR}:ro`,
+    );
+  }
+
+  args.push(...penvArgs);
+  return args;
 }
 
 /**
@@ -268,8 +355,15 @@ async function runPlaybook(
   env: Record<string, string>,
   sshKeyTempFile: string,
   requiredVars: string[],
+  options: PlaybookRunOptions = {},
 ): Promise<void> {
-  const args = buildPlaybookArgs(playbook, sshKeyTempFile, requiredVars, env);
+  const args = buildPlaybookArgs(
+    playbook,
+    sshKeyTempFile,
+    requiredVars,
+    env,
+    options,
+  );
   const { exitCode } = await runCommand(args, {
     cwd: ANSIBLE_DIR,
     env,
@@ -369,13 +463,6 @@ export async function runAnsible(
   const skipWeb = !roles.has(ServerRole.Web);
   const skipBackend = !roles.has(ServerRole.Backend);
 
-  log("Ensuring required files...");
-  if (!existsSync(EE_DEFINITION_FILE)) {
-    throw new Error(
-      `execution environment definition not found at ${EE_DEFINITION_FILE}.`,
-    );
-  }
-
   log("Ensuring required commands exist...");
   requireCmds(["docker"]);
 
@@ -406,10 +493,6 @@ export async function runAnsible(
 
   await ensureAnsibleTooling();
 
-  await prepareWebsiteAssets(config, skipWeb);
-
-  await buildExecutionEnvironment();
-
   // Validate backend image configuration when deploying backend
   if (!skipBackend) {
     requireVar(
@@ -422,24 +505,36 @@ export async function runAnsible(
     );
   }
 
+  await buildExecutionEnvironment();
+
+  const websiteAssetsDir = await prepareWebsiteAssets(config, skipWeb);
+
   const env = buildAnsibleEnv(pulumiHosts, config, requiredVars);
 
-  if (!skipWeb) {
-    log("Provisioning web server...");
-    await runPlaybook("web.yml", env, sshKeyTempFile, requiredVars);
-  } else {
-    log("Skipping provisioning web server...");
-  }
+  try {
+    if (!skipWeb) {
+      log("Provisioning web server...");
+      await runPlaybook("web.yml", env, sshKeyTempFile, requiredVars, {
+        websiteAssetsDir,
+      });
+    } else {
+      log("Skipping provisioning web server...");
+    }
 
-  if (!skipBackend) {
-    log("Provisioning backend...");
-    await runPlaybook("backend.yml", env, sshKeyTempFile, requiredVars);
-  } else {
-    log("Skipping provisioning backend...");
-  }
+    if (!skipBackend) {
+      log("Provisioning backend...");
+      await runPlaybook("backend.yml", env, sshKeyTempFile, requiredVars);
+    } else {
+      log("Skipping provisioning backend...");
+    }
 
-  // Security hardening always runs on all servers.
-  // We recommend running this playbook last because it may block connections.
-  log("Applying security hardening...");
-  await runPlaybook("security.yml", env, sshKeyTempFile, requiredVars);
+    // Security hardening always runs on all servers.
+    // We recommend running this playbook last because it may block connections.
+    log("Applying security hardening...");
+    await runPlaybook("security.yml", env, sshKeyTempFile, requiredVars);
+  } finally {
+    if (websiteAssetsDir) {
+      await rm(websiteAssetsDir, { recursive: true, force: true });
+    }
+  }
 }

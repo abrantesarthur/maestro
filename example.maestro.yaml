@@ -176,8 +176,10 @@ ansible:
       # --- For source: local ---
       # Build from a local directory and deploy static assets
 
-      # [Required when source is local] Path to the website source directory
-      dir: "/path/to/your/website"
+      # [Required when source is local] Path to the website source directory.
+      # Relative paths resolve against this config file's directory, so
+      # "./website" works no matter where maestro is invoked from.
+      dir: "./website"
 
       # [Optional] Build command to run (omit if site is pre-built)
       # Supports any build tool: bun, npm, yarn, pnpm, make, etc.

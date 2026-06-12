@@ -3,10 +3,14 @@
  * Maestro - Infrastructure orchestration for Pulumi and Ansible
  *
  * Usage:
- *   bun .                    # Run full provisioning
- *   bun . --dry-run          # Validate config and display settings
+ *   maestro                       # Run full provisioning (./maestro.yaml)
+ *   maestro --config <path>       # Use a config file elsewhere
+ *   maestro --dry-run             # Validate config and display settings
+ *
+ * (When developing maestro itself: `bun index.ts` from the repo root.)
  */
 
+import { resolve } from "node:path";
 import { loadConfig, displayConfig } from "./lib/config/index.ts";
 import {
   loadBwsSecrets,
@@ -24,19 +28,16 @@ import { runPulumi } from "./lib/runPulumi.ts";
 import { runAnsible } from "./lib/runAnsible.ts";
 
 // ============================================
-// Script Setup
-// ============================================
-
-const SCRIPT_DIR = import.meta.dir;
-const CONFIG_FILE = `${SCRIPT_DIR}/maestro.yaml`;
-
-// ============================================
 // Main Execution
 // ============================================
 
 async function main(): Promise<void> {
   log("Parsing arguments...");
-  const { dryRun } = parseArgs();
+  const { dryRun, configPath } = parseArgs();
+
+  // Config lives with the consuming app: resolve --config (default
+  // ./maestro.yaml) against the invocation cwd, not maestro's install dir.
+  const configFile = resolve(process.cwd(), configPath);
 
   log("Cleaning up stale temp files...");
   await cleanupStaleTempFiles();
@@ -46,8 +47,8 @@ async function main(): Promise<void> {
   // the host CLI; `docker` is still required by the Ansible execution env.
   requireCmds(["bws", "cloudflared", "pulumi"]);
 
-  log(`Loading configuration from ${CONFIG_FILE}...`);
-  const config = await loadConfig(CONFIG_FILE);
+  log(`Loading configuration from ${configFile}...`);
+  const config = await loadConfig(configFile);
 
   if (dryRun) {
     log("Dry-run mode enabled. Configuration loaded:");

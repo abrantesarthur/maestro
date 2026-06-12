@@ -1,57 +1,139 @@
 # Maestro
 
-Maestro is an infrastructure orchestration tool that combines Pulumi and Ansible to provision and configure cloud infrastructure.
+Maestro deploys a web application to production from a single YAML file. Point it at a `maestro.yaml` describing your domain, servers, and app containers, and it provisions the cloud infrastructure (DNS, droplets, tunnels, managed Postgres) and configures the servers (nginx, Docker, your backend) — end to end, in one command.
 
-## Prerequisites
+Under the hood it combines [Pulumi](https://www.pulumi.com) for cloud resources and [Ansible](https://www.ansible.com) for server configuration, so you don't have to wire the two together yourself.
 
-Maestro runs on [Bun](https://bun.sh) and requires these commands on the host (validated at startup):
+One `maestro.yaml` gets you:
 
-- `pulumi` — the Pulumi CLI. Maestro drives it in-process via the [Automation API](https://www.pulumi.com/docs/iac/automation-api/); state lives in Pulumi Cloud (authenticated with `PULUMI_ACCESS_TOKEN`, no interactive `pulumi login`).
-- `bws` — Bitwarden Secrets Manager CLI, the source of all secrets.
-- `cloudflared` — used to reach the servers through Cloudflare SSH tunnels.
-- `docker` — used by the Ansible execution environment (the Pulumi path no longer uses Docker).
+- **DNS and TLS** — Cloudflare DNS records, zone TLS settings, and Origin CA certificates for your domain.
+- **Servers** — DigitalOcean droplets per environment (`dev` / `staging` / `prod`), each environment fully isolated on its own subdomain.
+- **Private SSH access** — servers are reached through Cloudflare Zero Trust tunnels (`ssh0.example.com`), never by raw IP.
+- **Web tier** — nginx serving your static site or reverse-proxying a web container.
+- **Backend tier** — your app's Docker image deployed blue/green with health checks and optional pre-deploy database migrations, so deploys are zero-downtime.
+- **Database tier (optional)** — a DigitalOcean Managed Postgres cluster per environment, reachable only over a private VPC, with a least-privilege app user.
 
-Before running Maestro, the base `domain` in `maestro.yaml` **must already exist as an active zone in the Cloudflare account** that your `CLOUDFLARE_API_TOKEN` belongs to. Maestro does not create the zone or verify ownership itself — it looks up the zone by name at runtime and fails with `Cloudflare zone for <domain> not found.` if it is missing.
+Maestro is a versioned npm package with a CLI. Your application's repository owns its `maestro.yaml` (next to the app code the file describes) and runs maestro against it — `bunx @arthuroabrantes/maestro`, or pinned as a `devDependency`. Upgrading maestro is a version bump in your repo; nothing about your app lives in maestro's repository.
 
-Ownership is proven through Cloudflare's standard nameserver delegation: add the domain to your Cloudflare account and point your registrar's nameservers at the ones Cloudflare assigns. The zone becomes `active` only once that delegation is in place, and the scoped `CLOUDFLARE_API_TOKEN` is what authorizes Maestro to manage it.
+---
 
-The Cloudflare zone must also be **free of conflicting DNS records** before the first run. Maestro creates its own records (apex `A`, `www` `A`, and `api`/`ssh*` `CNAME`s) and does not adopt pre-existing ones. If a record of a different type already occupies one of those names — for example a manually-created `www` `CNAME` when Maestro wants to create a `www` `A` record — Cloudflare rejects the create with `A CNAME record with that host already exists` (error `81054`) and the run fails partway through. Remove (or import into Pulumi) any conflicting records on the apex, `www`, `api`, and `ssh*` names before provisioning.
+## Using Maestro
 
-## Quick Start
+### 1. Install the host requirements
 
-1. Copy the example configuration file:
+Maestro runs on [Bun](https://bun.sh) and orchestrates a few host tools (all validated at startup):
 
-   ```bash
-   cp example.maestro.yaml maestro.yaml
-   ```
+| Tool          | Used for                                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker`      | Running the containerized Ansible execution environment and extracting image-sourced website assets.                                               |
+| `pulumi`      | The Pulumi CLI. Maestro drives it in-process via the Automation API; you never run it yourself. State lives in Pulumi Cloud (no `pulumi login` needed — `PULUMI_ACCESS_TOKEN` authenticates). |
+| `bws`         | Bitwarden Secrets Manager CLI — the source of all secrets.                                                                                         |
+| `cloudflared` | Reaching the servers through Cloudflare SSH tunnels.                                                                                               |
+| `pip`/Python  | Maestro auto-installs `ansible-navigator` (and `ansible-builder`) via `pip install --user` if they're missing from `PATH`.                          |
 
-2. Edit `maestro.yaml` with your configuration (domain, Cloudflare account ID, etc.)
+### 2. Set up your accounts (one time)
 
-3. Set your Bitwarden Secrets Manager access token:
+**Cloudflare.** The base `domain` in `maestro.yaml` must already exist as an **active zone** in your Cloudflare account: add the domain to Cloudflare and point your registrar's nameservers at the ones Cloudflare assigns. Maestro looks the zone up by name at runtime and fails with `Cloudflare zone for <domain> not found.` if it's missing — it never creates the zone or verifies ownership itself.
 
-   ```bash
-   export BWS_ACCESS_TOKEN="your_bws_access_token"
-   ```
+The zone must also be **free of conflicting DNS records**. Maestro creates its own records (apex `A`, `www` `A`, and `api`/`ssh*` `CNAME`s) and does not adopt pre-existing ones; if a record of a different type already occupies one of those names, Cloudflare rejects the create with `A CNAME record with that host already exists` (error `81054`) and the run fails partway through. Remove (or import into Pulumi) any conflicting records on the apex, `www`, `api`, and `ssh*` names first.
 
-4. Run the orchestration:
-   ```bash
-   bun .
-   ```
+**DigitalOcean.** Add the SSH **public** key you'll use to your DigitalOcean account. Maestro provisions droplets with it but does not register the key for you.
 
-## Configuration
+**Bitwarden Secrets Manager.** Create the secrets below in a BWS project readable by your machine-account token. Maestro fetches them at startup and injects them into its own environment — they are never written to your repo.
 
-All configuration is managed through a single YAML file: `maestro.yaml`
+| Secret                      | Purpose                                                                                                                                            | Required scopes                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VPS_SSH_KEY`               | SSH **private** key matching the public key registered in DigitalOcean.                                                                            | Not an API token; no scopes apply.                                                                                                                                                                                                                                                                                |
+| `GHCR_TOKEN`                | GitHub Container Registry token the servers use to pull your app images.                                                                           | GitHub personal access token (classic) with **`read:packages`**. Nothing else is needed for read-only pulls.                                                                                                                                                                                                      |
+| `GHCR_USERNAME`             | GitHub username that owns `GHCR_TOKEN`.                                                                                                            | Not an API token; no scopes apply.                                                                                                                                                                                                                                                                                |
+| `PULUMI_ACCESS_TOKEN`       | Pulumi Cloud access token (where infrastructure state lives).                                                                                      | Standard personal access token; needs access to the organization/stacks being deployed.                                                                                                                                                                                                                           |
+| `CLOUDFLARE_API_TOKEN`      | Cloudflare API token.                                                                                                                              | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; User → **SSL and Certificates:Edit** (Origin CA certs — a _user-level_ permission; without it cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit**. Scoped to the account/zone being managed.                              |
+| `DIGITALOCEAN_ACCESS_TOKEN` | DigitalOcean API token.                                                                                                                            | `droplet:create/read/update/delete`; `ssh_key:read`; `tag:create/read/delete`. A full read+write token also works. With the database tier enabled, additionally `database:create/read/update/delete` and VPC read/write.                                                                                            |
 
-See `example.maestro.yaml` for a fully documented template with all available options.
+With the database tier enabled (`pulumi.database.enabled: true`), two more secrets are required — stable identifiers you choose, read by both Pulumi (to create the user/database) and your backend:
 
-### Configuration Structure
+| Secret          | Purpose                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| `POSTGRES_USER` | Dedicated least-privilege app database user name (created by Pulumi). |
+| `POSTGRES_DB`   | Application database name (created by Pulumi).                        |
+
+> `POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_PASSWORD` are **not** Bitwarden secrets — they are derived from DigitalOcean, surfaced as Pulumi stack outputs, and injected into your backend automatically. Never commit them.
+
+### 3. Write your `maestro.yaml`
+
+In your application's repository, create a `maestro.yaml`. A minimal full-stack example:
 
 ```yaml
-domain: example.com # Domain for DNS and nginx
+domain: example.com
 
 pulumi:
-  enabled: true # Enable/disable Pulumi provisioning
-  command: up # Pulumi command: up, refresh, cancel, output, destroy (destroy skips Ansible)
+  enabled: true
+  command: up
+  projectName: example
+  cloudflareAccountId: "<your-cloudflare-account-id>"
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles: [backend, web]
+
+ansible:
+  enabled: true
+  web:
+    static:
+      source: local
+      dir: ./website # relative paths resolve against this file's directory
+      dist: dist
+  backend:
+    image: ghcr.io/your-org/your-app
+    tag: latest
+    port: 3000
+
+secrets:
+  provider: bws
+```
+
+See [`example.maestro.yaml`](example.maestro.yaml) for a fully documented template with every option, and the [Configuration reference](#configuration-reference) below.
+
+### 4. Run it
+
+```bash
+export BWS_ACCESS_TOKEN="your_bws_machine_account_token"
+
+bunx @arthuroabrantes/maestro --dry-run   # validate the config and preview settings
+bunx @arthuroabrantes/maestro             # provision everything
+```
+
+`BWS_ACCESS_TOKEN` is the only environment variable you set by hand — a Bitwarden machine-account token with **read** access to the project holding the secrets above. Everything else flows from Bitwarden.
+
+Alternatively, pin maestro as a `devDependency` and run it via `bun run maestro`. A thin CI workflow that runs maestro on merge works the same way — the CLI is non-interactive.
+
+### CLI reference
+
+```
+maestro [--config <path>] [--dry-run]
+```
+
+| Flag              | Purpose                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `--config <path>` | Path to `maestro.yaml`. Default: `./maestro.yaml` in the current working directory.    |
+| `--dry-run`       | Validate the config and display the resolved settings without provisioning anything.   |
+| `--help`          | Show usage.                                                                             |
+
+Relative paths inside the config (e.g. `ansible.web.static.dir: ./website`) always resolve against the **config file's directory**, not the directory maestro is invoked from — so the same config works locally, in CI, and via `--config` from anywhere.
+
+---
+
+## Configuration reference
+
+All configuration lives in one YAML file. The full structure:
+
+```yaml
+domain: example.com # Base domain for DNS and nginx
+
+pulumi:
+  enabled: true # Enable/disable cloud provisioning
+  command: up # up | refresh | cancel | output | destroy (destroy skips Ansible)
   projectName: your-project-name # Pulumi project name
   cloudflareAccountId: "" # Your Cloudflare account ID
   sshPort: 22 # SSH port for tunnels
@@ -59,224 +141,161 @@ pulumi:
     enabled: false # Provision a DigitalOcean Managed Postgres cluster per stack
     version: "16" # Postgres major version: "15", "16", or "17"
     size: db-s-1vcpu-1gb # DigitalOcean DB node size
-    nodeCount: 1 # Single node (region always co-locates with the stack's droplets)
-  stacks: # Define one or more stacks (dev, staging, prod)
+    nodeCount: 1 # Node count (region always co-locates with the stack's droplets)
+  stacks: # One or more environments: dev, staging, prod
     prod:
       servers:
-        - roles: [backend, web] # Server roles determine what gets provisioned
-          # groups: [devops]   # Optional: override global ansible.groups
-          # size: s-1vcpu-1gb  # Optional: DigitalOcean droplet size
-          # region: nyc1       # Optional: DigitalOcean region
-      # database:            # Optional: per-stack sizing override (override wins)
+        - roles: [backend, web] # Roles determine what gets provisioned/configured
+          # groups: [devops]    # Optional: override global ansible.groups
+          # size: s-1vcpu-1gb   # Optional: DigitalOcean droplet size
+          # region: nyc1        # Optional: DigitalOcean region
+      # database:               # Optional: per-stack sizing override (override wins)
       #   size: db-s-2vcpu-4gb
 
 ansible:
-  enabled: true # Enable/disable all Ansible provisioning
+  enabled: true # Enable/disable all server configuration
   groups: [devops] # System groups (can be overridden per-server)
-  web: # Required if any server has "web" role
-    static:
-      source: local
-      dir: "/path/to/site"
-  backend: # Required if any server has "backend" role
+  web: # Required if any server has the "web" role
+    static: # ...serve static files with nginx, or:
+      source: local # local | image
+      dir: ./website # Website source (relative to this config file)
+      build: bun run build # Optional build command
+      dist: dist # Subdirectory with built assets
+    # docker:               # ...or reverse-proxy a web container
+    #   image: ghcr.io/org/web
+    #   tag: latest
+    #   port: 3000
+  backend: # Required if any server has the "backend" role
     image: ghcr.io/org/app # Container image
     tag: latest # Image tag
     port: 3000 # Backend port
-    env: # Environment variables for container
-      DATABASE_URL: postgres://...
-    migrate: # Optional: run a DB migration before each deploy (omit = no migration)
+    env: # Environment variables for the container
+      SOME_VAR: value
+    migrate: # Optional: DB migration before each deploy (omit = none)
       command: ["npm", "run", "migrate"] # argv run inside the backend image
     healthCheck: # Optional: blue/green readiness probe
-      path: /health # HTTP path polled for 200 before cutover (default: /health)
+      path: /health # Polled for 200 before cutover (default: /health)
 
 secrets:
-  provider: bws # Secrets provider (bws = Bitwarden)
-  projectId: "" # Optional BWS project ID
-  requiredVars: [] # Secrets to validate and pass to Ansible
+  provider: bws # Secrets provider (bws = Bitwarden Secrets Manager)
+  projectId: "" # Optional BWS project ID to scope the fetch
+  requiredVars: [] # Extra secrets to validate and forward to Ansible
 ```
 
-### Server Roles
+### Server roles
 
-Provisioning is **role-based**: Ansible playbooks run only on servers that have the corresponding role. Available roles:
+Provisioning is **role-based**: each Ansible playbook runs only on servers holding the corresponding role, and is skipped entirely when no server has it.
 
-| Role      | Ansible Playbook | Purpose                               |
-| --------- | ---------------- | ------------------------------------- |
-| `backend` | `backend.yml`    | Docker + backend container deployment |
-| `web`     | `web.yml`        | nginx (static files or reverse proxy) |
+| Role      | Playbook      | Purpose                               |
+| --------- | ------------- | ------------------------------------- |
+| `backend` | `backend.yml` | Docker + backend container deployment |
+| `web`     | `web.yml`     | nginx (static files or reverse proxy) |
 
-**Security hardening** (`security.yml`) is applied automatically to all servers. This includes:
+**Security hardening** (`security.yml`) always runs on all servers: UFW firewall rules (deny incoming by default, allow SSH, role-specific openings) and system group management (`ansible.groups`).
 
-- UFW firewall rules (deny incoming by default, allow SSH, role-specific rules)
-- System group management (configurable via `ansible.groups`)
+### Environments (stacks)
 
-If no server has a particular role, that playbook is skipped entirely.
+Each stack under `pulumi.stacks` is an isolated environment with its own Pulumi state, servers, and (optionally) database. Maestro provisions every defined stack sequentially, then aggregates all hosts for the Ansible phase. Servers are tagged with both their stack name and their roles, so playbooks can target by environment. See [`ansible/README.md`](ansible/README.md) for host-targeting details.
 
-### Multi-Stack Support
+Non-production stacks live on prefixed subdomains of the base `domain`, applied to every resource:
 
-Maestro supports multiple isolated environments through Pulumi stacks. Each stack (`dev`, `staging`, `prod`) maintains its own infrastructure state.
-
-```yaml
-pulumi:
-  stacks:
-    staging:
-      servers:
-        - roles: [backend, web]
-    prod:
-      servers:
-        - roles: [backend]
-          groups: [devops, backend-team] # Per-server group override
-          size: s-2vcpu-4gb
-        - roles: [web]
-```
-
-When you run `bun .`, Maestro provisions each defined stack sequentially, then aggregates all hosts for Ansible configuration. Each server is tagged with its stack name (e.g., `prod`, `staging`) in addition to its roles (e.g., `backend`, `web`), allowing Ansible playbooks to target servers by environment if needed. See [`ansible/README.md`](ansible/README.md) for details on host targeting.
-
-### Domain Configuration
-
-Maestro automatically creates environment-specific subdomains based on the stack name. The `domain` setting in `maestro.yaml` is the base domain, and each non-production stack gets its own subdomain prefix:
-
-| Stack     | Subdomain Prefix | Effective Domain      |
-| --------- | ---------------- | --------------------- |
-| `dev`     | `dev.`           | `dev.example.com`     |
-| `staging` | `staging.`       | `staging.example.com` |
-| `prod`    | (none)           | `example.com`         |
-
-This applies to all resources provisioned for each stack:
-
-| Resource     | Dev Example            | Staging Example            | Prod Example       |
+| Resource     | `dev`                  | `staging`                  | `prod`             |
 | ------------ | ---------------------- | -------------------------- | ------------------ |
-| SSH Tunnel   | `ssh0.dev.example.com` | `ssh0.staging.example.com` | `ssh0.example.com` |
-| API Endpoint | `api.dev.example.com`  | `api.staging.example.com`  | `api.example.com`  |
-| Web Domain   | `dev.example.com`      | `staging.example.com`      | `example.com`      |
-| WWW Domain   | `www.dev.example.com`  | `www.staging.example.com`  | `www.example.com`  |
+| Web domain   | `dev.example.com`      | `staging.example.com`      | `example.com`      |
+| WWW domain   | `www.dev.example.com`  | `www.staging.example.com`  | `www.example.com`  |
+| API endpoint | `api.dev.example.com`  | `api.staging.example.com`  | `api.example.com`  |
+| SSH tunnel   | `ssh0.dev.example.com` | `ssh0.staging.example.com` | `ssh0.example.com` |
 
-DNS records (both A records for web servers and CNAME records for tunnels) are created under the base domain's Cloudflare zone. SSL certificates are issued for each environment's effective domain.
+DNS records are created under the base domain's Cloudflare zone; TLS certificates are issued per effective domain.
 
 ### Database (Managed Postgres)
 
-When `pulumi.database.enabled` is `true`, Maestro provisions a **DigitalOcean Managed Postgres** cluster as a dedicated database tier. The guiding principle is _the backend is cattle; the database is the crown jewels_ — the database lives in its own managed failure domain, separate from the disposable backend droplet.
+When `pulumi.database.enabled` is `true`, Maestro provisions a **DigitalOcean Managed Postgres** cluster as a dedicated database tier. The guiding principle: _the backend is cattle; the database is the crown jewels_ — the database lives in its own managed failure domain, separate from the disposable backend droplet.
 
-**Per-environment isolation.** The database is stack-aware like the rest of the stack: each enabled stack (`dev` / `staging` / `prod`) provisions its **own** cluster, app database, and app user. A `dev` deploy never touches the `prod` database.
+- **Per-environment isolation.** Each enabled stack provisions its **own** cluster, app database, and app user. A `dev` deploy never touches the `prod` database.
+- **Private VPC endpoint + TLS.** Each stack gets a dedicated VPC joined by both the backend droplet and the cluster. The backend connects over the database's **private** endpoint — traffic never traverses the public internet — and still uses `sslmode=require` (plus `PGSSLMODE=require` for libpq clients).
+- **Least privilege.** Pulumi creates a dedicated database user (from `POSTGRES_USER`) and database (from `POSTGRES_DB`). The application never uses the cluster admin (`doadmin`).
+- **Firewall by tag.** A `DatabaseFirewall` trusts the backend droplets by their per-stack **tag**, not droplet ID, so it survives droplet rebuilds. There is no `0.0.0.0/0` rule.
+- **Lifecycle safeguards.** The cluster carries `retainOnDelete: true` **and** `protect: true`; the app database, user, and VPC carry `retainOnDelete`. A `pulumi destroy` of the disposable backend succeeds while leaving the cloud database and its data intact; intentional teardown requires deliberately unprotecting and removing the resource from state.
+- **Durability.** DigitalOcean's built-in daily backups plus point-in-time recovery (PITR) cover durability — PITR protects against operator/application mistakes (a bad migration, an accidental `DELETE`), not just infrastructure loss.
 
-**Private VPC endpoint + TLS.** Each stack gets a dedicated DigitalOcean VPC that **both** the backend droplet and the database cluster join. The backend connects over the database's **private** VPC endpoint (`cluster.privateHost`), so database traffic never traverses the public internet. TLS is still required: the connection uses `sslmode=require` (and `PGSSLMODE=require` for libpq clients).
+> **One-time droplet replacement.** VPC membership is immutable on a DigitalOcean droplet, so enabling the database replaces the existing backend droplet once on first apply. The backend is cattle; Ansible re-converges the replacement.
 
-**Least-privilege user + dedicated database.** Pulumi creates a dedicated `DatabaseUser` (named from `POSTGRES_USER`) and `DatabaseDb` (named from `POSTGRES_DB`). The application never uses the cluster admin (`doadmin`). DigitalOcean-managed Postgres users are non-superuser by default; tightening per-database `GRANT`s further is a documented follow-up.
+**Connection wiring.** `POSTGRES_USER`/`POSTGRES_DB` originate in Bitwarden (stable values you choose); `POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_PASSWORD` are derived from DigitalOcean and read from typed Pulumi stack outputs (the password as a Pulumi secret). Maestro threads the per-stack values onto that stack's backend host(s), so multi-stack deploys never cross-wire one stack's backend to another stack's database. The backend container ends up with `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, and `POSTGRES_SSLMODE=require` in its environment.
 
-**DatabaseFirewall (trusted sources).** A `DatabaseFirewall` restricts access to the backend droplet by the per-stack **tag** (the stack name, applied to every droplet in the stack) rather than the droplet ID, so it survives the disposable droplet being rebuilt with a new ID. There is no `0.0.0.0/0` rule; the public endpoint is locked down.
+### Zero-downtime backend deploys & migrations
 
-**Lifecycle safeguards (`retainOnDelete` + `protect`).** The cluster carries both `retainOnDelete: true` and `protect: true`; the app database, app user, and the VPC carry `retainOnDelete`. This means a `pulumi destroy` of the disposable backend **succeeds while leaving the cloud database (and its data) intact**, and accidental targeted deletes are blocked. Intentional teardown is therefore deliberate: it requires unprotecting and removing the resource from Pulumi state (a manual-cleanup runbook step), which is by design for the crown jewels.
+Backend deploys are **zero-downtime** by default: nginx stays up as a stable reverse proxy and Maestro swaps containers blue/green underneath it.
 
-> **One-time droplet replacement.** VPC membership is immutable on a DigitalOcean droplet, so enabling the database (and the per-stack VPC) replaces the existing backend droplet once on first apply. The backend is cattle, so this is acceptable — Ansible re-converges the replacement.
+The backend runs as one of two containers — `backend-blue` (on `ansible.backend.port`) and `backend-green` (on `port + 1`) — both bound to `127.0.0.1`. Each deploy starts the new image on the idle port while the live one keeps serving, waits for it to pass the health check, points nginx at the new port, and reloads (`nginx -s reload` drains in-flight requests). Only then is the old container stopped. If the new container never gets healthy, the old one keeps serving and the deploy fails — there is no half-deployed state.
 
-**Durability.** DigitalOcean's built-in **daily backups** plus **point-in-time recovery (PITR)** cover durability today. PITR (the decisive feature) recovers to any point within the provider's retention window, protecting against operator/application mistakes (a bad migration, an accidental `DELETE`), not just infrastructure loss. Choose your retention window deliberately.
+- **`ansible.backend.healthCheck.path`** (optional): the HTTP path polled for a `200` on the new container before cutover. Defaults to `/health`. The retry/timeout budget is fixed.
+- **`ansible.backend.migrate.command`** (optional): an argv array (e.g. `["npm", "run", "migrate"]`, not a shell line) run once inside the backend image **before the new container starts**, against the live database, with the same environment as the app (including the per-stack `POSTGRES_*` values). A non-zero exit aborts the deploy before the app container is touched. Omit the block to skip migrations. The DB password and other secrets stay on a `no_log`-guarded path and are never printed.
 
-**Connection wiring (one source of truth).** Connection details flow through the existing plumbing, with a hybrid origin:
+### Forwarding extra secrets
 
-- `POSTGRES_USER` and `POSTGRES_DB` **originate in Bitwarden** (stable values you choose). Pulumi reads them to create the dedicated user + database, and the backend reads the same values — no drift.
-- `POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the cluster's assigned port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean** and exported as Pulumi **stack outputs** (the password as a Pulumi secret). Maestro reads them from the typed Pulumi stack outputs (via the Automation API) and threads them **per stack** onto that stack's backend host(s), so multi-stack deploys never cross-wire one stack's backend to another stack's database — and the port is always whatever DO actually assigned, never a value you keep in sync by hand.
+List additional Bitwarden secret names under `secrets.requiredVars`. They are validated at startup and forwarded into the Ansible execution environment, where playbooks read them via `lookup('env', 'VAR_NAME')`. Backend-container variables go under `ansible.backend.env` instead.
 
-The backend container ends up with `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, and `POSTGRES_SSLMODE=require`.
+---
 
-> **Note:** `POSTGRES_USER`/`POSTGRES_DB` originate in Bitwarden but are also injected into the container environment (as `BACKEND_ENV_POSTGRES_USER`/`BACKEND_ENV_POSTGRES_DB`, see `buildAnsibleEnv`), so the backend can read them from either source — keep the two in sync. `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_PASSWORD` are DigitalOcean-derived and live only in the environment.
+## How it works
 
-### Zero-Downtime Backend Deploys & Migrations
+### The pipeline
 
-Backend deploys are **zero-downtime** by default. nginx stays up as a stable
-reverse proxy in front of the backend and Maestro swaps containers blue/green,
-so traffic is always being served.
+`index.ts` (the `maestro` bin) orchestrates one linear pipeline:
 
-**Blue/green cutover.** The backend runs as one of two containers: `backend-blue`
-(on `ansible.backend.port`) and `backend-green` (on `ansible.backend.port + 1`),
-both bound to `127.0.0.1`. On each deploy Maestro starts the new image on the
-idle port while the live one keeps serving, waits for it to pass the health
-check, then points nginx at the new port and reloads (`nginx -s reload` drains
-in-flight requests). Only then does it stop the old container. If the new
-container never gets healthy, the old one keeps serving and the deploy fails —
-no half-deployed state.
+1. **Parse CLI flags** and resolve the config path against the current working directory.
+2. **Validate `maestro.yaml`** against a typed schema (io-ts codecs plus semantic checks: role/web consistency, region mixing, database preconditions, path existence). `--dry-run` stops here and prints the resolved settings.
+3. **Fetch secrets** from Bitwarden Secrets Manager (`bws secret list`) and inject them into the process environment; required secrets are asserted up front so failures happen before any cloud call.
+4. **Write the SSH key** to a `0600` temp file (stable path — it's interpolated into Pulumi resources, so a per-run random path would diff them on every deploy).
+5. **Run Pulumi per stack** — in-process via the [Automation API](https://www.pulumi.com/docs/iac/automation-api/), no Pulumi Docker image and no shelling out to `pulumi up`. The TypeScript program under `pulumi/` provisions Cloudflare DNS records, zone TLS settings, Origin CA certificates, Zero Trust SSH tunnels, the DigitalOcean droplets, and (optionally) the VPC + Managed Postgres tier. State lives in Pulumi Cloud.
+6. **Aggregate hosts** from all stacks' typed outputs — hostnames, roles, stack tags, and per-stack database endpoints.
+7. **Wait for tunnel readiness** — polls SSH-over-cloudflared until every host accepts connections.
+8. **Run Ansible** against the hosts: `web.yml`, `backend.yml`, then `security.yml` last (it may tighten firewall rules that would block the earlier plays).
 
-**Health check (`ansible.backend.healthCheck.path`).** Optional. The HTTP path
-polled for a `200` on the new container before cutover. Defaults to `/health`.
-The retry/timeout budget is fixed.
+### The Ansible execution environment
 
-**Migrations (`ansible.backend.migrate.command`).** Optional. An argv array
-(e.g. `["npm", "run", "migrate"]`, not a shell line) run once inside the backend
-image **before the new container starts**, against the live database, with the
-same environment as the app (including the per-stack `POSTGRES_*` values). A
-non-zero exit aborts the deploy before the app container is touched, so a bad
-migration never leaves a half-deployed stack. Omit the block to skip migrations.
-The DB password and other secrets stay on the `no_log`-guarded path and are
-never printed.
+Playbooks don't run on your host's Ansible — they run inside a containerized **execution environment** (EE) driven by `ansible-navigator`. Maestro builds the image locally with `ansible-builder` from the definition that ships with the package (`ansible/execution_environment/`). The built image is tagged with a content hash of the definition, so subsequent runs reuse it and skip the build entirely until the definition changes (e.g. on a maestro upgrade).
 
-### Required Environment Variable
+The image is **app-agnostic** — everything app-specific reaches the container at runtime, never at image build time:
 
-| Variable           | Purpose                                                                | Required Scopes                                                                                                                       |
-| ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `BWS_ACCESS_TOKEN` | Bitwarden Secrets Manager token required for retrieving other secrets. | A Bitwarden Secrets Manager machine-account access token with **read** access to the project(s) holding the secrets listed below. |
+- **Website assets** are staged into a temp directory (built from `ansible.web.static.dir`, or extracted from a container image) and volume-mounted read-only at `/opt/website`.
+- **The SSH key** temp file is volume-mounted read-only.
+- **Configuration and secrets** are forwarded as environment variables (`--penv`), including the host list (`SSH_HOSTS`), which a dynamic inventory script (`ansible/inventory/hosts.py`) turns into Ansible hosts grouped by role and stack.
 
-### CLI Options
+This is what lets one EE image serve every consuming application.
 
-| Flag        | Purpose                                 |
-| ----------- | --------------------------------------- |
-| `--dry-run` | Preview configuration without executing |
+Maestro's installation directory is treated as read-only at runtime: website staging, the EE build context, navigator logs, and secret files all live in the system temp directory (with a `maestro_` prefix, `0600` secret files, and cleanup on exit plus a stale sweep at startup).
 
-### Secrets
+### Package layout
 
-Secrets are stored in Bitwarden Secrets Manager and fetched at runtime. The following secrets are required:
+| Path           | What it is                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| `index.ts`     | CLI entry point (`bin`), the pipeline above.                                                          |
+| `lib/`         | Orchestration: config loading/validation, secrets, Pulumi driver, Ansible driver, tunnel readiness.   |
+| `pulumi/`      | The Pulumi program (imported in-process): DNS, certificates, tunnels, droplets, VPC, managed Postgres. |
+| `ansible/`     | Execution environment definition, dynamic inventory, and playbooks/roles for nginx, Docker, UFW, blue/green deploys. |
 
-| Secret                 | Purpose                                                                                                                                          | Required Scopes                                                                                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VPS_SSH_KEY`          | SSH private key for accessing DigitalOcean servers. The corresponding public key must be manually added to your DigitalOcean account beforehand. | Not an API token — the SSH private key matching the public key registered in DigitalOcean; no scopes apply.                                                                                                       |
-| `GHCR_TOKEN`           | GitHub Container Registry token                                                                                                                  | GitHub personal access token (classic) with **`read:packages`** to pull images from ghcr.io. No other scopes are required for read-only pulls.                                                                    |
-| `GHCR_USERNAME`        | GitHub Container Registry username                                                                                                               | Not an API token — the GitHub username that owns `GHCR_TOKEN`; no scopes apply.                                                                                                                                   |
-| `PULUMI_ACCESS_TOKEN`  | Pulumi Cloud access token                                                                                                                        | A standard Pulumi Cloud personal access token (no granular scopes); needs access to the organization/stacks being deployed.                                                                                       |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token                                                                                                                             | Zone → **Zone:Read**, **Zone Settings:Edit**, **DNS:Edit**; **User → SSL and Certificates:Edit** (Origin CA certs — this is a _user-level_ permission, not zone-level; without it Origin CA cert creation fails with `401 / code 1016`); Account → **Cloudflare Tunnel:Edit** (Zero Trust tunnels). Scoped to the account/zone being managed. |
-| `DIGITALOCEAN_ACCESS_TOKEN`   | DigitalOcean API token                                                                                                                           | `droplet:create`, `droplet:read`, `droplet:update`, `droplet:delete`; `ssh_key:read`; `tag:create`, `tag:read`, `tag:delete`. A full read+write token also works. When the database tier is enabled, also needs `database:create`, `database:read`, `database:update`, `database:delete` and VPC read/write. |
+### Releasing
 
-When `pulumi.database.enabled` is `true`, the following additional secrets are required (the values are stable identifiers you choose):
+Releasing a maestro version is a `version` bump in `package.json` plus `npm publish` — the EE image definition, playbooks, and the Pulumi program all travel inside the package, so there is no second artifact to keep in sync.
 
-| Secret          | Purpose                                                                 | Required Scopes                                                                                                   |
-| --------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_USER` | Dedicated least-privilege app database user name (created by Pulumi).   | Not an API token — a stable identifier you choose. Read by both Pulumi (to create the user) and the backend.     |
-| `POSTGRES_DB`   | Application database name (created by Pulumi).                           | Not an API token — a stable identifier you choose. Read by both Pulumi (to create the database) and the backend. |
+## Developing maestro
 
-`POSTGRES_HOST` (the private endpoint), `POSTGRES_PORT` (the DO-assigned cluster port), and `POSTGRES_PASSWORD` are **derived from DigitalOcean**, surfaced as Pulumi stack outputs, and injected into the backend by Maestro. They are **not** Bitwarden secrets and must never be committed.
+This repository is itself just another consuming app whose `maestro.yaml` happens to sit next to the tool:
 
-> **Note:** `POSTGRES_USER`/`POSTGRES_DB` are also injected into the backend's environment (see the note in [Database (Managed Postgres)](#database-managed-postgres)), so they live in two places at runtime — keep them in sync.
+```bash
+bun index.ts --dry-run   # or: bun run maestro:dry-run
+bun index.ts             # full run against the repo's own maestro.yaml
+bun test                 # unit tests
+```
 
-You can specify additional required secrets in your `maestro.yaml` under `secrets.required_vars`. These secrets are validated at startup and automatically passed to the Ansible execution environment, where they can be accessed in playbooks via `lookup('env', 'VAR_NAME')`.
+## Roadmap
 
-## Components
-
-- `pulumi/` — the Pulumi program (run in-process via the Automation API) provisioning Cloudflare DNS, DigitalOcean VPS, and SSH tunneling into the servers.
-- `ansible/` — Ansible execution environment, inventories, and playbooks that configure the servers.
-
-## Workflow
-
-`index.ts` (run via `bun .`) orchestrates the entire provisioning process:
-
-1. Loads configuration from `maestro.yaml`
-2. Fetches secrets from Bitwarden Secrets Manager
-3. Runs Pulumi for each defined stack (dev, staging, prod) to provision cloud infrastructure (DNS, servers, tunnels)
-4. Aggregates hosts from all stacks
-5. Waits for servers to accept connection via SSH tunnels
-6. Runs Ansible to tunnel into and configure the servers (nginx, Docker, backend app)
-
-## Future Improvements
-
-- **Independent logical backup stream to DigitalOcean Spaces** (deferred): in addition to DigitalOcean's built-in daily backups + PITR, run a self-owned `pg_dump`-style logical backup into a DO Spaces bucket (a _different_ service from the database), on a schedule, with bucket lifecycle/retention rules and periodic tested restore drills. This is defense-in-depth against account- or provider-level problems with the managed backups and gives portable, provider-independent copies. The Spaces bucket, the backup cron, and the restore drills are intentionally **out of scope** of the current core database tier; built-in daily backups + PITR cover durability for now.
-
+- **Independent logical backup stream to DigitalOcean Spaces**: in addition to DO's daily backups + PITR, a self-owned `pg_dump`-style backup into a Spaces bucket on a schedule, with lifecycle/retention rules and tested restore drills — defense-in-depth against account- or provider-level problems, and portable copies.
 - **Per-database GRANT tightening**: the app user is non-superuser and never `doadmin`, but scoping its privileges to only what it needs within its own database (beyond DigitalOcean's defaults) is a follow-up.
-
-- **style**: use the Ansible SDK/packages instead of shelling out to the CLI (Pulumi already runs in-process via the Automation API; the shell scripts have been replaced by TypeScript).
-
-- **Multi-cloud provider support**: Currently, Maestro only supports DigitalOcean as a cloud provider. Future versions may add support for AWS, GCP, Azure, and other providers.
-
-- **Automated SSH key provisioning**: SSH keys must be manually added to your DigitalOcean account before running Maestro. A future improvement would automate the creation and registration of SSH keys during the provisioning process.
-
-- **Configuration schema validation**: Add typed schema validation for `maestro.yaml` to catch configuration errors early and provide better error messages.
-
-- **Multiple server supporrt**: Right now we can only specify one server per environment.
-
-- **Security considerations**:
-  -- Never write the ssh key to the host filesystem
-  -- Run the whole maestro in docker containers
-  -- Hide servers' IP address from pulumi output.
+- **Multi-cloud provider support**: DigitalOcean is currently the only provider; AWS/GCP/Azure may follow.
+- **Automated SSH key provisioning**: today the public key must be added to DigitalOcean manually before the first run.
+- **Multiple web/backend servers per environment** with load balancing; today each role maps to a single server per stack.
+- **Ansible via SDK**: drive Ansible through a library interface instead of shelling out to `ansible-navigator` (Pulumi already runs in-process).
+- **Security hardening follow-ups**: avoid materializing the SSH key on the host filesystem, and hide server IP addresses from Pulumi output.

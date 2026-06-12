@@ -1,11 +1,27 @@
 {
-  "name": "maestro",
-  "version": "0.1.0",
+  "name": "@arthuroabrantes/maestro",
+  "version": "0.1.1",
+  "description": "Provision DigitalOcean infrastructure from a single maestro.yaml (Pulumi + Ansible)",
   "type": "module",
+  "bin": {
+    "maestro": "index.ts"
+  },
+  "files": [
+    "index.ts",
+    "lib",
+    "pulumi",
+    "ansible",
+    "example.maestro.yaml"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/instrutoria/maestro.git"
+  },
   "scripts": {
     "maestro": "bun index.ts",
     "maestro:dry-run": "bun index.ts --dry-run",
-    "test": "bun test"
+    "test": "bun test",
+    "release": "npm version patch && git push && git push --tags && npm publish --access public"
   },
   "devDependencies": {
     "@types/bun": "latest",
