@@ -11,7 +11,11 @@
  */
 
 import { resolve } from "node:path";
-import { loadConfig, displayConfig } from "./lib/config/index.ts";
+import {
+  loadConfig,
+  displayConfig,
+  resolveSecretEnv,
+} from "./lib/config/index.ts";
 import {
   loadBwsSecrets,
   requireBwsSecret,
@@ -90,6 +94,13 @@ async function main(): Promise<void> {
   // Validate user-specified BWS secrets from config
   for (const varName of config.secrets?.requiredVars ?? []) {
     requireBwsSecret(varName);
+  }
+
+  // Backend-container secrets (ansible.backend.secretEnv): names declared in
+  // config, values fetched from Bitwarden. Assert the SOURCE secrets up front
+  // so a missing secret fails here, before any cloud call.
+  for (const { source } of resolveSecretEnv(config.ansible?.backend?.secretEnv)) {
+    requireBwsSecret(source);
   }
 
   // Secrets required vars to forward to ansible playbooks

@@ -169,8 +169,11 @@ ansible:
     image: ghcr.io/org/app # Container image
     tag: latest # Image tag
     port: 3000 # Backend port
-    env: # Environment variables for the container
+    env: # Non-sensitive environment variables for the container
       SOME_VAR: value
+    secretEnv: # Sensitive vars: names of Bitwarden secrets, values injected at runtime
+      - STRIPE_SECRET_KEY # container var STRIPE_SECRET_KEY ← BWS secret of the same name
+      - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN # rename on inject: container var ← BWS secret
     migrate: # Optional: DB migration before each deploy (omit = none)
       command: ["npm", "run", "migrate"] # argv run inside the backend image
     healthCheck: # Optional: blue/green readiness probe
@@ -234,7 +237,13 @@ The backend runs as one of two containers — `backend-blue` (on `ansible.backen
 
 ### Forwarding extra secrets
 
-List additional Bitwarden secret names under `secrets.requiredVars`. They are validated at startup and forwarded into the Ansible execution environment, where playbooks read them via `lookup('env', 'VAR_NAME')`. Backend-container variables go under `ansible.backend.env` instead.
+Maestro never stores secret values in `maestro.yaml` — the file is meant to be version controlled. There are three ways to get configuration into the system, by sensitivity and destination:
+
+- **`ansible.backend.env`** — non-sensitive backend-container variables, as literal key/value pairs (e.g. `NODE_ENV: production`).
+- **`ansible.backend.secretEnv`** — **sensitive** backend-container variables. List the _names_ of secrets stored in Bitwarden; maestro fetches the values at runtime and injects each into the container under the same name. To inject under a different name, use a mapping entry — `CONTAINER_VAR: BWS_SECRET_NAME` (e.g. `BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN` hands the app a token stored under a non-conflicting Bitwarden name). Source secrets are validated at startup (a missing secret fails the run before any cloud call), and the values ride the same `no_log`-guarded path as the database password — they are never written to your repo or printed. A container var may not also appear in `env`, and `PORT` is reserved (auto-injected from `ansible.backend.port`).
+- **`secrets.requiredVars`** — secrets needed by Ansible _playbooks_ (not the app container). They are validated at startup and forwarded into the Ansible execution environment, where playbooks read them via `lookup('env', 'VAR_NAME')`.
+
+> **Never forward `BWS_ACCESS_TOKEN` to your app.** Maestro's deploy token can read all deploy secrets (Cloudflare, DigitalOcean, Pulumi); a compromised backend container would inherit your whole infrastructure. Maestro rejects it as a `secretEnv` _source_. If your application itself needs Bitwarden access, create a separate machine-account token scoped to an app-secrets project, store it in Bitwarden under a different name (e.g. `APP_BWS_ACCESS_TOKEN`), and use the mapping form to hand it to the app under the name it expects: `BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`.
 
 ---
 

@@ -298,6 +298,17 @@ const HealthCheckConfigCodec = t.exact(
   }),
 );
 
+// A secretEnv entry is either a plain Bitwarden secret name (injected into the
+// container under the same name) or a single-pair mapping of
+// containerVarName: bwsSecretName (injected under containerVarName, value read
+// from bwsSecretName). The mapping form exists so an app can receive a variable
+// under a name that would be ambiguous or forbidden as a SOURCE — e.g.
+// `BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`.
+const SecretEnvEntryCodec = t.union([
+  t.string,
+  t.record(t.string, t.string),
+]);
+
 const BackendConfigCodec = t.exact(
   t.intersection([
     t.type({
@@ -307,6 +318,7 @@ const BackendConfigCodec = t.exact(
     }),
     t.partial({
       env: t.record(t.string, t.string),
+      secretEnv: t.array(SecretEnvEntryCodec),
       migrate: MigrateConfigCodec,
       healthCheck: HealthCheckConfigCodec,
     }),
@@ -368,3 +380,30 @@ export const MaestroConfigCodec = t.exact(
 
 export type StackConfig = t.TypeOf<typeof StackConfigCodec>;
 export type MaestroConfig = t.TypeOf<typeof MaestroConfigCodec>;
+export type SecretEnvEntry = t.TypeOf<typeof SecretEnvEntryCodec>;
+
+/** A normalized secretEnv pair: container var name ← Bitwarden secret name. */
+export interface SecretEnvPair {
+  /** Environment variable name the backend container receives */
+  container: string;
+  /** Bitwarden secret name the value is read from */
+  source: string;
+}
+
+/**
+ * Normalize ansible.backend.secretEnv entries into (container, source) pairs.
+ * Plain strings map a secret to a container var of the same name; mapping
+ * entries rename (containerVarName: bwsSecretName).
+ */
+export function resolveSecretEnv(
+  secretEnv: SecretEnvEntry[] | undefined,
+): SecretEnvPair[] {
+  return (secretEnv ?? []).flatMap((entry) =>
+    typeof entry === "string"
+      ? [{ container: entry, source: entry }]
+      : Object.entries(entry).map(([container, source]) => ({
+          container,
+          source,
+        })),
+  );
+}
