@@ -3,11 +3,19 @@
  * Maestro - Infrastructure orchestration for Pulumi and Ansible
  *
  * Usage:
- *   bun .                    # Run full provisioning
- *   bun . --dry-run          # Validate config and display settings
+ *   maestro                       # Run full provisioning (./maestro.yaml)
+ *   maestro --config <path>       # Use a config file elsewhere
+ *   maestro --dry-run             # Validate config and display settings
+ *
+ * (When developing maestro itself: `bun index.ts` from the repo root.)
  */
 
-import { loadConfig, displayConfig } from "./lib/config/index.ts";
+import { resolve } from "node:path";
+import {
+  loadConfig,
+  displayConfig,
+  resolveSecretEnv,
+} from "./lib/config/index.ts";
 import {
   loadBwsSecrets,
   requireBwsSecret,
@@ -24,28 +32,27 @@ import { runPulumi } from "./lib/runPulumi.ts";
 import { runAnsible } from "./lib/runAnsible.ts";
 
 // ============================================
-// Script Setup
-// ============================================
-
-const SCRIPT_DIR = import.meta.dir;
-const CONFIG_FILE = `${SCRIPT_DIR}/maestro.yaml`;
-
-// ============================================
 // Main Execution
 // ============================================
 
 async function main(): Promise<void> {
   log("Parsing arguments...");
-  const { dryRun } = parseArgs();
+  const { dryRun, configPath } = parseArgs();
+
+  // Config lives with the consuming app: resolve --config (default
+  // ./maestro.yaml) against the invocation cwd, not maestro's install dir.
+  const configFile = resolve(process.cwd(), configPath);
 
   log("Cleaning up stale temp files...");
   await cleanupStaleTempFiles();
 
   log("Ensuring required commands exist...");
-  requireCmds(["bws", "cloudflared"]);
+  // `pulumi` is driven in-process via the Automation API, which shells out to
+  // the host CLI; `docker` is still required by the Ansible execution env.
+  requireCmds(["bws", "cloudflared", "pulumi"]);
 
-  log(`Loading configuration from ${CONFIG_FILE}...`);
-  const config = await loadConfig(CONFIG_FILE);
+  log(`Loading configuration from ${configFile}...`);
+  const config = await loadConfig(configFile);
 
   if (dryRun) {
     log("Dry-run mode enabled. Configuration loaded:");
@@ -70,7 +77,13 @@ async function main(): Promise<void> {
   if (config.pulumi?.enabled) {
     requireBwsSecret("PULUMI_ACCESS_TOKEN");
     requireBwsSecret("CLOUDFLARE_API_TOKEN");
-    requireBwsSecret("DIGITALOCEAN_TOKEN");
+    requireBwsSecret("DIGITALOCEAN_ACCESS_TOKEN");
+  }
+
+  // POSTGRES_HOST, POSTGRES_PORT, and POSTGRES_PASSWORD are DigitalOcean-derived Pulumi outputs
+  if (config.pulumi?.database?.enabled) {
+    requireBwsSecret("POSTGRES_USER");
+    requireBwsSecret("POSTGRES_DB");
   }
 
   if (config.ansible?.enabled) {
@@ -83,10 +96,15 @@ async function main(): Promise<void> {
     requireBwsSecret(varName);
   }
 
-  // Prepare secrets required vars JSON for passing to ansible
-  const secretsRequiredVarsJson = JSON.stringify(
-    config.secrets?.requiredVars ?? [],
-  );
+  // Backend-container secrets (ansible.backend.secretEnv): names declared in
+  // config, values fetched from Bitwarden. Assert the SOURCE secrets up front
+  // so a missing secret fails here, before any cloud call.
+  for (const { source } of resolveSecretEnv(config.ansible?.backend?.secretEnv)) {
+    requireBwsSecret(source);
+  }
+
+  // Secrets required vars to forward to ansible playbooks
+  const secretsRequiredVars = config.secrets?.requiredVars ?? [];
 
   log("Setting up SSH key...");
   const sshKeyTempFile = await setupSshKeyTempFile();
@@ -100,7 +118,7 @@ async function main(): Promise<void> {
     await waitForTunnelsReady(allHosts, sshKeyTempFile);
 
     log("Provisioning ansible...");
-    await runAnsible(allHosts, config, secretsRequiredVarsJson);
+    await runAnsible(allHosts, config, sshKeyTempFile, secretsRequiredVars);
   } else {
     log("Skipping ansible provisioning");
   }

@@ -3,17 +3,10 @@
  */
 
 import { log } from "./helpers.ts";
+import { type PulumiHosts } from "./hosts.ts";
 
-export interface HostInfo {
-  hostname: string;
-  roles?: string[];
-  tags?: string[];
-  effective_domain?: string;
-}
-
-export interface PulumiHosts {
-  hosts: HostInfo[];
-}
+/** Strict DNS-label pattern; rejects shell metacharacters before host is interpolated into ssh ProxyCommand (which runs via /bin/sh -c). */
+const VALID_HOSTNAME = /^[A-Za-z0-9.-]+$/;
 
 /**
  * Wait for a single tunnel to become reachable via SSH through cloudflared
@@ -30,6 +23,10 @@ export async function waitForTunnel(
   attempts: number = 30,
   delayMs: number = 10000,
 ): Promise<void> {
+  if (!VALID_HOSTNAME.test(host)) {
+    throw new Error(`Refusing to connect: invalid hostname ${host}`);
+  }
+
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const result = Bun.spawnSync(
       [
@@ -91,53 +88,4 @@ export async function waitForTunnelsReady(
   for (const hostname of hostnames) {
     await waitForTunnel(hostname, sshKeyPath);
   }
-}
-
-/**
- * Parse Pulumi output to extract hosts JSON
- * Looks for content between __PULUMI_OUTPUTS_BEGIN__ and __PULUMI_OUTPUTS_END__ markers
- *
- * @param output - The raw stdout from Pulumi
- * @returns Parsed hosts object
- * @throws Error if parsing fails
- */
-export function parsePulumiHosts(output: string): PulumiHosts {
-  const beginMarker = "__PULUMI_OUTPUTS_BEGIN__";
-  const endMarker = "__PULUMI_OUTPUTS_END__";
-
-  const beginIndex = output.indexOf(beginMarker);
-  const endIndex = output.indexOf(endMarker);
-
-  if (beginIndex === -1 || endIndex === -1) {
-    throw new Error("Could not find Pulumi output markers in stdout");
-  }
-
-  const jsonStr = output
-    .slice(beginIndex + beginMarker.length, endIndex)
-    .trim();
-
-  try {
-    const parsed = JSON.parse(jsonStr);
-    return {
-      hosts: parsed.hosts ?? [],
-    };
-  } catch (e) {
-    throw new Error(`Failed to parse Pulumi hosts JSON: ${e}`);
-  }
-}
-
-/**
- * Merge hosts from multiple Pulumi stacks
- *
- * @param existing - Existing hosts object
- * @param newHosts - New hosts to merge
- * @returns Merged hosts object
- */
-export function mergeHosts(
-  existing: PulumiHosts,
-  newHosts: PulumiHosts,
-): PulumiHosts {
-  return {
-    hosts: [...existing.hosts, ...(newHosts.hosts ?? [])],
-  };
 }

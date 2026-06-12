@@ -37,7 +37,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: web_mode == 'static'
+  when: web_tier_enabled | bool and web_mode == 'static'
 
 - name: Check website assets are available in the execution environment (static mode)
   ansible.builtin.stat:
@@ -46,12 +46,12 @@
   delegate_to: localhost
   become: false
   run_once: true
-  when: web_mode == 'static'
+  when: web_tier_enabled | bool and web_mode == 'static'
 
 - name: Fail if website assets are missing (static mode)
   ansible.builtin.fail:
     msg: "Website assets were not found at {{ website_src_dir }}."
-  when: web_mode == 'static' and not website_assets_dir.stat.exists
+  when: web_tier_enabled | bool and web_mode == 'static' and not website_assets_dir.stat.exists
   delegate_to: localhost
   become: false
   run_once: true
@@ -64,7 +64,7 @@
     group: root
     mode: "0644"
     directory_mode: "0755"
-  when: web_mode == 'static'
+  when: web_tier_enabled | bool and web_mode == 'static'
 
 # ============================================
 # Deploy nginx configuration (mode-specific)
@@ -79,7 +79,7 @@
     mode: "0644"
   register: nginx_conf_template
   notify: Validate nginx configuration
-  when: web_mode == 'static'
+  when: web_tier_enabled | bool and web_mode == 'static'
 
 - name: Deploy nginx site configuration (docker mode)
   ansible.builtin.template:
@@ -90,7 +90,7 @@
     mode: "0644"
   register: nginx_conf_template_docker
   notify: Validate nginx configuration
-  when: web_mode == 'docker'
+  when: web_tier_enabled | bool and web_mode == 'docker'
 
 - name: Enable nginx site configuration
   ansible.builtin.file:
@@ -100,10 +100,43 @@
     force: true
   register: nginx_site_link
   notify: Validate nginx configuration
+  when: web_tier_enabled | bool
+
+# ============================================
+# Backend reverse proxy (blue/green cutover edge)
+# ============================================
+# Re-templates the upstream from the live port backend_app wrote before this role.
+# A port change makes the template change, which notifies validate -> reload; the
+# flush_handlers below applies it in-run, so the cutover is gap-free.
+
+- name: Deploy backend reverse-proxy site configuration
+  ansible.builtin.template:
+    src: backend-proxy.conf.j2
+    dest: "{{ nginx_conf_dest }}sites-available/{{ backend_proxy_site_name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nginx_backend_proxy_template
+  notify: Validate nginx configuration
+  when: backend_proxy_enabled | bool
+
+- name: Enable backend reverse-proxy site configuration
+  ansible.builtin.file:
+    src: "{{ nginx_conf_dest }}sites-available/{{ backend_proxy_site_name }}.conf"
+    dest: "{{ nginx_conf_dest }}sites-enabled/{{ backend_proxy_site_name }}.conf"
+    state: link
+    force: true
+  register: nginx_backend_proxy_link
+  notify: Validate nginx configuration
+  when: backend_proxy_enabled | bool
 
 - name: Flush handlers if nginx config changed
   ansible.builtin.meta: flush_handlers
-  when: nginx_conf_template.changed or nginx_conf_template_docker.changed or nginx_site_link.changed
+  when: >
+    nginx_conf_template.changed or nginx_conf_template_docker.changed
+    or nginx_site_link.changed
+    or (nginx_backend_proxy_template is defined and nginx_backend_proxy_template.changed)
+    or (nginx_backend_proxy_link is defined and nginx_backend_proxy_link.changed)
 
 - name: Ensure nginx service is enabled and running
   ansible.builtin.service:

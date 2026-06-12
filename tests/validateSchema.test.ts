@@ -15,6 +15,7 @@ pulumi:
   enabled: false
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -38,6 +39,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -45,7 +47,7 @@ pulumi:
         - roles:
             - backend
           size: small
-          region: us-east
+          region: sfo3
     staging:
       servers: []
     prod:
@@ -113,6 +115,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 2222
   stacks:
     dev:
@@ -148,6 +151,7 @@ pulumi:
   enabled: false
   command: ${command}
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -169,6 +173,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -191,6 +196,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -217,6 +223,224 @@ ansible:
       const result = await validateSchema(yaml);
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("backend");
       expect(result.pulumi?.stacks?.dev?.servers[0].roles).toContain("web");
+    });
+
+    test("accepts pulumi.database with all fields", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    version: "16"
+    size: db-s-1vcpu-1gb
+    nodeCount: 1
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+`;
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.database?.enabled).toBe(true);
+      expect(result.pulumi?.database?.version).toBe("16");
+      expect(result.pulumi?.database?.size).toBe("db-s-1vcpu-1gb");
+      expect(result.pulumi?.database?.nodeCount).toBe(1);
+    });
+
+    test("accepts pulumi.database with only the required enabled field", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: false
+  stacks:
+    prod:
+      servers: []
+`;
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.database?.enabled).toBe(false);
+      expect(result.pulumi?.database?.version).toBeUndefined();
+    });
+
+    test("accepts all valid postgres versions", async () => {
+      const versions = ["15", "16", "17"] as const;
+      for (const version of versions) {
+        const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    version: "${version}"
+  stacks:
+    prod:
+      servers: []
+`;
+        const result = await validateSchema(yaml);
+        expect(result.pulumi?.database?.version).toBe(version);
+      }
+    });
+
+    test("accepts a per-stack database sizing override", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    size: db-s-1vcpu-1gb
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+      database:
+        size: db-s-2vcpu-4gb
+        nodeCount: 1
+`;
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.stacks?.prod?.database?.size).toBe(
+        "db-s-2vcpu-4gb",
+      );
+      expect(result.pulumi?.stacks?.prod?.database?.nodeCount).toBe(1);
+    });
+
+    test("accepts a positive integer nodeCount (1 and 3)", async () => {
+      for (const nodeCount of [1, 3]) {
+        const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    nodeCount: ${nodeCount}
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+      database:
+        nodeCount: ${nodeCount}
+`;
+        const result = await validateSchema(yaml);
+        expect(result.pulumi?.database?.nodeCount).toBe(nodeCount);
+        expect(result.pulumi?.stacks?.prod?.database?.nodeCount).toBe(
+          nodeCount,
+        );
+      }
+    });
+
+    test("strips database.region (the DB co-locates with the droplet region)", async () => {
+      // region is not a database field: a DO VPC is region-scoped and the private
+      // endpoint only resolves inside it, so the DB always co-locates with the
+      // stack's droplets. A stray region is stripped, never honored.
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    region: sfo3
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+          region: sfo3
+      database:
+        size: db-s-2vcpu-4gb
+        region: nyc1
+`;
+      const result = await validateSchema(yaml);
+      const globalDb = result.pulumi?.database as Record<string, unknown>;
+      const stackDb = result.pulumi?.stacks?.prod?.database as Record<
+        string,
+        unknown
+      >;
+      expect(globalDb?.region).toBeUndefined();
+      expect(stackDb?.region).toBeUndefined();
+      expect(stackDb?.size).toBe("db-s-2vcpu-4gb");
+    });
+
+    test("accepts backend with a migrate command", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command:
+        - npm
+        - run
+        - migrate
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.migrate?.command).toEqual([
+        "npm",
+        "run",
+        "migrate",
+      ]);
+    });
+
+    test("accepts backend with a healthCheck path", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    healthCheck:
+      path: /ready
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.healthCheck?.path).toBe("/ready");
+    });
+
+    test("accepts backend with no migrate block (backward compatible)", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.image).toBe("myapp");
+      expect(result.ansible?.backend?.migrate).toBeUndefined();
+      expect(result.ansible?.backend?.healthCheck).toBeUndefined();
     });
 
     test("accepts web static with image source", async () => {
@@ -334,6 +558,22 @@ ansible:
       );
     });
 
+    test("rejects backend migrate without command field", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate: {}
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
     test("rejects web docker without image field", async () => {
       const yaml = `
 domain: example.com
@@ -369,11 +609,32 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
       servers:
         - size: small
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
+    test("rejects pulumi.database without enabled field", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    version: "16"
+  stacks:
+    prod:
+      servers: []
 `;
       await expect(validateSchema(yaml)).rejects.toThrow(
         "Invalid configuration",
@@ -387,6 +648,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev: {}
@@ -423,6 +685,7 @@ pulumi:
   enabled: "yes"
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks: {}
 `;
@@ -438,6 +701,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: "22"
   stacks: {}
 `;
@@ -453,6 +717,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -472,6 +737,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -498,6 +764,23 @@ ansible:
       );
     });
 
+    test("rejects backend.migrate.command as a string instead of array", async () => {
+      const yaml = `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command: "npm run migrate"
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
+
     test("rejects requiredVars as string instead of array", async () => {
       const yaml = `
 domain: example.com
@@ -512,6 +795,63 @@ secrets:
   });
 
   // ============================================
+  // Invalid Configurations - nodeCount (positive integer)
+  // ============================================
+
+  describe("invalid nodeCount", () => {
+    const globalYaml = (nodeCount: string) => `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    nodeCount: ${nodeCount}
+  stacks:
+    prod:
+      servers: []
+`;
+
+    const stackYaml = (nodeCount: string) => `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+  stacks:
+    prod:
+      servers: []
+      database:
+        nodeCount: ${nodeCount}
+`;
+
+    for (const [label, value] of [
+      ["zero", "0"],
+      ["negative", "-5"],
+      ["non-integer", "2.5"],
+    ] as const) {
+      test(`rejects global pulumi.database.nodeCount of ${label}`, async () => {
+        await expect(validateSchema(globalYaml(value))).rejects.toThrow(
+          "Invalid configuration",
+        );
+      });
+
+      test(`rejects per-stack database.nodeCount of ${label}`, async () => {
+        await expect(validateSchema(stackYaml(value))).rejects.toThrow(
+          "Invalid configuration",
+        );
+      });
+    }
+  });
+
+  // ============================================
   // Invalid Configurations - Invalid Enum Values
   // ============================================
 
@@ -523,6 +863,7 @@ pulumi:
   enabled: true
   command: deploy
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks: {}
 `;
@@ -538,6 +879,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     development:
@@ -555,6 +897,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -591,6 +934,27 @@ ansible:
         "Invalid configuration",
       );
     });
+
+    test("rejects invalid postgres version", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+    version: "14"
+  stacks:
+    prod:
+      servers: []
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "Invalid configuration",
+      );
+    });
   });
 
   // ============================================
@@ -615,6 +979,7 @@ pulumi:
   enabled: false
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -653,6 +1018,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -675,6 +1041,32 @@ ansible:
       const server = result.pulumi?.stacks?.dev?.servers[0];
       expect(server?.roles).toContain("backend");
       expect((server as Record<string, unknown>).customField).toBeUndefined();
+    });
+
+    test("strips enabled/version from a per-stack database override", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+  stacks:
+    prod:
+      servers: []
+      database:
+        size: db-s-2vcpu-4gb
+        enabled: true
+        version: "17"
+`;
+      const result = await validateSchema(yaml);
+      const stackDb = result.pulumi?.stacks?.prod?.database;
+      expect(stackDb?.size).toBe("db-s-2vcpu-4gb");
+      expect((stackDb as Record<string, unknown>)?.enabled).toBeUndefined();
+      expect((stackDb as Record<string, unknown>)?.version).toBeUndefined();
     });
 
     test("strips extra field in backend config", async () => {
@@ -718,6 +1110,7 @@ pulumi:
   enabled: "not-a-boolean"
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks: {}
 `;
@@ -736,21 +1129,38 @@ pulumi:
   // ============================================
 
   describe("semantic validation", () => {
-    test("rejects enabled pulumi without prod stack", async () => {
+    test("rejects enabled pulumi with no stacks defined", async () => {
       const yaml = `
 domain: example.com
 pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks: {}
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "at least one stack must be defined in pulumi.stacks when pulumi.enabled is true",
+      );
+    });
+
+    test("accepts enabled pulumi with a non-prod stack only", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
       servers: []
 `;
-      await expect(validateSchema(yaml)).rejects.toThrow(
-        "pulumi.stacks.prod is required when pulumi.enabled is true",
-      );
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.stacks?.dev).toBeDefined();
+      expect(result.pulumi?.stacks?.prod).toBeUndefined();
     });
 
     test("rejects config with both ansible.web.static and ansible.web.docker", async () => {
@@ -780,6 +1190,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -805,6 +1216,7 @@ pulumi:
   enabled: true
   command: up
   cloudflareAccountId: abc123
+  projectName: proj
   sshPort: 22
   stacks:
     dev:
@@ -835,6 +1247,219 @@ ansible:
       );
     });
 
+    test("rejects database.enabled when pulumi.enabled is false", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: false
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+  stacks:
+    prod:
+      servers: []
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        /pulumi\.database\.enabled/,
+      );
+    });
+
+    test("accepts database.enabled with a non-prod stack only", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  database:
+    enabled: true
+  stacks:
+    dev:
+      servers: []
+`;
+      // The DB tier only requires pulumi.enabled (which requires at least one
+      // stack); it does NOT require prod specifically, so a dev-only set is valid.
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.database?.enabled).toBe(true);
+      expect(result.pulumi?.stacks?.prod).toBeUndefined();
+    });
+
+    test("rejects a stack whose servers have mixed regions", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+          region: nyc1
+        - roles:
+            - backend
+          region: fra1
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        /stack "prod" mixes regions/,
+      );
+    });
+
+    test("accepts a stack whose servers share one region", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+          region: nyc1
+        - roles:
+            - backend
+          region: nyc1
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+`;
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.stacks?.prod?.servers).toHaveLength(2);
+    });
+
+    test("accepts a stack whose servers omit region (region inherited)", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+        - roles:
+            - backend
+          region: nyc1
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+`;
+      const result = await validateSchema(yaml);
+      expect(result.pulumi?.stacks?.prod?.servers).toHaveLength(2);
+    });
+
+    test("rejects a per-stack database override when pulumi.database is absent", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers: []
+      database:
+        size: db-s-2vcpu-4gb
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        /stack "prod" defines a database override but pulumi\.database is not configured/,
+      );
+    });
+
+    test("rejects an empty migrate.command array", async () => {
+      // The codec accepts an empty array (t.array(t.string)); the semantic
+      // check is what rejects it.
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command: []
+`;
+      await expect(validateSchema(yaml)).rejects.toThrow(
+        "ansible.backend.migrate.command must be a non-empty array",
+      );
+    });
+
+    test("accepts a non-empty migrate.command with the backend role", async () => {
+      const yaml = `
+domain: example.com
+pulumi:
+  enabled: true
+  command: up
+  cloudflareAccountId: abc123
+  projectName: proj
+  sshPort: 22
+  stacks:
+    prod:
+      servers:
+        - roles:
+            - backend
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    migrate:
+      command:
+        - npm
+        - run
+        - migrate
+`;
+      const result = await validateSchema(yaml);
+      expect(result.ansible?.backend?.migrate?.command).toEqual([
+        "npm",
+        "run",
+        "migrate",
+      ]);
+    });
+
     test("rejects config with source local but missing dist", async () => {
       const yaml = `
 domain: example.com
@@ -848,6 +1473,137 @@ ansible:
       await expect(validateSchema(yaml)).rejects.toThrow(
         'ansible.web.static.dist is required when source is "local"',
       );
+    });
+
+    describe("backend secretEnv", () => {
+      const backendYaml = (secretEnvBlock: string) => `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    env:
+      NODE_ENV: production
+${secretEnvBlock}
+`;
+
+      test("accepts a list of secret names", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          "STRIPE_SECRET_KEY",
+          "APP_BWS_ACCESS_TOKEN",
+        ]);
+      });
+
+      test("accepts backend with no secretEnv (backward compatible)", async () => {
+        const result = await validateSchema(backendYaml(""));
+        expect(result.ansible?.backend?.secretEnv).toBeUndefined();
+      });
+
+      test("accepts mapping entries (containerVarName: bwsSecretName)", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          "STRIPE_SECRET_KEY",
+          { BWS_ACCESS_TOKEN: "APP_BWS_ACCESS_TOKEN" },
+        ]);
+      });
+
+      test("rejects duplicate entries", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - STRIPE_SECRET_KEY`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'targets the container variable "STRIPE_SECRET_KEY" more than once',
+        );
+      });
+
+      test("rejects a mapping entry colliding with a plain entry", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - API_KEY
+      - API_KEY: OTHER_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'targets the container variable "API_KEY" more than once',
+        );
+      });
+
+      test("rejects an empty mapping entry", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - {}`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          "empty mapping entry",
+        );
+      });
+
+      test("rejects empty entries", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - ""`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          "must be non-empty secret names",
+        );
+      });
+
+      test("rejects a name also present in env", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - NODE_ENV`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          '"NODE_ENV" appears in both ansible.backend.env and ansible.backend.secretEnv',
+        );
+      });
+
+      test("rejects the auto-injected PORT as a target", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - PORT`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not target "PORT"',
+        );
+      });
+
+      test("rejects PORT as a mapping target too", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - PORT: SOME_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not target "PORT"',
+        );
+      });
+
+      test("rejects BWS_ACCESS_TOKEN as a source (maestro's own deploy token)", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - BWS_ACCESS_TOKEN`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not read from "BWS_ACCESS_TOKEN"',
+        );
+      });
+
+      test("rejects BWS_ACCESS_TOKEN as a mapping source too", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - APP_TOKEN: BWS_ACCESS_TOKEN`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not read from "BWS_ACCESS_TOKEN"',
+        );
+      });
+
+      test("accepts BWS_ACCESS_TOKEN as a container name when the source differs", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          { BWS_ACCESS_TOKEN: "APP_BWS_ACCESS_TOKEN" },
+        ]);
+      });
+
+      test("rejects secretEnv as a map instead of a list", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      API_KEY: STRIPE_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow();
+      });
     });
   });
 });

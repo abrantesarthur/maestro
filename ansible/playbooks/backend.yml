@@ -5,3 +5,21 @@
   roles:
     - docker
     - backend_app
+    # nginx is the public edge; it repoints its upstream to the new container
+    # after backend_app writes the live port, for a gap-free reload cutover.
+    - nginx
+  # Remove the old container only AFTER nginx has reloaded onto the new port (doing
+  # it inside backend_app, before nginx runs, would proxy to a dead port). Uses facts
+  # set by backend_app; guarded so a skipped role / first deploy is a no-op.
+  post_tasks:
+    - name: Remove previously-live backend container(s)
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ backend_old_names }}"
+      vars:
+        backend_old_names: >-
+          {{ [backend_container_name_green]
+             if backend_target_color == 'blue'
+             else [backend_container_name_blue] }}
+      when: backend_target_color is defined

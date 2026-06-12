@@ -1,0 +1,4 @@
+# Generated at build/run time — never ship these with the npm package
+context/
+ansible-navigator.log
+execution_environment/files/

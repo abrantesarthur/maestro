@@ -9,20 +9,17 @@ ansible-navigator:
   execution-environment:
     enabled: True # Enable running within an execution environment container
     container-engine: docker
-    image: ansible_ee:latest # Name of the execution environment image to run
+    # Image built locally by maestro on each run — must match EE_IMAGE in
+    # lib/runAnsible.ts.
+    image: ansible_ee:latest
     pull:
       policy: missing # Only pull the image if it’s not present locally
-    environment-variables:
-      pass:
-        - SSH_HOSTS
-        - SSH_KEY_PATH
-        - GHCR_TOKEN
-        - GHCR_USERNAME
-        - BACKEND_IMAGE
-        - BACKEND_IMAGE_TAG
-        - BACKEND_PORT
+    # Env vars are forwarded into the container via --penv
+    # (see buildPlaybookArgs in lib/runAnsible.ts).
   ansible:
     inventory:
       help: False # Do not show inventory help output
       entries:
-        - inventory/hosts.py # Dynamic inventory populated via SSH_HOSTS
+        # Executable dynamic inventory: Ansible runs this script and parses its stdout as JSON
+        # (host list is computed at runtime from the SSH_HOSTS env var, not a static file)
+        - inventory/hosts.py

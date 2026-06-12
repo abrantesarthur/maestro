@@ -1,4 +1,4 @@
-import { ServerRole, type MaestroConfig } from "./schema";
+import { ServerRole, resolveSecretEnv, type MaestroConfig } from "./schema";
 
 /**
  * Validates semantic constraints that cannot be expressed in io-ts codecs
@@ -11,17 +11,58 @@ export const validateSemanticConfig = async ({
   raw: MaestroConfig;
   roles: Set<ServerRole>;
 }): Promise<void> => {
-  // Conditional validation: pulumi.enabled requires cloudflareAccountId and at least the prod stack
+  // Conditional validation: pulumi.enabled requires cloudflareAccountId and at
+  // least one defined stack. We don't require `prod` specifically — a dev-only or
+  // staging-only deployment is valid (it just lives on a prefixed subdomain;
+  // `prod` is the environment that maps to the apex domain). The guard only
+  // prevents an enabled-but-empty stacks config, which would provision nothing.
   if (raw.pulumi?.enabled) {
     if (!raw.pulumi.cloudflareAccountId) {
       throw new Error(
         `pulumi.cloudflareAccountId is required when pulumi.enabled is true`,
       );
     }
-    if (!raw.pulumi.stacks?.prod) {
+    if (!raw.pulumi.stacks || Object.keys(raw.pulumi.stacks).length === 0) {
       throw new Error(
-        `pulumi.stacks.prod is required when pulumi.enabled is true`,
+        `at least one stack must be defined in pulumi.stacks when pulumi.enabled is true`,
       );
+    }
+  }
+
+  // Conditional validation: the database tier is Pulumi-provisioned infra, so
+  // enabling it requires pulumi.enabled. The Bitwarden POSTGRES_USER/DB pair is
+  // enforced separately in index.ts at runtime.
+  if (raw.pulumi?.database?.enabled && !raw.pulumi.enabled) {
+    throw new Error(
+      `pulumi.enabled must be true when pulumi.database.enabled is true`,
+    );
+  }
+
+  // A per-stack database override is only meaningful as a sizing override on top
+  // of the global pulumi.database block. Without it, runPulumi's merge drops the
+  // override silently, so reject the orphaned config explicitly.
+  if (!raw.pulumi?.database) {
+    for (const [stackName, stack] of Object.entries(raw.pulumi?.stacks ?? {})) {
+      if (stack?.database) {
+        throw new Error(
+          `stack "${stackName}" defines a database override but pulumi.database is not configured`,
+        );
+      }
+    }
+  }
+
+  // Mixed-region guard: a stack gets a single region-scoped VPC and every droplet
+  // must join it, so all servers in a stack must share one region. The stack's
+  // effective region is servers[0].region ?? "nyc1" (matching pulumi/index.ts).
+  // Servers that omit region inherit it; an explicit differing region is invalid.
+  for (const [stackName, stack] of Object.entries(raw.pulumi?.stacks ?? {})) {
+    const stackRegion = stack.servers[0]?.region ?? "nyc1";
+    for (const server of stack.servers) {
+      if (server.region && server.region !== stackRegion) {
+        throw new Error(
+          `stack "${stackName}" mixes regions: all servers must share one region, but found "${server.region}" alongside the stack region "${stackRegion}"`,
+        );
+      }
     }
   }
 
@@ -91,12 +132,69 @@ export const validateSemanticConfig = async ({
     }
   }
 
+  // Validate ansible.backend.secretEnv: Bitwarden secret names whose values
+  // are injected into the backend container at runtime. Entries are plain
+  // names or containerVarName: bwsSecretName mappings. Container names must be
+  // unambiguous (no duplicates, no overlap with the literal env map) and must
+  // not shadow values maestro injects itself; source names must never resolve
+  // to maestro's own deploy token.
+  if (raw.ansible?.backend?.secretEnv) {
+    for (const entry of raw.ansible.backend.secretEnv) {
+      if (typeof entry !== "string" && Object.keys(entry).length === 0) {
+        throw new Error(
+          `ansible.backend.secretEnv contains an empty mapping entry`,
+        );
+      }
+    }
+    const pairs = resolveSecretEnv(raw.ansible.backend.secretEnv);
+    const seen = new Set<string>();
+    for (const { container, source } of pairs) {
+      if (!container || !source) {
+        throw new Error(
+          `ansible.backend.secretEnv entries must be non-empty secret names`,
+        );
+      }
+      if (seen.has(container)) {
+        throw new Error(
+          `ansible.backend.secretEnv targets the container variable "${container}" more than once`,
+        );
+      }
+      seen.add(container);
+      if (container in (raw.ansible?.backend?.env ?? {})) {
+        throw new Error(
+          `"${container}" appears in both ansible.backend.env and ansible.backend.secretEnv; define it in exactly one place`,
+        );
+      }
+      if (container === "PORT") {
+        throw new Error(
+          `ansible.backend.secretEnv must not target "PORT"; it is injected automatically from ansible.backend.port`,
+        );
+      }
+      if (source === "BWS_ACCESS_TOKEN") {
+        throw new Error(
+          `ansible.backend.secretEnv must not read from "BWS_ACCESS_TOKEN": that is maestro's own deploy token (which can read all deploy secrets), not a Bitwarden secret. ` +
+            `Store a separate, narrowly scoped machine-account token in Bitwarden under a different name and reference it — to hand it to the app as BWS_ACCESS_TOKEN, use the mapping form: "BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN".`,
+        );
+      }
+    }
+  }
+
   // Validate ansible.backend configuration when backend role is present
   if ((raw.ansible?.enabled ?? false) && roles.has(ServerRole.Backend)) {
     const backendConfig = raw.ansible?.backend;
     if (!backendConfig?.image || !backendConfig?.tag) {
       throw new Error(
         `ansible.backend.image and ansible.backend.tag are required when servers have the 'backend' role`,
+      );
+    }
+
+    // The migrate block is optional (absence = no migration), but when present
+    // its command must be non-empty — an empty argv would start the migration
+    // container with no command, which the codec cannot reject (empty array is
+    // a valid t.array(t.string)).
+    if (backendConfig.migrate && backendConfig.migrate.command.length === 0) {
+      throw new Error(
+        `ansible.backend.migrate.command must be a non-empty array`,
       );
     }
   }

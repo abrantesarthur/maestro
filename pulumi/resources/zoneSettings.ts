@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { getZoneId } from "../providers";
+import { resourceType } from "./resourceType";
 
 /** Arguments for constructing a ZoneSettings component */
 export interface ZoneSettingsArgs {
@@ -15,7 +16,7 @@ export class ZoneSettings extends pulumi.ComponentResource {
 
   constructor(args: ZoneSettingsArgs, opts?: pulumi.ComponentResourceOptions) {
     const name = ZoneSettings.buildResourceName(args);
-    super("dalhe:cloudflare:ZoneSettings", name, {}, opts);
+    super(resourceType("cloudflare:ZoneSettings"), name, {}, opts);
 
     const defaults: Required<Pick<ZoneSettingsArgs, "ssl">> = {
       ssl: "strict",

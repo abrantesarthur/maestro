@@ -40,42 +40,73 @@ export const WebModeValues = {
   Docker: "docker",
 } as const;
 
+export const PostgresVersionValues = {
+  V15: "15",
+  V16: "16",
+  V17: "17",
+} as const;
+
+// Managed-database size slugs. Must stay in sync with `databaseSizeMap` in
+// pulumi/index.ts, which maps these strings to digitalocean.DatabaseSlug.
+export const DatabaseSizeValues = {
+  DB_1VCPU_1GB: "db-s-1vcpu-1gb",
+  DB_1VCPU_2GB: "db-s-1vcpu-2gb",
+  DB_2VCPU_4GB: "db-s-2vcpu-4gb",
+  DB_4VCPU_8GB: "db-s-4vcpu-8gb",
+  DB_6VCPU_16GB: "db-s-6vcpu-16gb",
+  DB_8VCPU_32GB: "db-s-8vcpu-32gb",
+  DB_16VCPU_64GB: "db-s-16vcpu-64gb",
+} as const;
+
+// DigitalOcean region slugs. Must stay in sync with `regionMap` in
+// pulumi/index.ts, which maps these strings to digitalocean.Region.
+export const RegionValues = {
+  NYC1: "nyc1",
+  NYC2: "nyc2",
+  NYC3: "nyc3",
+  SFO1: "sfo1",
+  SFO2: "sfo2",
+  SFO3: "sfo3",
+  AMS2: "ams2",
+  AMS3: "ams3",
+  LON1: "lon1",
+  FRA1: "fra1",
+  TOR1: "tor1",
+  BLR1: "blr1",
+  SGP1: "sgp1",
+} as const;
+
 // ============================================
 // Enum Codecs (Derived from Values)
 // ============================================
 
-export const StackNameCodec = t.keyof({
-  [StackNameValues.Dev]: null,
-  [StackNameValues.Staging]: null,
-  [StackNameValues.Prod]: null,
-});
+// Build a `t.keyof` (membership) codec from the values of a `…Values` const.
+// Generic over T so `t.TypeOf` stays the precise literal union (T[keyof T])
+// rather than widening to `string`.
+const keyofValues = <T extends Record<string, string>>(values: T) =>
+  t.keyof(
+    Object.fromEntries(Object.values(values).map((v) => [v, null])) as Record<
+      T[keyof T],
+      null
+    >,
+  );
 
-export const ServerRoleCodec = t.keyof({
-  [ServerRoleValues.Backend]: null,
-  [ServerRoleValues.Web]: null,
-});
+export const StackNameCodec = keyofValues(StackNameValues);
+export const ServerRoleCodec = keyofValues(ServerRoleValues);
+export const PulumiCommandCodec = keyofValues(PulumiCommandValues);
+export const StaticSourceCodec = keyofValues(StaticSourceValues);
+export const SecretsProviderCodec = keyofValues(SecretsProviderValues);
+export const WebModeCodec = keyofValues(WebModeValues);
+export const PostgresVersionCodec = keyofValues(PostgresVersionValues);
+export const DatabaseSizeCodec = keyofValues(DatabaseSizeValues);
+export const RegionCodec = keyofValues(RegionValues);
 
-export const PulumiCommandCodec = t.keyof({
-  [PulumiCommandValues.Up]: null,
-  [PulumiCommandValues.Refresh]: null,
-  [PulumiCommandValues.Cancel]: null,
-  [PulumiCommandValues.Output]: null,
-  [PulumiCommandValues.Destroy]: null,
-});
-
-export const StaticSourceCodec = t.keyof({
-  [StaticSourceValues.Local]: null,
-  [StaticSourceValues.Image]: null,
-});
-
-export const SecretsProviderCodec = t.keyof({
-  [SecretsProviderValues.Bws]: null,
-});
-
-export const WebModeCodec = t.keyof({
-  [WebModeValues.Static]: null,
-  [WebModeValues.Docker]: null,
-});
+// Positive integer (> 0). Rejects negatives, zero, and non-integers.
+const PositiveIntCodec = t.refinement(
+  t.number,
+  (n) => Number.isInteger(n) && n > 0,
+  "PositiveInt",
+);
 
 // ============================================
 // Enum Types (Derived from Codecs)
@@ -96,6 +127,15 @@ export const WebMode = WebModeValues;
 export type StaticSource = t.TypeOf<typeof StaticSourceCodec>;
 export const StaticSource = StaticSourceValues;
 
+export type PostgresVersion = t.TypeOf<typeof PostgresVersionCodec>;
+export const PostgresVersion = PostgresVersionValues;
+
+export type DatabaseSize = t.TypeOf<typeof DatabaseSizeCodec>;
+export const DatabaseSize = DatabaseSizeValues;
+
+export type Region = t.TypeOf<typeof RegionCodec>;
+export const Region = RegionValues;
+
 // ============================================
 // Server Config Codec
 // ============================================
@@ -110,9 +150,43 @@ const ServerConfigCodec = t.exact(
       tags: t.array(t.string),
       image: t.string,
       size: t.string,
-      region: t.string,
+      region: RegionCodec,
     }),
   ]),
+);
+
+// ============================================
+// Database Config Codec
+// ============================================
+
+// Global database defaults (under pulumi.database). `enabled` is the single
+// switch; the remaining fields are optional sizing overrides with documented
+// defaults applied by the Pulumi program (version "16", nodeCount 1, size
+// "db-s-1vcpu-1gb"). Region is intentionally NOT configurable: a DigitalOcean
+// VPC is region-scoped and the private endpoint only resolves inside it, so the
+// database always co-locates with the stack's droplets' region.
+const DatabaseConfigCodec = t.exact(
+  t.intersection([
+    t.type({
+      enabled: t.boolean,
+    }),
+    t.partial({
+      version: PostgresVersionCodec,
+      size: DatabaseSizeCodec,
+      nodeCount: PositiveIntCodec,
+    }),
+  ]),
+);
+
+// Per-stack database sizing override (under pulumi.stacks.*.database). It may
+// only override sizing (size / nodeCount); `enabled` and `version` are decided
+// globally, and region is never configurable (the database co-locates with the
+// stack's droplets — see DatabaseConfigCodec).
+const StackDatabaseConfigCodec = t.exact(
+  t.partial({
+    size: DatabaseSizeCodec,
+    nodeCount: PositiveIntCodec,
+  }),
 );
 
 // ============================================
@@ -120,9 +194,14 @@ const ServerConfigCodec = t.exact(
 // ============================================
 
 export const StackConfigCodec = t.exact(
-  t.type({
-    servers: t.array(ServerConfigCodec),
-  }),
+  t.intersection([
+    t.type({
+      servers: t.array(ServerConfigCodec),
+    }),
+    t.partial({
+      database: StackDatabaseConfigCodec,
+    }),
+  ]),
 );
 
 // ============================================
@@ -150,6 +229,7 @@ const PulumiConfigCodec = t.exact(
     }),
     t.partial({
       stacks: PulumiStacksCodec,
+      database: DatabaseConfigCodec,
     }),
   ]),
 );
@@ -206,7 +286,29 @@ const WebConfigCodec = t.exact(
 // Backend Config Codec
 // ============================================
 
-// FIXME: do we prefix backend env vars with BACKEND_ENV_ ?
+const MigrateConfigCodec = t.exact(
+  t.type({
+    command: t.array(t.string),
+  }),
+);
+
+const HealthCheckConfigCodec = t.exact(
+  t.partial({
+    path: t.string,
+  }),
+);
+
+// A secretEnv entry is either a plain Bitwarden secret name (injected into the
+// container under the same name) or a single-pair mapping of
+// containerVarName: bwsSecretName (injected under containerVarName, value read
+// from bwsSecretName). The mapping form exists so an app can receive a variable
+// under a name that would be ambiguous or forbidden as a SOURCE — e.g.
+// `BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`.
+const SecretEnvEntryCodec = t.union([
+  t.string,
+  t.record(t.string, t.string),
+]);
+
 const BackendConfigCodec = t.exact(
   t.intersection([
     t.type({
@@ -216,6 +318,9 @@ const BackendConfigCodec = t.exact(
     }),
     t.partial({
       env: t.record(t.string, t.string),
+      secretEnv: t.array(SecretEnvEntryCodec),
+      migrate: MigrateConfigCodec,
+      healthCheck: HealthCheckConfigCodec,
     }),
   ]),
 );
@@ -275,3 +380,30 @@ export const MaestroConfigCodec = t.exact(
 
 export type StackConfig = t.TypeOf<typeof StackConfigCodec>;
 export type MaestroConfig = t.TypeOf<typeof MaestroConfigCodec>;
+export type SecretEnvEntry = t.TypeOf<typeof SecretEnvEntryCodec>;
+
+/** A normalized secretEnv pair: container var name ← Bitwarden secret name. */
+export interface SecretEnvPair {
+  /** Environment variable name the backend container receives */
+  container: string;
+  /** Bitwarden secret name the value is read from */
+  source: string;
+}
+
+/**
+ * Normalize ansible.backend.secretEnv entries into (container, source) pairs.
+ * Plain strings map a secret to a container var of the same name; mapping
+ * entries rename (containerVarName: bwsSecretName).
+ */
+export function resolveSecretEnv(
+  secretEnv: SecretEnvEntry[] | undefined,
+): SecretEnvPair[] {
+  return (secretEnv ?? []).flatMap((entry) =>
+    typeof entry === "string"
+      ? [{ container: entry, source: entry }]
+      : Object.entries(entry).map(([container, source]) => ({
+          container,
+          source,
+        })),
+  );
+}

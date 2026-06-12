@@ -1,10 +1,40 @@
 ---
-backend_container_name: backend
 backend_container_port: "{{ lookup('env', 'BACKEND_PORT') }}"
-backend_host_port: "{{ lookup('env', 'BACKEND_PORT') }}"
 backend_bind_address: 127.0.0.1
+
+# Postgres client image used by the grant task (avoids installing psql on the host).
+backend_db_client_image: postgres:16-alpine
+
+# Blue/green container names. Blue binds BACKEND_PORT, green binds BACKEND_PORT+1,
+# both on 127.0.0.1. The idle color (the one not currently running) receives the
+# new image; on a clean host we default to blue.
+backend_container_name_blue: backend-blue
+backend_container_name_green: backend-green
+backend_blue_port: "{{ lookup('env', 'BACKEND_PORT') }}"
+backend_green_port: "{{ (lookup('env', 'BACKEND_PORT') | int) + 1 }}"
+
+# Migration argv (JSON-encoded array) forwarded as BACKEND_MIGRATE_COMMAND via the
+# ansible-navigator pass list. Empty string when no migrate block is configured.
+backend_migrate_command_raw: "{{ lookup('env', 'BACKEND_MIGRATE_COMMAND') }}"
+
+# HTTP readiness probe path for the blue/green health check.
+backend_health_path: "{{ lookup('env', 'BACKEND_HEALTH_PATH') | default('/health', true) }}"
+
+# One-line file holding the live backend port (blue or green). backend_app writes
+# it at cutover; the nginx role reads it back to point its proxy upstream at the
+# freshly-promoted container. This is how the two roles agree on the live port.
+backend_upstream_port_file: /etc/maestro/backend-upstream.port
 # backend_env is dynamically built from BACKEND_ENV_* environment variables in tasks
 # Example: BACKEND_ENV_MY_VAR=value becomes MY_VAR=value in the container
+#
+# Postgres connection wiring (hybrid origin):
+#   - POSTGRES_USER / POSTGRES_DB / POSTGRES_SSLMODE / PGSSLMODE are stable global values delivered
+#     via BACKEND_ENV_* (POSTGRES_SSLMODE/PGSSLMODE are the constant 'require' for TLS over the
+#     private VPC endpoint).
+#   - POSTGRES_HOST / POSTGRES_PORT / POSTGRES_PASSWORD are per-stack, DO-derived values threaded
+#     onto this stack's backend host(s) as the per-host 'postgres_host' / 'postgres_port' /
+#     'postgres_password' hostvars (see inventory/hosts.py). The tasks merge them into backend_env
+#     when postgres_host is defined, so each stack's backend reaches its own isolated database.
 backend_image: "{{ lookup('env', 'BACKEND_IMAGE') }}"
 backend_image_tag: "{{ lookup('env', 'BACKEND_IMAGE_TAG') }}"
 ghcr_username: "{{ lookup('env', 'GHCR_USERNAME') }}"

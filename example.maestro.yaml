@@ -14,7 +14,7 @@
 #
 # Environment-specific subdomains are automatically created based on stack name:
 #   - dev stack:     dev.example.com, api.dev.example.com, ssh0.dev.example.com
-#   - staging stack: stag.example.com, api.stag.example.com, ssh0.stag.example.com
+#   - staging stack: staging.example.com, api.staging.example.com, ssh0.staging.example.com
 #   - prod stack:    example.com, api.example.com, ssh0.example.com
 domain: example.com
 
@@ -30,12 +30,18 @@ pulumi:
   # configure the server via Ansible (see below).
   enabled: true
 
-  # [Required] Pulumi command to run: up, refresh, cancel, or output
+  # [Required] Pulumi command to run: up, refresh, cancel, output, or destroy
   # - up: Apply infrastructure changes
   # - refresh: Reconcile state without deploying
   # - cancel: Cancel a running update
   # - output: Retrieve stack outputs without changes
+  # - destroy: Tear down all infrastructure for the stack (skips Ansible)
   command: up
+
+  # [Required] Pulumi project name
+  # Identifies the Pulumi project that owns the stacks below. Stacks are
+  # namespaced under this project in Pulumi Cloud (e.g. <org>/<projectName>/prod).
+  projectName: your-project-name
 
   # [Required] Cloudflare account ID
   # Found at: https://dash.cloudflare.com/ -> "Copy Account ID" under the three
@@ -44,6 +50,38 @@ pulumi:
 
   # [Required] SSH port for Cloudflare tunnel configuration
   sshPort: 22
+
+  # [Optional] Managed PostgreSQL database tier (global defaults)
+  #
+  # When enabled, Pulumi provisions a DigitalOcean Managed Postgres cluster PER
+  # STACK (each environment gets its own isolated database), placed in the same
+  # per-stack VPC as the backend droplet. The backend reaches it over the
+  # PRIVATE VPC endpoint with TLS (sslmode=require). A dedicated least-privilege
+  # app user and app database are created, and a DatabaseFirewall restricts
+  # access to the stack's backend droplet (by stack-name tag).
+  #
+  # The database is the "crown jewels": the cluster carries retainOnDelete and
+  # protect, so a `pulumi destroy` of the disposable backend droplet leaves the
+  # database (and its data) intact. Durability is covered by DigitalOcean's
+  # built-in daily backups and point-in-time recovery (PITR).
+  #
+  # Connection details are wired through the existing plumbing (no secrets here):
+  #   - POSTGRES_USER, POSTGRES_DB originate in Bitwarden (values you choose;
+  #     stable). Pulumi reads them to create the user + database; the backend reads
+  #     the same values. One source of truth, no drift.
+  #   - POSTGRES_HOST (the private endpoint), POSTGRES_PORT (the cluster's assigned
+  #     port), and POSTGRES_PASSWORD are DERIVED by DigitalOcean (unknowable until
+  #     provisioned). Pulumi exports them as stack outputs (password as a Pulumi
+  #     secret); Maestro threads them into the backend container per stack. They
+  #     are NEVER stored in Bitwarden or committed.
+  # database:
+  #   enabled: false          # [Required] Set to true to provision the DB tier
+  #   version: "16"           # [Optional, default: "16"] Postgres major version: "15", "16", or "17"
+  #   size: db-s-1vcpu-1gb    # [Optional, default: db-s-1vcpu-1gb] DigitalOcean DB node size
+  #   nodeCount: 1            # [Optional, default: 1] Number of nodes (1 = single node)
+  # The database region is NOT configurable: it always co-locates with the
+  # stack's droplets (a DigitalOcean VPC is region-scoped and the private
+  # endpoint only resolves inside it).
 
   # [Required when pulumi.enabled is true] Stack definitions
   # Each stack (dev, staging, prod) represents an isolated environment.
@@ -55,10 +93,25 @@ pulumi:
         # Single production server (handles backend and web)
         - roles: [backend, web] # Required: one or more of backend, web
           # groups: [devops]       # Optional: override global ansible.groups for this server
-          # tags: []               # Optional: custom user-defined tags
-          # image: ubuntu-25-04-x64 # Optional, default: ubuntu-25-04-x64
+          # tags: []               # Optional: custom user-defined tags. Each tag is:
+          #                        #   - added as a DigitalOcean droplet tag (on top of
+          #                        #     the stack name + roles, which are always applied)
+          #                        #   - turned into an Ansible inventory group of the same
+          #                        #     name, so playbooks can target `hosts: <tag>`
+          #                        #   Note: the reserved tags `web` and `backend` trigger
+          #                        #   the same infra as the matching roles (DNS records /
+          #                        #   api tunnel), even when used as a custom tag.
+          # image: ubuntu-24-04-x64 # Optional, default: ubuntu-24-04-x64
           # size: s-1vcpu-1gb      # Optional, default: s-1vcpu-1gb
           # region: nyc1           # Optional, default: nyc1
+      # [Optional] Per-stack database sizing override. Merged over pulumi.database
+      # (override wins). Only sizing may be overridden here (size / nodeCount) —
+      # enabling the DB tier (enabled) and the engine version (version) are global,
+      # and region is never configurable (the database co-locates with this stack's
+      # droplets).
+      # database:
+      #   size: db-s-2vcpu-4gb   # [Optional] Override node size for this stack
+      #   nodeCount: 1           # [Optional] Override node count for this stack
 
   # Multi-stack setup example (uncomment to use):
   # stacks:
@@ -123,8 +176,10 @@ ansible:
       # --- For source: local ---
       # Build from a local directory and deploy static assets
 
-      # [Required when source is local] Path to the website source directory
-      dir: "/path/to/your/website"
+      # [Required when source is local] Path to the website source directory.
+      # Relative paths resolve against this config file's directory, so
+      # "./website" works no matter where maestro is invoked from.
+      dir: "./website"
 
       # [Optional] Build command to run (omit if site is pre-built)
       # Supports any build tool: bun, npm, yarn, pnpm, make, etc.
@@ -181,13 +236,51 @@ ansible:
     port: 3000
 
     # [Optional] Environment variables passed to the backend container
-    # Each key-value pair becomes an environment variable in the container
+    # Each key-value pair becomes an environment variable in the container.
+    # For NON-SENSITIVE values only — this file is version controlled.
+    # Sensitive values go in 'secretEnv' below instead.
     # Note: PORT is automatically injected from 'port' above; do not set it here
     env:
       # Add your application-specific environment variables:
-      # DATABASE_URL: postgres://user:pass@host:5432/db
+      # NODE_ENV: production
       # REDIS_URL: redis://localhost:6379
-      # API_KEY: your_api_key_here
+
+    # [Optional] SENSITIVE environment variables for the backend container.
+    # List the NAMES of secrets stored in Bitwarden Secrets Manager; maestro
+    # fetches their values at runtime and injects each into the container.
+    # Values never appear in this file or in logs (no_log). Each name is
+    # validated at startup — a missing secret fails the run before any cloud
+    # call.
+    #
+    # Two entry forms:
+    #   - NAME                       -> container var NAME, value from BWS secret NAME
+    #   - CONTAINER_VAR: BWS_SECRET  -> container var CONTAINER_VAR, value from
+    #                                   BWS secret BWS_SECRET (rename on inject)
+    # Notes:
+    #   - A container var may not also appear in 'env' above (one place only).
+    #   - PORT is reserved (auto-injected from 'port' above).
+    #   - BWS_ACCESS_TOKEN is rejected as a SOURCE: that is maestro's own
+    #     deploy token, never forward it. If your app needs Bitwarden access,
+    #     store a separate token scoped to an app-secrets project under a
+    #     different name and rename it on inject (see example below).
+    # secretEnv:
+    #   - STRIPE_SECRET_KEY
+    #   - DATABASE_ENCRYPTION_KEY
+    #   - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN
+
+    # [Optional] Migration run before each deploy, as a one-shot container from
+    # the backend image, with the app's env, against the live DB. Non-zero exit
+    # aborts the deploy; the old container keeps serving. Omit to skip migrations.
+    # 'command' is the argv run inside the container (not a host shell line):
+    # migrate:
+    #   command: ["npm", "run", "migrate"]   # e.g. ["alembic", "upgrade", "head"]
+
+    # [Optional] Readiness probe for the blue/green cutover. Maestro polls this
+    # path on the new container until it returns 200 before flipping nginx to it;
+    # if it never passes, the deploy aborts and the old container keeps serving.
+    # Defaults to /health.
+    # healthCheck:
+    #   path: /health
 
 # ============================================
 # Secrets Configuration
@@ -211,7 +304,20 @@ secrets:
   #   - VPS_SSH_KEY: SSH private key for server provisioning and configuration
   #   - PULUMI_ACCESS_TOKEN: Pulumi Cloud token for infrastructure state management
   #   - CLOUDFLARE_API_TOKEN: Cloudflare API token for DNS, tunnels, and SSL
-  #   - DIGITALOCEAN_TOKEN: DigitalOcean API token for provisioning servers
+  #   - DIGITALOCEAN_ACCESS_TOKEN: DigitalOcean API token for provisioning servers
+  #
+  # Required only when pulumi.database.enabled is true (NAMES only — values live
+  # in Bitwarden, never here). These are the stable identifiers you choose; both
+  # Pulumi (to create the user/database) and the backend read them:
+  #   - POSTGRES_USER: dedicated least-privilege app database user name
+  #   - POSTGRES_DB:   application database name
+  # POSTGRES_HOST (private endpoint), POSTGRES_PORT (the DO-assigned cluster port),
+  # and POSTGRES_PASSWORD are derived from DigitalOcean and flow in as Pulumi stack
+  # outputs — they are NOT Bitwarden secrets and must never be committed.
+  #
+  # POSTGRES_USER and POSTGRES_DB are also injected into the backend's environment
+  # (as BACKEND_ENV_POSTGRES_USER/BACKEND_ENV_POSTGRES_DB), so they live in two
+  # places at runtime — keep them in sync.
   requiredVars: []
   # Example:
   # requiredVars:

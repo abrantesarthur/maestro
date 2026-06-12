@@ -3,7 +3,9 @@ import * as cloudflare from "@pulumi/cloudflare";
 import * as digitalOcean from "@pulumi/digitalocean";
 import * as tls from "@pulumi/tls";
 import { installCertificate } from "../commands/installCertificate";
-import { Tunnel, TunnelIngress, TunnelIngressProtocol } from "./tunnel";
+import { Tunnel, type TunnelIngress, TunnelIngressProtocol } from "./tunnel";
+import { resourceType } from "./resourceType";
+import { NGINX_BACKEND_EDGE_PORT } from "../constants";
 
 /** The arguments for constructing a VirtualServer instance */
 export interface VirtualServerArgs {
@@ -21,6 +23,11 @@ export interface VirtualServerArgs {
   index: pulumi.Input<number>;
   /** The effective domain for this environment (e.g., dev.example.com, staging.example.com, example.com) */
   effectiveDomain: pulumi.Input<string>;
+  /**
+   * The VPC the droplet joins so it shares a private network with the managed
+   * resources. 
+   */
+  vpcUuid?: pulumi.Input<string>;
 }
 
 /** The pre-defined tag values for a VirtualServer */
@@ -48,9 +55,14 @@ export class VirtualServer extends pulumi.ComponentResource {
   readonly effectiveDomain: pulumi.Output<string>;
 
   constructor(args: VirtualServerArgs, opts?: pulumi.ComponentResourceOptions) {
-    super("dalhe:VirtualServer", VirtualServer.buildResourceName(args), opts);
+    super(
+      resourceType("VirtualServer"),
+      VirtualServer.buildResourceName(args),
+      opts,
+    );
     const name = VirtualServer.buildResourceName(args);
-    const { image, size, region, sshKeys, tags, effectiveDomain } = args;
+    const { image, size, region, sshKeys, tags, effectiveDomain, vpcUuid } =
+      args;
 
     const virtualServer = new digitalOcean.Droplet(
       name,
@@ -61,12 +73,11 @@ export class VirtualServer extends pulumi.ComponentResource {
         sshKeys,
         name,
         tags,
+        vpcUuid,
       },
       { parent: this },
     );
 
-    const stackConfig = new pulumi.Config(pulumi.getProject());
-    const backendPort = stackConfig.require("backendPort");
     const certHostnames = pulumi
       .output(effectiveDomain)
       .apply((ed) => [`*.${ed}`, ed]);
@@ -122,10 +133,13 @@ export class VirtualServer extends pulumi.ComponentResource {
           },
         ];
         if (tags.includes(VpsTag.Backend as string)) {
+          // Point api.<domain> at the nginx edge, not the backend port: nginx is
+          // the stable origin, and blue/green swaps the backend behind it without
+          // moving the tunnel's target.
           ingressList.push({
             hostname: `api.${ed}`,
             protocol: TunnelIngressProtocol.Http,
-            port: Number(backendPort),
+            port: NGINX_BACKEND_EDGE_PORT,
           });
         }
         return ingressList;

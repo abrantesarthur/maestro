@@ -10,7 +10,7 @@ import {
   REMOTE_KEY_DIR,
   REMOTE_KEY_PATH,
 } from "./constants";
-import { InstallCertificateOptions } from "./types";
+import type { InstallCertificateOptions } from "./types";
 
 /**
  * Reads the ssh key file, ensuring it exists.
@@ -176,3 +176,4 @@ export const installCertificate = ({
     },
   );
 };
+

@@ -10,6 +10,9 @@ domain: "{{ effective_domain }}"
 # Web mode: 'static' (serve files) or 'docker' (reverse proxy)
 web_mode: "{{ lookup('env', 'WEB_MODE') | default('static', true) }}"
 
+# Gate web-tier (static/docker) tasks to web hosts only, Backend hosts must not deploy website assets
+web_tier_enabled: "{{ 'web' in group_names }}"
+
 # Static mode configuration
 website_src_dir: /opt/website
 website_dest_dir: "/var/www/{{ domain }}/website"
@@ -17,3 +20,29 @@ website_dest_dir: "/var/www/{{ domain }}/website"
 # Docker mode configuration
 web_docker_port: "{{ lookup('env', 'WEB_DOCKER_PORT') | default('3000', true) }}"
 web_docker_bind_address: 127.0.0.1
+
+# ============================================
+# Backend reverse proxy (blue/green cutover edge)
+# ============================================
+# Enable on hosts in the backend group. 
+backend_proxy_enabled: "{{ 'backend' in group_names }}"
+
+# nginx upstream the deploy repoints at cutover.
+backend_upstream_name: backend_upstream
+
+# Backend binds 127.0.0.1; nginx proxies to it locally.
+backend_proxy_bind_address: 127.0.0.1
+
+# Fallback only: backend_app sets the real live port as a fact at cutover, which
+# overrides this. (A lookup('file') here used to read the Ansible controller, not
+# the host, so it never saw the port file.)
+backend_live_port: "{{ lookup('env', 'BACKEND_PORT') }}"
+
+# Loopback port nginx listens on; the Cloudflare tunnel routes api.<domain> here.
+# MUST match NGINX_BACKEND_EDGE_PORT in pulumi/constants.ts.
+backend_proxy_edge_port: 8080
+
+# Distinct from the web-tier site file so web+backend on one domain don't collide;
+# falls back to inventory_hostname when the host has no effective_domain.
+backend_proxy_domain: "{{ effective_domain | default(inventory_hostname, true) }}"
+backend_proxy_site_name: "{{ backend_proxy_domain }}-backend"
