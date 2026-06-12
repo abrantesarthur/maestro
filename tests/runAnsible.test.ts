@@ -173,6 +173,52 @@ describe("buildAnsibleEnv (blue/green deploy knobs)", () => {
     expect(joined).toContain("--penv BACKEND_HEALTH_PATH");
   });
 
+  test("secretEnv names resolve from process.env into BACKEND_ENV_* vars", async () => {
+    process.env["TEST_STRIPE_SECRET"] = "sk_live_123";
+    try {
+      const config = await backendConfig(`    secretEnv:
+      - TEST_STRIPE_SECRET`);
+      const env = buildAnsibleEnv(NO_HOSTS, config, []);
+      expect(env.BACKEND_ENV_TEST_STRIPE_SECRET).toBe("sk_live_123");
+    } finally {
+      delete process.env["TEST_STRIPE_SECRET"];
+    }
+  });
+
+  test("mapping entries inject the source secret under the container name", async () => {
+    process.env["TEST_APP_BWS_TOKEN"] = "app-token-value";
+    try {
+      const config = await backendConfig(`    secretEnv:
+      - BWS_ACCESS_TOKEN: TEST_APP_BWS_TOKEN`);
+      const env = buildAnsibleEnv(NO_HOSTS, config, []);
+      expect(env.BACKEND_ENV_BWS_ACCESS_TOKEN).toBe("app-token-value");
+      expect(env.BACKEND_ENV_TEST_APP_BWS_TOKEN).toBeUndefined();
+    } finally {
+      delete process.env["TEST_APP_BWS_TOKEN"];
+    }
+  });
+
+  test("a missing secretEnv value resolves to empty (validated upstream)", async () => {
+    delete process.env["TEST_UNSET_SECRET"];
+    const config = await backendConfig(`    secretEnv:
+      - TEST_UNSET_SECRET`);
+    const env = buildAnsibleEnv(NO_HOSTS, config, []);
+    expect(env.BACKEND_ENV_TEST_UNSET_SECRET).toBe("");
+  });
+
+  test("secretEnv vars are --penv-forwarded by buildPlaybookArgs", async () => {
+    process.env["TEST_STRIPE_SECRET"] = "sk_live_123";
+    try {
+      const config = await backendConfig(`    secretEnv:
+      - TEST_STRIPE_SECRET`);
+      const env = buildAnsibleEnv(NO_HOSTS, config, []);
+      const args = buildPlaybookArgs("backend.yml", "/tmp/key", [], env);
+      expect(args.join(" ")).toContain("--penv BACKEND_ENV_TEST_STRIPE_SECRET");
+    } finally {
+      delete process.env["TEST_STRIPE_SECRET"];
+    }
+  });
+
   test("the dynamic inventory var SSH_HOSTS is --penv-forwarded", () => {
     // Regression guard: SSH_HOSTS must be --penv-forwarded, otherwise the
     // dynamic inventory is empty and every play matches no hosts.

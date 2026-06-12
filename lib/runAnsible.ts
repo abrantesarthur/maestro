@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { ServerRole, type MaestroConfig } from "./config/index.ts";
+import {
+  ServerRole,
+  resolveSecretEnv,
+  type MaestroConfig,
+} from "./config/index.ts";
 import {
   log,
   requireCmds,
@@ -420,6 +424,17 @@ export function buildAnsibleEnv(
   // Export backend environment variables (BACKEND_ENV_*)
   for (const [key, value] of Object.entries(ansible?.backend?.env ?? {})) {
     env[`BACKEND_ENV_${key}`] = value;
+  }
+
+  // Backend-container secrets (ansible.backend.secretEnv): the config holds
+  // only the NAMES; the values were loaded from Bitwarden into process.env at
+  // startup (and asserted present). Mapping entries inject the source secret
+  // under a different container var name. They ride the same BACKEND_ENV_*
+  // path as literal env vars, which the backend_app role consumes under no_log.
+  for (const { container, source } of resolveSecretEnv(
+    ansible?.backend?.secretEnv,
+  )) {
+    env[`BACKEND_ENV_${container}`] = process.env[source] ?? "";
   }
 
   // Auto-inject PORT into the container environment from backend.port

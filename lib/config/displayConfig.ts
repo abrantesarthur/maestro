@@ -1,4 +1,4 @@
-import type { MaestroConfig } from "./schema";
+import { resolveSecretEnv, type MaestroConfig } from "./schema";
 
 export function displayConfig(config: MaestroConfig): void {
   console.log("  domain:", config.domain);
@@ -92,6 +92,17 @@ export function displayConfig(config: MaestroConfig): void {
   if (backendEnvKeys.length > 0) {
     for (const key of backendEnvKeys) {
       console.log(`    ${key}=${config?.ansible?.backend?.env?.[key]}`);
+    }
+  } else {
+    console.log("    (none)");
+  }
+
+  // Backend secret env vars: names only — values live in Bitwarden
+  console.log("  Backend secret environment variables (values from Bitwarden):");
+  const secretEnvPairs = resolveSecretEnv(config?.ansible?.backend?.secretEnv);
+  if (secretEnvPairs.length > 0) {
+    for (const { container, source } of secretEnvPairs) {
+      console.log(`    ${container}=<from Bitwarden secret ${source}>`);
     }
   } else {
     console.log("    (none)");

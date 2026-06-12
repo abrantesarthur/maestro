@@ -1474,5 +1474,136 @@ ansible:
         'ansible.web.static.dist is required when source is "local"',
       );
     });
+
+    describe("backend secretEnv", () => {
+      const backendYaml = (secretEnvBlock: string) => `
+domain: example.com
+ansible:
+  enabled: true
+  backend:
+    image: myapp
+    tag: latest
+    port: 8080
+    env:
+      NODE_ENV: production
+${secretEnvBlock}
+`;
+
+      test("accepts a list of secret names", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          "STRIPE_SECRET_KEY",
+          "APP_BWS_ACCESS_TOKEN",
+        ]);
+      });
+
+      test("accepts backend with no secretEnv (backward compatible)", async () => {
+        const result = await validateSchema(backendYaml(""));
+        expect(result.ansible?.backend?.secretEnv).toBeUndefined();
+      });
+
+      test("accepts mapping entries (containerVarName: bwsSecretName)", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          "STRIPE_SECRET_KEY",
+          { BWS_ACCESS_TOKEN: "APP_BWS_ACCESS_TOKEN" },
+        ]);
+      });
+
+      test("rejects duplicate entries", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - STRIPE_SECRET_KEY
+      - STRIPE_SECRET_KEY`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'targets the container variable "STRIPE_SECRET_KEY" more than once',
+        );
+      });
+
+      test("rejects a mapping entry colliding with a plain entry", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - API_KEY
+      - API_KEY: OTHER_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'targets the container variable "API_KEY" more than once',
+        );
+      });
+
+      test("rejects an empty mapping entry", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - {}`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          "empty mapping entry",
+        );
+      });
+
+      test("rejects empty entries", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - ""`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          "must be non-empty secret names",
+        );
+      });
+
+      test("rejects a name also present in env", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - NODE_ENV`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          '"NODE_ENV" appears in both ansible.backend.env and ansible.backend.secretEnv',
+        );
+      });
+
+      test("rejects the auto-injected PORT as a target", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - PORT`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not target "PORT"',
+        );
+      });
+
+      test("rejects PORT as a mapping target too", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - PORT: SOME_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not target "PORT"',
+        );
+      });
+
+      test("rejects BWS_ACCESS_TOKEN as a source (maestro's own deploy token)", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - BWS_ACCESS_TOKEN`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not read from "BWS_ACCESS_TOKEN"',
+        );
+      });
+
+      test("rejects BWS_ACCESS_TOKEN as a mapping source too", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - APP_TOKEN: BWS_ACCESS_TOKEN`);
+        await expect(validateSchema(yaml)).rejects.toThrow(
+          'must not read from "BWS_ACCESS_TOKEN"',
+        );
+      });
+
+      test("accepts BWS_ACCESS_TOKEN as a container name when the source differs", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN`);
+        const result = await validateSchema(yaml);
+        expect(result.ansible?.backend?.secretEnv).toEqual([
+          { BWS_ACCESS_TOKEN: "APP_BWS_ACCESS_TOKEN" },
+        ]);
+      });
+
+      test("rejects secretEnv as a map instead of a list", async () => {
+        const yaml = backendYaml(`    secretEnv:
+      API_KEY: STRIPE_SECRET`);
+        await expect(validateSchema(yaml)).rejects.toThrow();
+      });
+    });
   });
 });

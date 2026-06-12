@@ -236,13 +236,37 @@ ansible:
     port: 3000
 
     # [Optional] Environment variables passed to the backend container
-    # Each key-value pair becomes an environment variable in the container
+    # Each key-value pair becomes an environment variable in the container.
+    # For NON-SENSITIVE values only — this file is version controlled.
+    # Sensitive values go in 'secretEnv' below instead.
     # Note: PORT is automatically injected from 'port' above; do not set it here
     env:
       # Add your application-specific environment variables:
-      # DATABASE_URL: postgres://user:pass@host:5432/db
+      # NODE_ENV: production
       # REDIS_URL: redis://localhost:6379
-      # API_KEY: your_api_key_here
+
+    # [Optional] SENSITIVE environment variables for the backend container.
+    # List the NAMES of secrets stored in Bitwarden Secrets Manager; maestro
+    # fetches their values at runtime and injects each into the container.
+    # Values never appear in this file or in logs (no_log). Each name is
+    # validated at startup — a missing secret fails the run before any cloud
+    # call.
+    #
+    # Two entry forms:
+    #   - NAME                       -> container var NAME, value from BWS secret NAME
+    #   - CONTAINER_VAR: BWS_SECRET  -> container var CONTAINER_VAR, value from
+    #                                   BWS secret BWS_SECRET (rename on inject)
+    # Notes:
+    #   - A container var may not also appear in 'env' above (one place only).
+    #   - PORT is reserved (auto-injected from 'port' above).
+    #   - BWS_ACCESS_TOKEN is rejected as a SOURCE: that is maestro's own
+    #     deploy token, never forward it. If your app needs Bitwarden access,
+    #     store a separate token scoped to an app-secrets project under a
+    #     different name and rename it on inject (see example below).
+    # secretEnv:
+    #   - STRIPE_SECRET_KEY
+    #   - DATABASE_ENCRYPTION_KEY
+    #   - BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN
 
     # [Optional] Migration run before each deploy, as a one-shot container from
     # the backend image, with the app's env, against the live DB. Non-zero exit

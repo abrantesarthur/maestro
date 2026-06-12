@@ -1,4 +1,4 @@
-import { ServerRole, type MaestroConfig } from "./schema";
+import { ServerRole, resolveSecretEnv, type MaestroConfig } from "./schema";
 
 /**
  * Validates semantic constraints that cannot be expressed in io-ts codecs
@@ -128,6 +128,53 @@ export const validateSemanticConfig = async ({
         } catch {
           throw new Error(`ansible.web.static.dir does not exist at ${dir}`);
         }
+      }
+    }
+  }
+
+  // Validate ansible.backend.secretEnv: Bitwarden secret names whose values
+  // are injected into the backend container at runtime. Entries are plain
+  // names or containerVarName: bwsSecretName mappings. Container names must be
+  // unambiguous (no duplicates, no overlap with the literal env map) and must
+  // not shadow values maestro injects itself; source names must never resolve
+  // to maestro's own deploy token.
+  if (raw.ansible?.backend?.secretEnv) {
+    for (const entry of raw.ansible.backend.secretEnv) {
+      if (typeof entry !== "string" && Object.keys(entry).length === 0) {
+        throw new Error(
+          `ansible.backend.secretEnv contains an empty mapping entry`,
+        );
+      }
+    }
+    const pairs = resolveSecretEnv(raw.ansible.backend.secretEnv);
+    const seen = new Set<string>();
+    for (const { container, source } of pairs) {
+      if (!container || !source) {
+        throw new Error(
+          `ansible.backend.secretEnv entries must be non-empty secret names`,
+        );
+      }
+      if (seen.has(container)) {
+        throw new Error(
+          `ansible.backend.secretEnv targets the container variable "${container}" more than once`,
+        );
+      }
+      seen.add(container);
+      if (container in (raw.ansible?.backend?.env ?? {})) {
+        throw new Error(
+          `"${container}" appears in both ansible.backend.env and ansible.backend.secretEnv; define it in exactly one place`,
+        );
+      }
+      if (container === "PORT") {
+        throw new Error(
+          `ansible.backend.secretEnv must not target "PORT"; it is injected automatically from ansible.backend.port`,
+        );
+      }
+      if (source === "BWS_ACCESS_TOKEN") {
+        throw new Error(
+          `ansible.backend.secretEnv must not read from "BWS_ACCESS_TOKEN": that is maestro's own deploy token (which can read all deploy secrets), not a Bitwarden secret. ` +
+            `Store a separate, narrowly scoped machine-account token in Bitwarden under a different name and reference it — to hand it to the app as BWS_ACCESS_TOKEN, use the mapping form: "BWS_ACCESS_TOKEN: APP_BWS_ACCESS_TOKEN".`,
+        );
       }
     }
   }
